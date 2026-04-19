@@ -1,14 +1,14 @@
 FROM node:20-alpine
 
-# Build tools for native modules (sharp, canvas etc.)
-RUN apk add --no-cache python3 make g++ vips-dev
+# Build tools for native modules + git (needed for GitHub-sourced npm packages)
+RUN apk add --no-cache python3 make g++ vips-dev git
 
 WORKDIR /app
 
 COPY package*.json ./
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-RUN npm install --production --ignore-scripts
+RUN npm install --omit=dev
 
 COPY . .
 
