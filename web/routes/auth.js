@@ -43,7 +43,15 @@ router.post('/login', async (req,res) => {
   } catch(err){res.status(500).json({error:'Login failed'});}
 });
 
-router.post('/logout',(req,res)=>res.clearCookie('viper_token').json({ok:true}));
+// FIX: clearCookie must pass the same options used when setting the cookie
+// otherwise the browser won't clear it (mismatched path/secure/sameSite)
+router.post('/logout', (req, res) =>
+  res.clearCookie('viper_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  }).json({ ok: true })
+);
 
 router.get('/me', requireAuth, async (req,res) => {
   try {

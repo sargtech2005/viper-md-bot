@@ -69,8 +69,8 @@ async function doLogin() {
 
   if (!email || !password) return showError('Please fill in all fields');
 
-  btn.disabled   = true;
-  btn.innerHTML  = '<span class="loading"></span>Signing in...';
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="loading"></span>Signing in...';
 
   try {
     const r = await fetch('/api/auth/login', {
@@ -90,14 +90,17 @@ async function doLogin() {
 }
 
 function showError(msg) {
-  errEl.textContent    = msg;
-  errEl.style.display  = 'block';
-  btn.disabled         = false;
-  btn.innerHTML        = 'Sign In';
+  errEl.textContent   = msg;
+  errEl.style.display = 'block';
+  btn.disabled        = false;
+  btn.innerHTML       = 'Sign In';
 }
 
-// Redirect if already logged in
-fetch('/api/auth/me').then(r => { if (r.ok) window.location.href = '/dashboard.html'; }).catch(()=>{});
+// FIX: Only redirect if we get a confirmed 200. Never redirect on errors
+// (old code used r.ok which is true for any 2xx, causing redirect on stale responses)
+fetch('/api/auth/me', { credentials: 'same-origin' })
+  .then(r => { if (r.status === 200) window.location.href = '/dashboard.html'; })
+  .catch(() => {}); // network error = stay on login, don't crash
 </script>
 </body>
 </html>

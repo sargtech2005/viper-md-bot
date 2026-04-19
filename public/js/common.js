@@ -25,18 +25,36 @@ function toast(msg, type='success') {
 }
 
 // ── Auth check ────────────────────────────────────────────────────────────────
+// FIX: Only redirect on explicit 401/403. Network errors / slow DB on Render
+// must NOT redirect — that caused the blink/refresh loop.
 async function requireLogin(adminRequired=false) {
   try {
-    const d = await api('/api/auth/me');
+    const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+
+    // Explicit auth failure → go to login
+    if (r.status === 401 || r.status === 403) {
+      window.location.href = '/login.html';
+      return null;
+    }
+
+    // Server error or network hiccup → fail silently, don't redirect
+    if (!r.ok) return null;
+
+    const d = await r.json().catch(() => null);
+    if (!d || !d.user) return null;
+
     window.viperUser = d.user;
+
     if (adminRequired && !d.user.is_admin) {
       window.location.href = '/dashboard.html';
       return null;
     }
+
     renderNav(d.user);
     return d.user;
+
   } catch {
-    window.location.href = '/login.html';
+    // Pure network error (Render cold start, DB slow) — don't redirect
     return null;
   }
 }
@@ -60,7 +78,6 @@ function renderNav(user) {
     </a>
   `).join('');
 
-  // User info in nav
   const ui = document.getElementById('nav-user');
   if (ui) ui.innerHTML = `
     <div class="nav-user-name">@${user.username}</div>
