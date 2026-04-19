@@ -1,0 +1,251 @@
+{
+  "category": "developer",
+  "description": "Developer & tech tools — full implementation coming soon",
+  "commands": [
+    {
+      "name": "scrape",
+      "icon": "🕷️",
+      "description": "Scrape text content from any public webpage",
+      "usage": ".scrape <url>",
+      "tags": ["web", "scraping", "html"]
+    },
+    {
+      "name": "whois",
+      "icon": "🔍",
+      "description": "WHOIS lookup for any domain",
+      "usage": ".whois <domain>",
+      "tags": ["domain", "lookup", "network"]
+    },
+    {
+      "name": "dns",
+      "icon": "🌐",
+      "description": "DNS record lookup (A, MX, TXT, CNAME, NS)",
+      "usage": ".dns <domain> [type]",
+      "tags": ["dns", "network", "domain"]
+    },
+    {
+      "name": "ipinfo",
+      "icon": "🗺️",
+      "description": "IP address geolocation and ASN info",
+      "usage": ".ipinfo <ip>",
+      "tags": ["ip", "network", "geo"]
+    },
+    {
+      "name": "headers",
+      "icon": "📋",
+      "description": "Inspect HTTP response headers of any URL",
+      "usage": ".headers <url>",
+      "tags": ["http", "web", "headers"]
+    },
+    {
+      "name": "webstatus",
+      "icon": "📡",
+      "description": "Check if a website is up or down",
+      "usage": ".webstatus <url>",
+      "tags": ["web", "uptime", "monitor"]
+    },
+    {
+      "name": "ssl",
+      "icon": "🔒",
+      "description": "SSL/TLS certificate details and expiry date",
+      "usage": ".ssl <domain>",
+      "tags": ["ssl", "tls", "security", "https"]
+    },
+    {
+      "name": "jwt",
+      "icon": "🪙",
+      "description": "Decode and inspect a JWT token (header + payload)",
+      "usage": ".jwt <token>",
+      "tags": ["jwt", "auth", "token", "security"]
+    },
+    {
+      "name": "b64",
+      "icon": "🔤",
+      "description": "Base64 encode or decode a string",
+      "usage": ".b64 encode|decode <text>",
+      "tags": ["base64", "encode", "decode", "crypto"]
+    },
+    {
+      "name": "hash",
+      "icon": "#️⃣",
+      "description": "Generate MD5 / SHA1 / SHA256 / SHA512 hash",
+      "usage": ".hash <algo> <text>",
+      "tags": ["hash", "md5", "sha", "crypto"]
+    },
+    {
+      "name": "jsonformat",
+      "icon": "📄",
+      "description": "Validate and pretty-print a JSON string",
+      "usage": ".jsonformat <json>",
+      "tags": ["json", "format", "validate", "dev"]
+    },
+    {
+      "name": "regex",
+      "icon": "🧩",
+      "description": "Test a regex pattern against a string",
+      "usage": ".regex <pattern> | <test-string>",
+      "tags": ["regex", "pattern", "test"]
+    },
+    {
+      "name": "portscan",
+      "icon": "🔌",
+      "description": "Scan common ports on a host (non-intrusive)",
+      "usage": ".portscan <host>",
+      "tags": ["ports", "network", "scan"]
+    },
+    {
+      "name": "netping",
+      "icon": "🏓",
+      "description": "Network ping to measure latency to a host",
+      "usage": ".netping <host>",
+      "tags": ["ping", "latency", "network"]
+    },
+    {
+      "name": "curl",
+      "icon": "📨",
+      "description": "Make a GET/POST HTTP request and see the response",
+      "usage": ".curl <url> [method] [body]",
+      "tags": ["http", "curl", "request", "api"]
+    },
+    {
+      "name": "hosting",
+      "icon": "🏠",
+      "description": "Look up hosting provider info for a domain/IP",
+      "usage": ".hosting <domain>",
+      "tags": ["hosting", "server", "network"]
+    },
+    {
+      "name": "pageinfo",
+      "icon": "🗒️",
+      "description": "Extract meta title, description, OG tags from a page",
+      "usage": ".pageinfo <url>",
+      "tags": ["seo", "meta", "web", "scraping"]
+    },
+    {
+      "name": "robots",
+      "icon": "🤖",
+      "description": "Fetch and display robots.txt for a domain",
+      "usage": ".robots <domain>",
+      "tags": ["robots", "seo", "crawl"]
+    },
+    {
+      "name": "sitemap",
+      "icon": "🗺️",
+      "description": "Fetch and list sitemap.xml URLs from a domain",
+      "usage": ".sitemap <domain>",
+      "tags": ["sitemap", "seo", "web"]
+    },
+    {
+      "name": "techstack",
+      "icon": "🧱",
+      "description": "Detect technologies used on a website (CMS, framework, CDN)",
+      "usage": ".techstack <url>",
+      "tags": ["wappalyzer", "tech", "fingerprint"]
+    },
+    {
+      "name": "urlshort",
+      "icon": "🔗",
+      "description": "Shorten a long URL using is.gd",
+      "usage": ".urlshort <url>",
+      "tags": ["url", "shorten", "links"]
+    },
+    {
+      "name": "qrgen",
+      "icon": "⬛",
+      "description": "Generate a QR code image from any text or URL",
+      "usage": ".qrgen <text>",
+      "tags": ["qr", "generate", "image"]
+    },
+    {
+      "name": "urlencode",
+      "icon": "🔏",
+      "description": "URL-encode or URL-decode a string",
+      "usage": ".urlencode encode|decode <text>",
+      "tags": ["url", "encode", "decode"]
+    },
+    {
+      "name": "colorconvert",
+      "icon": "🎨",
+      "description": "Convert between HEX, RGB, and HSL colour formats",
+      "usage": ".colorconvert #hex | rgb(r,g,b)",
+      "tags": ["color", "hex", "rgb", "hsl", "design"]
+    },
+    {
+      "name": "minify",
+      "icon": "📦",
+      "description": "Minify HTML, CSS, or JavaScript code",
+      "usage": ".minify html|css|js <code>",
+      "tags": ["minify", "compress", "code"]
+    },
+    {
+      "name": "timestamp",
+      "icon": "⏱️",
+      "description": "Convert Unix timestamp to human date or vice versa",
+      "usage": ".timestamp <unix> | <date>",
+      "tags": ["time", "unix", "timestamp", "date"]
+    },
+    {
+      "name": "uuid",
+      "icon": "🆔",
+      "description": "Generate one or more random UUID v4 strings",
+      "usage": ".uuid [count]",
+      "tags": ["uuid", "generate", "random"]
+    },
+    {
+      "name": "passgen",
+      "icon": "🛡️",
+      "description": "Generate a strong random password",
+      "usage": ".passgen [length] [symbols?]",
+      "tags": ["password", "security", "random"]
+    },
+    {
+      "name": "cron",
+      "icon": "🕰️",
+      "description": "Explain a cron expression in plain English",
+      "usage": ".cron <expression>",
+      "tags": ["cron", "schedule", "devops"]
+    },
+    {
+      "name": "myip",
+      "icon": "🌍",
+      "description": "Return the bot server's public IP address",
+      "usage": ".myip",
+      "tags": ["ip", "network", "server"]
+    },
+    {
+      "name": "apitest",
+      "icon": "🧪",
+      "description": "Test a REST API endpoint with custom method + headers",
+      "usage": ".apitest <url> [GET|POST] [json-body]",
+      "tags": ["api", "rest", "test", "http"]
+    },
+    {
+      "name": "domainavail",
+      "icon": "✅",
+      "description": "Check if a domain name is available for registration",
+      "usage": ".domainavail <name.tld>",
+      "tags": ["domain", "availability", "whois"]
+    },
+    {
+      "name": "subdomains",
+      "icon": "🌲",
+      "description": "Find subdomains of a domain using crt.sh certificate logs",
+      "usage": ".subdomains <domain>",
+      "tags": ["subdomains", "recon", "security"]
+    },
+    {
+      "name": "coderun",
+      "icon": "▶️",
+      "description": "Run a code snippet (Python/JS/Bash) via sandboxed API",
+      "usage": ".coderun <lang> <code>",
+      "tags": ["code", "execute", "sandbox", "python", "js"]
+    },
+    {
+      "name": "lorem",
+      "icon": "📝",
+      "description": "Generate Lorem Ipsum placeholder text",
+      "usage": ".lorem [paragraphs]",
+      "tags": ["lorem", "placeholder", "text"]
+    }
+  ]
+}

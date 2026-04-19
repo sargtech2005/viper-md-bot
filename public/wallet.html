@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Wallet — VIPER BOT MD</title>
+<link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body class="app-layout">
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <nav id="sidebar-nav"></nav>
+  <div class="nav-user" id="nav-user"></div>
+  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-title">Wallet</span>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- Balance Card -->
+    <div class="card" style="margin-bottom:1.25rem;background:linear-gradient(135deg,rgba(34,197,94,.08),rgba(139,92,246,.08));border-color:rgba(34,197,94,.25)">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+        <div>
+          <div style="font-size:.8rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Current Balance</div>
+          <div style="font-size:3rem;font-weight:900;color:var(--green)" id="wallet-balance">—</div>
+          <div style="font-size:.85rem;color:var(--muted)">🪙 coins available</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:.8rem;color:var(--muted)">Each session costs</div>
+          <div style="font-size:1.5rem;font-weight:800;color:var(--text)">10 🪙</div>
+          <div style="font-size:.78rem;color:var(--muted)">per creation</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="no-paystack" style="display:none" class="alert alert-info">
+      ⚙️ Payments are not yet configured. Please contact the admin to enable coin purchases.
+    </div>
+
+    <!-- Coin Packages -->
+    <div class="card" id="packages-card" style="margin-bottom:1.25rem">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🪙 Buy Coins</div>
+          <div class="card-sub">Select a package to top up your balance</div>
+        </div>
+      </div>
+
+      <div class="pkg-grid" id="pkg-grid">
+        <div style="text-align:center;padding:2rem;color:var(--muted)"><div class="spinner"></div></div>
+      </div>
+
+      <div style="margin-top:1.25rem">
+        <div id="buy-alert"></div>
+        <button class="btn btn-green btn-full" id="buy-btn" onclick="buyCoins()" style="display:none">
+          🪙 Pay with Paystack
+        </button>
+      </div>
+    </div>
+
+    <!-- Payment History -->
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-header">
+        <div class="card-title">💳 Payment History</div>
+      </div>
+      <div id="payments-list">
+        <div style="text-align:center;padding:1rem;color:var(--muted)"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Transaction History -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📋 Coin Transactions</div>
+      </div>
+      <div id="tx-list">
+        <div style="text-align:center;padding:1rem;color:var(--muted)"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Paystack SDK loaded dynamically -->
+<script src="/js/common.js"></script>
+<script>
+let walletData    = null;
+let selectedPkg   = null;
+let paystackLoaded= false;
+
+(async () => {
+  const user = await requireLogin();
+  if (!user) return;
+  await loadWallet();
+})();
+
+async function loadWallet() {
+  try {
+    const d = await api('/api/wallet');
+    walletData = d;
+    document.getElementById('wallet-balance').textContent = fCoins(d.user.coins);
+
+    if (!d.paystack_public_key) {
+      document.getElementById('no-paystack').style.display    = 'block';
+      document.getElementById('packages-card').style.display  = 'none';
+    } else {
+      renderPackages(d.packages);
+      loadPaystack(d.paystack_public_key);
+    }
+
+    renderPayments(d.payments);
+    renderTransactions(d.transactions);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderPackages(pkgs) {
+  const grid = document.getElementById('pkg-grid');
+  if (!pkgs.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:.875rem;padding:1rem">No packages available</div>';
+    return;
+  }
+  grid.innerHTML = pkgs.map((p,i) => {
+    const save = i > 0 ? Math.round((1 - (p.ngn/p.coins) / (pkgs[0].ngn/pkgs[0].coins)) * 100) : 0;
+    return `<div class="pkg-card" id="pkg-${p.id}" onclick="selectPkg(${p.id})">
+      <div class="pkg-label">Package ${p.id}</div>
+      <div class="pkg-coins">${fCoins(p.coins)}</div>
+      <div style="font-size:.75rem;color:var(--muted);margin:.15rem 0">coins</div>
+      <div class="pkg-price">₦${p.ngn.toLocaleString()}</div>
+      ${save > 0 ? `<div class="pkg-save">Save ${save}%</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function selectPkg(id) {
+  document.querySelectorAll('.pkg-card').forEach(el => el.classList.remove('selected'));
+  document.getElementById(`pkg-${id}`)?.classList.add('selected');
+  selectedPkg = walletData.packages.find(p => p.id === id);
+  const btn = document.getElementById('buy-btn');
+  if (selectedPkg) {
+    btn.style.display = 'block';
+    btn.textContent = `🪙 Buy ${fCoins(selectedPkg.coins)} Coins for ₦${selectedPkg.ngn.toLocaleString()}`;
+  }
+}
+
+function loadPaystack(publicKey) {
+  if (paystackLoaded) return;
+  const s = document.createElement('script');
+  s.src   = 'https://js.paystack.co/v1/inline.js';
+  s.onload = () => { paystackLoaded = true; };
+  document.head.appendChild(s);
+}
+
+async function buyCoins() {
+  if (!selectedPkg) return toast('Please select a package first', 'error');
+  if (!paystackLoaded) return toast('Paystack is still loading, please wait a moment', 'info');
+
+  const alertEl = document.getElementById('buy-alert');
+  alertEl.innerHTML = '';
+  const btn = document.getElementById('buy-btn');
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="spinner"></span> Initiating...';
+
+  try {
+    const d = await api('/api/wallet/initiate', { method:'POST', body:{ package_id: selectedPkg.id } });
+
+    const handler = PaystackPop.setup({
+      key:       d.public_key,
+      email:     d.email,
+      amount:    d.amount_kobo,
+      ref:       d.reference,
+      currency:  'NGN',
+      metadata:  { coins: d.coins },
+      onSuccess: async (response) => {
+        btn.innerHTML = '<span class="spinner"></span> Verifying...';
+        try {
+          const v = await api('/api/wallet/verify', { method:'POST', body:{ reference: response.reference } });
+          toast(`✅ Payment verified! +${v.coins} coins added. New balance: ${fCoins(v.new_balance)}`, 'success');
+          await loadWallet();
+        } catch (e) {
+          alertEl.innerHTML = `<div class="alert alert-error">Verification failed: ${e.message}. Contact support.</div>`;
+        } finally {
+          btn.disabled  = false;
+          btn.innerHTML = `🪙 Buy ${fCoins(selectedPkg.coins)} Coins for ₦${selectedPkg.ngn.toLocaleString()}`;
+        }
+      },
+      onCancel: () => {
+        toast('Payment cancelled', 'info');
+        btn.disabled  = false;
+        btn.innerHTML = `🪙 Buy ${fCoins(selectedPkg.coins)} Coins for ₦${selectedPkg.ngn.toLocaleString()}`;
+      },
+    });
+    handler.openIframe();
+  } catch (e) {
+    alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    btn.disabled  = false;
+    btn.innerHTML = `🪙 Buy ${fCoins(selectedPkg.coins)} Coins for ₦${selectedPkg.ngn.toLocaleString()}`;
+  }
+}
+
+function renderPayments(payments) {
+  const el = document.getElementById('payments-list');
+  if (!payments.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:1.5rem"><div class="empty-icon">💳</div><p>No payments yet</p></div>';
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Date</th><th>Coins</th><th>Amount</th><th>Status</th></tr></thead>
+    <tbody>${payments.map(p => `
+      <tr>
+        <td style="font-size:.8rem">${fDate(p.created_at)}</td>
+        <td><strong>+${fCoins(p.coins)} 🪙</strong></td>
+        <td>${fNgn(p.amount_kobo)}</td>
+        <td><span class="badge ${p.status==='success'?'badge-green':p.status==='pending'?'badge-yellow':'badge-red'}">${p.status}</span></td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function renderTransactions(txs) {
+  const el = document.getElementById('tx-list');
+  if (!txs.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:1.5rem"><div class="empty-icon">📋</div><p>No transactions yet</p></div>';
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
+    <tbody>${txs.map(t => `
+      <tr>
+        <td style="font-size:.8rem">${fDate(t.created_at)}</td>
+        <td style="font-size:.83rem;color:var(--muted)">${t.description||t.type}</td>
+        <td style="font-weight:700;color:${t.amount>0?'var(--green)':'var(--red)'}">${t.amount>0?'+':''}${t.amount} 🪙</td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+</script>
+</body>
+</html>

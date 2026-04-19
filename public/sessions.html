@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sessions — VIPER BOT MD</title>
+<link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body class="app-layout">
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <nav id="sidebar-nav"></nav>
+  <div class="nav-user" id="nav-user"></div>
+  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-title">My Sessions</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-green btn-sm" onclick="openCreateModal()">➕ New Session</button>
+    </div>
+  </header>
+
+  <div class="page-body">
+    <div id="sessions-container">
+      <div class="empty-state"><div class="spinner"></div><p>Loading sessions...</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Session Modal -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ Create New Session</div>
+      <button class="modal-close" onclick="closeModal('create-modal')">✕</button>
+    </div>
+    <div id="create-alert"></div>
+    <div class="field">
+      <label>Session Label (optional)</label>
+      <input type="text" id="new-label" placeholder="e.g. My Main Bot"/>
+      <div class="field-hint">A name to help you identify this session</div>
+    </div>
+    <div class="alert alert-info" style="font-size:.83rem">
+      🪙 Creating a session costs <strong>10 coins</strong>. Your current balance: <strong id="modal-coins">—</strong>
+    </div>
+    <button class="btn btn-green btn-full" id="create-btn" onclick="createSession()">Create Session</button>
+  </div>
+</div>
+
+<!-- Logs Modal -->
+<div class="modal-overlay" id="logs-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <div class="modal-title">📄 Session Logs</div>
+      <button class="modal-close" onclick="closeModal('logs-modal')">✕</button>
+    </div>
+    <pre id="logs-content" style="background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:1rem;font-size:.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;white-space:pre-wrap;color:var(--muted)">Loading...</pre>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+let sessions = [], user = null;
+
+(async () => {
+  user = await requireLogin();
+  if (!user) return;
+  document.getElementById('modal-coins').textContent = fCoins(user.coins) + ' 🪙';
+  await loadSessions();
+})();
+
+async function loadSessions() {
+  try {
+    const d = await api('/api/sessions');
+    sessions = d.sessions;
+    render();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function render() {
+  const c = document.getElementById('sessions-container');
+  if (!sessions.length) {
+    c.innerHTML = `<div class="card">
+      <div class="empty-state">
+        <div class="empty-icon">📱</div>
+        <h3>No sessions yet</h3>
+        <p>Create a session and pair your WhatsApp number to get started.<br/>Each session costs 10 coins.</p>
+        <button class="btn btn-green" style="margin-top:1rem" onclick="openCreateModal()">➕ Create First Session</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
+    ${sessions.map(s => sessionCard(s)).join('')}
+  </div>`;
+}
+
+function sessionCard(s) {
+  const hasPhone = !!s.phone_number;
+  const label    = s.phone_number || s.session_label || `Session #${s.id}`;
+  const running  = s.is_running;
+
+  return `<div class="card" style="position:relative">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem">
+      <div>
+        <div style="font-size:1rem;font-weight:700">📱 ${label}</div>
+        ${s.session_label && s.phone_number ? `<div style="font-size:.78rem;color:var(--muted)">${s.session_label}</div>` : ''}
+        <div style="font-size:.75rem;color:var(--muted);margin-top:.2rem">Created ${fDate(s.created_at)}</div>
+      </div>
+      ${statusBadge(s.status, running)}
+    </div>
+
+    ${s.connected_at ? `<div style="font-size:.78rem;color:var(--green);margin-bottom:.75rem">✅ Connected ${fDate(s.connected_at)}</div>` : ''}
+
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+      ${!hasPhone ? `<a href="/pair/${s.id}" class="btn btn-green btn-sm">🔗 Pair Number</a>` : ''}
+      ${hasPhone ? `<a href="/pair/${s.id}" class="btn btn-outline btn-sm">🔗 Re-pair</a>` : ''}
+      ${hasPhone && !running ? `<button class="btn btn-outline btn-sm" onclick="restartSession(${s.id})">▶ Start</button>` : ''}
+      ${running ? `<button class="btn btn-outline btn-sm" onclick="stopSession(${s.id})">⏹ Stop</button>` : ''}
+      ${hasPhone ? `<button class="btn btn-outline btn-sm" onclick="viewLogs(${s.id})">📄 Logs</button>` : ''}
+      <button class="btn btn-red btn-sm" onclick="deleteSession(${s.id},'${label}')">🗑</button>
+    </div>
+  </div>`;
+}
+
+function openCreateModal() {
+  // Refresh coins
+  api('/api/auth/me').then(d => {
+    document.getElementById('modal-coins').textContent = fCoins(d.user.coins) + ' 🪙';
+  }).catch(()=>{});
+  document.getElementById('create-alert').innerHTML = '';
+  document.getElementById('new-label').value = '';
+  document.getElementById('create-modal').classList.add('open');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+async function createSession() {
+  const btn   = document.getElementById('create-btn');
+  const label = document.getElementById('new-label').value.trim();
+  const alert = document.getElementById('create-alert');
+  alert.innerHTML = '';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating...';
+  try {
+    const d = await api('/api/sessions', { method:'POST', body: { label } });
+    closeModal('create-modal');
+    toast('Session created! Now pair your WhatsApp number.', 'success');
+    // Redirect to pair page
+    window.location.href = `/pair/${d.session.id}`;
+  } catch (e) {
+    alert.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    btn.disabled = false;
+    btn.innerHTML = 'Create Session';
+  }
+}
+
+async function restartSession(id) {
+  try {
+    await api(`/api/sessions/${id}/restart`, { method:'POST' });
+    toast('Session restarting...', 'success');
+    setTimeout(loadSessions, 2000);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function stopSession(id) {
+  if (!confirm('Stop this session?')) return;
+  try {
+    await api(`/api/sessions/${id}/stop`, { method:'POST' });
+    toast('Session stopped');
+    await loadSessions();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteSession(id, label) {
+  if (!confirm(`Delete session "${label}"? This cannot be undone.`)) return;
+  try {
+    await api(`/api/sessions/${id}`, { method:'DELETE' });
+    toast('Session deleted');
+    await loadSessions();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function viewLogs(id) {
+  document.getElementById('logs-content').textContent = 'Loading...';
+  document.getElementById('logs-modal').classList.add('open');
+  try {
+    const d = await api(`/api/sessions/${id}/logs`);
+    document.getElementById('logs-content').textContent = d.logs || 'No logs yet.';
+  } catch (e) { document.getElementById('logs-content').textContent = 'Failed to load logs: ' + e.message; }
+}
+
+// Auto-refresh every 15s
+setInterval(loadSessions, 15000);
+</script>
+</body>
+</html>

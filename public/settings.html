@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Settings — VIPER BOT MD</title>
+<link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body class="app-layout">
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <nav id="sidebar-nav"></nav>
+  <div class="nav-user" id="nav-user"></div>
+  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-title">Account Settings</span>
+    </div>
+  </header>
+
+  <div class="page-body" style="max-width:600px">
+
+    <!-- Profile Info -->
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-title" style="margin-bottom:1rem">👤 Profile</div>
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem">
+        <div style="width:56px;height:56px;background:var(--green-glow);border:2px solid var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;color:var(--green)" id="profile-avatar">?</div>
+        <div>
+          <div style="font-weight:700" id="profile-username">Loading...</div>
+          <div style="font-size:.825rem;color:var(--muted)" id="profile-email"></div>
+          <div style="font-size:.8rem;color:var(--green);margin-top:.2rem" id="profile-coins"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;font-size:.83rem">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:.65rem">
+          <div style="color:var(--muted)">Member since</div>
+          <div id="profile-joined" style="font-weight:600;margin-top:.2rem">—</div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:.65rem">
+          <div style="color:var(--muted)">Last login</div>
+          <div id="profile-last" style="font-weight:600;margin-top:.2rem">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-title" style="margin-bottom:1rem">🔒 Change Password</div>
+      <div id="pw-alert"></div>
+      <div class="field">
+        <label>Current Password</label>
+        <input type="password" id="cur-pw" placeholder="Enter current password"/>
+      </div>
+      <div class="field">
+        <label>New Password</label>
+        <input type="password" id="new-pw" placeholder="Min. 6 characters"/>
+      </div>
+      <div class="field">
+        <label>Confirm New Password</label>
+        <input type="password" id="confirm-pw" placeholder="Repeat new password"/>
+      </div>
+      <button class="btn btn-green" id="pw-btn" onclick="changePassword()">Update Password</button>
+    </div>
+
+    <!-- Change Email -->
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-title" style="margin-bottom:1rem">📧 Change Email</div>
+      <div id="email-alert"></div>
+      <div class="field">
+        <label>New Email Address</label>
+        <input type="email" id="new-email" placeholder="new@email.com"/>
+      </div>
+      <div class="field">
+        <label>Current Password (to confirm)</label>
+        <input type="password" id="email-pw" placeholder="Your current password"/>
+      </div>
+      <button class="btn btn-outline" id="email-btn" onclick="changeEmail()">Update Email</button>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="card" style="border-color:rgba(239,68,68,.3)">
+      <div class="card-title" style="color:var(--red);margin-bottom:.5rem">⚠️ Danger Zone</div>
+      <p style="font-size:.875rem;color:var(--muted);margin-bottom:1rem">Deleting your account is permanent. All sessions and coins will be lost.</p>
+      <button class="btn btn-red" onclick="deleteAccount()">🗑 Delete My Account</button>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+let currentUser = null;
+
+(async () => {
+  currentUser = await requireLogin();
+  if (!currentUser) return;
+  loadProfile();
+})();
+
+async function loadProfile() {
+  try {
+    const d = await api('/api/auth/me');
+    const u = d.user;
+    currentUser = u;
+    document.getElementById('profile-avatar').textContent   = u.username[0].toUpperCase();
+    document.getElementById('profile-username').textContent  = '@' + u.username;
+    document.getElementById('profile-email').textContent     = u.email;
+    document.getElementById('profile-coins').textContent     = fCoins(u.coins) + ' 🪙 coins';
+    document.getElementById('profile-joined').textContent    = fDate(u.created_at);
+    document.getElementById('profile-last').textContent      = fDate(u.last_login) || 'Now';
+    document.getElementById('new-email').placeholder         = u.email;
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function changePassword() {
+  const curPw  = document.getElementById('cur-pw').value;
+  const newPw  = document.getElementById('new-pw').value;
+  const conPw  = document.getElementById('confirm-pw').value;
+  const alertEl= document.getElementById('pw-alert');
+  alertEl.innerHTML = '';
+
+  if (!curPw || !newPw || !conPw) return alertEl.innerHTML = '<div class="alert alert-error">All fields are required</div>';
+  if (newPw.length < 6)           return alertEl.innerHTML = '<div class="alert alert-error">New password must be at least 6 characters</div>';
+  if (newPw !== conPw)            return alertEl.innerHTML = '<div class="alert alert-error">Passwords do not match</div>';
+
+  const btn = document.getElementById('pw-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Updating...';
+  try {
+    await api('/api/auth/change-password', { method:'POST', body:{ currentPassword:curPw, newPassword:newPw } });
+    alertEl.innerHTML = '<div class="alert alert-success">✅ Password updated successfully</div>';
+    document.getElementById('cur-pw').value = '';
+    document.getElementById('new-pw').value = '';
+    document.getElementById('confirm-pw').value = '';
+  } catch (e) {
+    alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  } finally { btn.disabled = false; btn.innerHTML = 'Update Password'; }
+}
+
+async function changeEmail() {
+  const newEmail = document.getElementById('new-email').value.trim();
+  const pw       = document.getElementById('email-pw').value;
+  const alertEl  = document.getElementById('email-alert');
+  alertEl.innerHTML = '';
+
+  if (!newEmail || !pw) return alertEl.innerHTML = '<div class="alert alert-error">All fields required</div>';
+
+  const btn = document.getElementById('email-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Updating...';
+  try {
+    await api('/api/auth/change-email', { method:'POST', body:{ newEmail, password:pw } });
+    alertEl.innerHTML = '<div class="alert alert-success">✅ Email updated</div>';
+    loadProfile();
+  } catch (e) {
+    alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  } finally { btn.disabled = false; btn.innerHTML = 'Update Email'; }
+}
+
+async function deleteAccount() {
+  if (!confirm('Are you SURE? This will permanently delete your account, all sessions, and coins. This cannot be undone.')) return;
+  if (!confirm('Last chance — delete account permanently?')) return;
+  try {
+    await api('/api/auth/delete-account', { method:'DELETE' });
+    window.location.href = '/';
+  } catch (e) { toast(e.message, 'error'); }
+}
+</script>
+</body>
+</html>

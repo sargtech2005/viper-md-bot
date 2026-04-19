@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pair Number — VIPER BOT MD</title>
+<link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body class="app-layout">
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <nav id="sidebar-nav"></nav>
+  <div class="nav-user" id="nav-user"></div>
+  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <a href="/sessions.html" style="color:var(--muted);font-size:.875rem">← Sessions</a>
+      <span class="topbar-title">Pair WhatsApp Number</span>
+    </div>
+  </header>
+
+  <div class="page-body" style="max-width:580px;margin:0 auto">
+
+    <!-- Step 1: Enter phone -->
+    <div class="card" id="step-phone">
+      <div class="card-title" style="margin-bottom:.4rem">📱 Enter Your WhatsApp Number</div>
+      <div style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">Use international format without + or spaces</div>
+      <div id="phone-alert"></div>
+      <div class="field">
+        <label>Phone Number</label>
+        <input type="tel" id="phone-input" placeholder="2348083086811" maxlength="15"/>
+        <div class="field-hint">Example: 2348083086811 (Nigeria) · 12025551234 (US)</div>
+      </div>
+      <button class="btn btn-green btn-full" id="pair-btn" onclick="startPairing()">
+        🔗 Get Pair Code
+      </button>
+    </div>
+
+    <!-- Step 2: Show pair code + instructions -->
+    <div class="card" id="step-code" style="display:none">
+      <div class="card-title" style="margin-bottom:1rem">🔑 Your Pair Code</div>
+
+      <div id="code-loading" style="text-align:center;padding:1.5rem;color:var(--muted)">
+        <div class="spinner" style="width:32px;height:32px;margin:0 auto .75rem"></div>
+        <div>Generating code — please wait...</div>
+      </div>
+
+      <div id="code-display" style="display:none">
+        <div class="pair-code-box">
+          <div class="pair-code" id="pair-code-value">—</div>
+          <div class="pair-countdown" id="code-countdown">⏳ Code expires in <span id="timer">60</span>s</div>
+        </div>
+
+        <div style="margin:1rem 0">
+          <div style="font-weight:700;margin-bottom:.6rem">How to link:</div>
+          <ol style="padding-left:1.2rem;font-size:.875rem;color:var(--muted);line-height:2">
+            <li>Open <strong style="color:var(--text)">WhatsApp</strong> on your phone</li>
+            <li>Tap <strong style="color:var(--text)">Settings → Linked Devices</strong></li>
+            <li>Tap <strong style="color:var(--text)">Link a Device</strong></li>
+            <li>Tap <strong style="color:var(--text)">"Link with phone number instead"</strong></li>
+            <li>Enter the code shown above ☝️</li>
+          </ol>
+        </div>
+
+        <button class="btn btn-outline btn-full" onclick="showPhoneStep()">↩ Try Different Number</button>
+      </div>
+
+      <!-- Connected success -->
+      <div id="code-connected" style="display:none;text-align:center;padding:1.5rem">
+        <div style="font-size:3rem;margin-bottom:.75rem">✅</div>
+        <h3 style="font-size:1.2rem;font-weight:800;color:var(--green);margin-bottom:.5rem">Connected!</h3>
+        <p style="font-size:.9rem;color:var(--muted);margin-bottom:1.5rem">VIPER BOT MD is now live on <strong id="connected-number" style="color:var(--text)"></strong></p>
+        <a href="/sessions.html" class="btn btn-green">→ Go to Sessions</a>
+      </div>
+
+      <!-- Error state -->
+      <div id="code-error" style="display:none;text-align:center;padding:1.5rem">
+        <div style="font-size:2.5rem;margin-bottom:.75rem">⚠️</div>
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:.5rem">Pairing Failed</h3>
+        <p id="error-msg-text" style="font-size:.875rem;color:var(--muted);margin-bottom:1.5rem"></p>
+        <button class="btn btn-outline" onclick="showPhoneStep()">↩ Try Again</button>
+      </div>
+    </div>
+
+    <!-- Live status feed -->
+    <div class="card" id="status-feed" style="display:none;margin-top:1rem">
+      <div class="card-title" style="margin-bottom:.75rem">📡 Live Status</div>
+      <div id="status-log" style="font-size:.8rem;color:var(--muted);line-height:1.8;max-height:180px;overflow-y:auto"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+const sessionId = window.location.pathname.split('/').pop();
+let eventSource = null;
+let countdown   = null;
+let phone       = '';
+
+(async () => {
+  const user = await requireLogin();
+  if (!user) return;
+  document.getElementById('phone-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startPairing();
+  });
+})();
+
+function log(msg) {
+  const el = document.getElementById('status-log');
+  document.getElementById('status-feed').style.display = 'block';
+  el.innerHTML += `<div>${new Date().toLocaleTimeString()} — ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function startPairing() {
+  const input   = document.getElementById('phone-input').value.replace(/[^0-9]/g,'');
+  const alertEl = document.getElementById('phone-alert');
+  alertEl.innerHTML = '';
+
+  if (!input || !/^\d{10,15}$/.test(input)) {
+    alertEl.innerHTML = '<div class="alert alert-error">Enter a valid phone number (10-15 digits)</div>';
+    return;
+  }
+
+  phone = input;
+  const btn = document.getElementById('pair-btn');
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="spinner"></span> Starting pairing...';
+
+  try {
+    await api(`/api/sessions/${sessionId}/pair`, { method:'POST', body:{ phone } });
+    showCodeStep();
+    startSSE();
+  } catch (e) {
+    alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    btn.disabled  = false;
+    btn.innerHTML = '🔗 Get Pair Code';
+  }
+}
+
+function showCodeStep() {
+  document.getElementById('step-phone').style.display = 'none';
+  document.getElementById('step-code').style.display  = 'block';
+  document.getElementById('code-loading').style.display  = 'block';
+  document.getElementById('code-display').style.display  = 'none';
+  document.getElementById('code-connected').style.display= 'none';
+  document.getElementById('code-error').style.display    = 'none';
+  log('Pairing started for ' + phone);
+}
+
+function showPhoneStep() {
+  stopSSE();
+  stopCountdown();
+  document.getElementById('step-phone').style.display = 'block';
+  document.getElementById('step-code').style.display  = 'none';
+  document.getElementById('status-feed').style.display= 'none';
+  document.getElementById('pair-btn').disabled  = false;
+  document.getElementById('pair-btn').innerHTML = '🔗 Get Pair Code';
+}
+
+function startSSE() {
+  stopSSE();
+  eventSource = new EventSource(`/api/sessions/${sessionId}/stream`);
+
+  eventSource.addEventListener('pair_code', e => {
+    const { code } = JSON.parse(e.data);
+    document.getElementById('code-loading').style.display = 'none';
+    document.getElementById('code-display').style.display = 'block';
+    document.getElementById('pair-code-value').textContent = code;
+    log('✅ Pair code received: ' + code);
+    startCountdown(60);
+  });
+
+  eventSource.addEventListener('connected', e => {
+    stopCountdown();
+    document.getElementById('code-loading').style.display   = 'none';
+    document.getElementById('code-display').style.display   = 'none';
+    document.getElementById('code-connected').style.display = 'block';
+    document.getElementById('connected-number').textContent  = phone;
+    log('🟢 Bot connected!');
+    stopSSE();
+  });
+
+  eventSource.addEventListener('logged_out', e => {
+    showError('Session was logged out. Please try pairing again.');
+    log('⛔ Logged out');
+  });
+
+  eventSource.addEventListener('pair_error', e => {
+    const { message } = JSON.parse(e.data);
+    log('❌ Pair error: ' + message);
+  });
+
+  eventSource.addEventListener('error', e => {
+    try {
+      const { message } = JSON.parse(e.data);
+      showError(message);
+      log('❌ Error: ' + message);
+    } catch {}
+  });
+
+  eventSource.onerror = () => {
+    log('⚠️ Connection issue — retrying...');
+  };
+}
+
+function stopSSE() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+}
+
+function startCountdown(secs) {
+  stopCountdown();
+  let left = secs;
+  document.getElementById('timer').textContent = left;
+  countdown = setInterval(() => {
+    left--;
+    document.getElementById('timer').textContent = left;
+    if (left <= 0) {
+      stopCountdown();
+      document.getElementById('code-countdown').textContent = '⚠️ Code may have expired. Re-pair if needed.';
+    }
+  }, 1000);
+}
+
+function stopCountdown() {
+  if (countdown) { clearInterval(countdown); countdown = null; }
+}
+
+function showError(msg) {
+  document.getElementById('code-loading').style.display = 'none';
+  document.getElementById('code-display').style.display = 'none';
+  document.getElementById('code-error').style.display   = 'block';
+  document.getElementById('error-msg-text').textContent  = msg;
+  stopSSE();
+  stopCountdown();
+}
+
+window.addEventListener('beforeunload', stopSSE);
+</script>
+</body>
+</html>

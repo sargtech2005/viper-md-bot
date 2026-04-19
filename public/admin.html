@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin Panel — VIPER BOT MD</title>
+<link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body class="app-layout">
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <nav id="sidebar-nav"></nav>
+  <div class="nav-user" id="nav-user"></div>
+  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-title">👑 Admin Panel</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-outline btn-sm" onclick="loadAll()">🔄 Refresh</button>
+    </div>
+  </header>
+
+  <div class="page-body">
+
+    <!-- Stats -->
+    <div class="stats-grid" style="margin-bottom:1.5rem">
+      <div class="stat-card stat-green"><div class="stat-label">Total Users</div><div class="stat-value" id="st-users">—</div></div>
+      <div class="stat-card stat-blue"><div class="stat-label">Total Sessions</div><div class="stat-value" id="st-sessions">—</div></div>
+      <div class="stat-card"><div class="stat-label">Connected Now</div><div class="stat-value" id="st-connected">—</div></div>
+      <div class="stat-card stat-purple"><div class="stat-label">Total Revenue</div><div class="stat-value" id="st-revenue">—</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('users')">👥 Users</div>
+      <div class="tab" onclick="switchTab('sessions')">📱 Sessions</div>
+      <div class="tab" onclick="switchTab('payments')">💳 Payments</div>
+      <div class="tab" onclick="switchTab('settings')">⚙️ Site Settings</div>
+      <div class="tab" onclick="switchTab('paystack')">🔑 Paystack Keys</div>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-panel active" id="tab-users">
+      <div class="card">
+        <div class="section-header" style="flex-wrap:wrap;gap:.5rem">
+          <div class="section-title">All Users</div>
+          <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+            <input type="text" id="user-search" placeholder="Search email or username..." style="padding:.4rem .75rem;background:var(--bg);border:1px solid var(--border);border-radius:.4rem;color:var(--text);font-size:.83rem;width:200px" oninput="searchUsers()"/>
+            <button class="btn btn-green btn-sm" onclick="openCreditModal()">➕ Credit Coins</button>
+          </div>
+        </div>
+        <div class="table-wrap" id="users-table">
+          <div class="empty-state"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessions Tab -->
+    <div class="tab-panel" id="tab-sessions">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">All Sessions</div>
+          <button class="btn btn-red btn-sm" onclick="stopAllSessions()">🛑 Stop All</button>
+        </div>
+        <div class="table-wrap" id="sessions-table">
+          <div class="empty-state"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payments Tab -->
+    <div class="tab-panel" id="tab-payments">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Payment History</div>
+          <button class="btn btn-outline btn-sm" onclick="openManualCreditModal()">✋ Manual Credit</button>
+        </div>
+        <div class="table-wrap" id="payments-table">
+          <div class="empty-state"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Site Settings Tab -->
+    <div class="tab-panel" id="tab-settings">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:1.25rem">⚙️ Site Settings</div>
+        <div id="settings-alert"></div>
+        <div class="form-row">
+          <div class="field">
+            <label>Site Name</label>
+            <input type="text" id="s-site-name" placeholder="VIPER BOT MD"/>
+          </div>
+          <div class="field">
+            <label>Signup Bonus Coins</label>
+            <input type="number" id="s-signup-coins" min="0"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Session Cost (coins)</label>
+            <input type="number" id="s-session-cost" min="1"/>
+          </div>
+          <div class="field">
+            <label>Max Sessions Per User (0 = unlimited)</label>
+            <input type="number" id="s-max-sessions" min="0"/>
+          </div>
+        </div>
+        <div class="field">
+          <label>Maintenance Mode</label>
+          <select id="s-maintenance">
+            <option value="false">Off — Site is live</option>
+            <option value="true">On — Under maintenance</option>
+          </select>
+        </div>
+        <div style="margin-top:.75rem">
+          <div class="card-title" style="margin-bottom:1rem">🪙 Coin Packages (NGN prices)</div>
+          <div class="form-row">
+            <div class="field"><label>Package 1 — Coins</label><input type="number" id="s-p1c" min="1"/></div>
+            <div class="field"><label>Package 1 — Price (₦)</label><input type="number" id="s-p1n" min="100"/></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Package 2 — Coins</label><input type="number" id="s-p2c" min="1"/></div>
+            <div class="field"><label>Package 2 — Price (₦)</label><input type="number" id="s-p2n" min="100"/></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Package 3 — Coins</label><input type="number" id="s-p3c" min="1"/></div>
+            <div class="field"><label>Package 3 — Price (₦)</label><input type="number" id="s-p3n" min="100"/></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label>Package 4 — Coins</label><input type="number" id="s-p4c" min="1"/></div>
+            <div class="field"><label>Package 4 — Price (₦)</label><input type="number" id="s-p4n" min="100"/></div>
+          </div>
+        </div>
+        <button class="btn btn-green" id="save-settings-btn" onclick="saveSettings()">💾 Save Settings</button>
+      </div>
+    </div>
+
+    <!-- Paystack Keys Tab -->
+    <div class="tab-panel" id="tab-paystack">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:.5rem">🔑 Paystack Configuration</div>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">
+          Get your keys from your <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" style="color:var(--green)">Paystack Dashboard → Settings → Developer</a>.
+          Use <strong>Live keys</strong> for real payments, <strong>Test keys</strong> for development.
+        </p>
+        <div id="paystack-alert"></div>
+        <div class="field">
+          <label>Public Key (pk_live_... or pk_test_...)</label>
+          <input type="text" id="ps-public" placeholder="pk_live_xxxxxxxxxxxx"/>
+          <div class="field-hint">This key is used in the frontend to initialize Paystack popup</div>
+        </div>
+        <div class="field">
+          <label>Secret Key (sk_live_... or sk_test_...)</label>
+          <input type="password" id="ps-secret" placeholder="sk_live_xxxxxxxxxxxx"/>
+          <div class="field-hint">⚠️ Keep this secret. Used server-side to verify payments.</div>
+        </div>
+        <div class="field">
+          <label>Webhook URL (add this in Paystack Dashboard → API Keys)</label>
+          <input type="text" id="webhook-url" readonly style="color:var(--muted);cursor:text"/>
+        </div>
+        <button class="btn btn-green" id="save-paystack-btn" onclick="savePaystackKeys()">💾 Save Paystack Keys</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Credit Coins Modal -->
+<div class="modal-overlay" id="credit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ Adjust User Coins</div>
+      <button class="modal-close" onclick="closeModal('credit-modal')">✕</button>
+    </div>
+    <div id="credit-alert"></div>
+    <div class="field">
+      <label>User ID</label>
+      <input type="number" id="credit-uid" placeholder="User ID"/>
+    </div>
+    <div class="field">
+      <label>Amount (positive = add, negative = deduct)</label>
+      <input type="number" id="credit-amount" placeholder="e.g. 100 or -50"/>
+    </div>
+    <div class="field">
+      <label>Reason</label>
+      <input type="text" id="credit-reason" placeholder="Optional reason"/>
+    </div>
+    <button class="btn btn-green btn-full" onclick="creditCoins()">Apply</button>
+  </div>
+</div>
+
+<!-- Manual Credit Modal -->
+<div class="modal-overlay" id="manual-credit-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">✋ Manual Credit</div>
+      <button class="modal-close" onclick="closeModal('manual-credit-modal')">✕</button>
+    </div>
+    <div id="mc-alert"></div>
+    <div class="field"><label>User ID</label><input type="number" id="mc-uid" placeholder="User ID"/></div>
+    <div class="field"><label>Coins to Add</label><input type="number" id="mc-coins" min="1" placeholder="e.g. 100"/></div>
+    <div class="field"><label>Reason</label><input type="text" id="mc-reason" placeholder="e.g. Bank transfer payment"/></div>
+    <button class="btn btn-green btn-full" onclick="manualCredit()">Credit Coins</button>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+let allUsers    = [];
+let allSessions = [];
+
+(async () => {
+  const user = await requireLogin(true);
+  if (!user) return;
+  document.getElementById('webhook-url').value = window.location.origin + '/api/wallet/webhook';
+  await loadAll();
+})();
+
+async function loadAll() {
+  await Promise.all([ loadStats(), loadUsers(), loadSessions(), loadPayments(), loadSettings() ]);
+}
+
+async function loadStats() {
+  try {
+    const d = await api('/api/admin/stats');
+    document.getElementById('st-users').textContent     = d.stats.total_users;
+    document.getElementById('st-sessions').textContent  = d.stats.total_sessions;
+    document.getElementById('st-connected').textContent = d.stats.connected;
+    document.getElementById('st-revenue').textContent   = '₦' + d.stats.revenue_ngn.toLocaleString();
+  } catch {}
+}
+
+async function loadUsers() {
+  try {
+    const d = await api('/api/admin/users?limit=100');
+    allUsers = d.users;
+    renderUsers(allUsers);
+  } catch (e) { toast(e.message,'error'); }
+}
+
+function renderUsers(users) {
+  const el = document.getElementById('users-table');
+  if (!users.length) { el.innerHTML = '<div class="empty-state" style="padding:2rem"><p>No users found</p></div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Coins</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+    <tbody>${users.map(u => `
+      <tr>
+        <td style="font-size:.8rem;color:var(--muted)">#${u.id}</td>
+        <td><strong>@${u.username}</strong> ${u.is_admin?'<span class="badge badge-purple">Admin</span>':''}</td>
+        <td style="font-size:.82rem;color:var(--muted)">${u.email}</td>
+        <td><strong>${fCoins(u.coins)} 🪙</strong></td>
+        <td>${u.is_banned?'<span class="badge badge-red">Banned</span>':'<span class="badge badge-green">Active</span>'}</td>
+        <td style="font-size:.78rem;color:var(--muted)">${fDate(u.created_at)}</td>
+        <td>
+          <div style="display:flex;gap:.35rem;flex-wrap:wrap">
+            <button class="btn btn-sm btn-outline" onclick="quickCredit(${u.id})" title="Adjust coins">🪙</button>
+            <button class="btn btn-sm btn-outline" onclick="toggleAdmin(${u.id})" title="${u.is_admin?'Remove admin':'Make admin'}">${u.is_admin?'⬇️':'👑'}</button>
+            <button class="btn btn-sm btn-outline" onclick="toggleBan(${u.id})" title="${u.is_banned?'Unban':'Ban'}">${u.is_banned?'✅':'🚫'}</button>
+            <button class="btn btn-sm btn-red" onclick="deleteUser(${u.id},'${u.username}')" title="Delete user">🗑</button>
+          </div>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function searchUsers() {
+  const q = document.getElementById('user-search').value.toLowerCase();
+  if (!q) { renderUsers(allUsers); return; }
+  renderUsers(allUsers.filter(u => u.email.includes(q) || u.username.includes(q)));
+}
+
+async function loadSessions() {
+  try {
+    const d = await api('/api/admin/sessions');
+    allSessions = d.sessions;
+    const el = document.getElementById('sessions-table');
+    if (!d.sessions.length) { el.innerHTML = '<div class="empty-state" style="padding:2rem"><p>No sessions</p></div>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>ID</th><th>Number</th><th>Owner</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody>${d.sessions.map(s => `
+        <tr>
+          <td style="font-size:.8rem;color:var(--muted)">#${s.id}</td>
+          <td><strong>${s.phone_number||'Not paired'}</strong>${s.session_label?`<div style="font-size:.75rem;color:var(--muted)">${s.session_label}</div>`:''}</td>
+          <td style="font-size:.83rem">@${s.username}</td>
+          <td>${statusBadge(s.status,s.is_running)}</td>
+          <td style="font-size:.78rem;color:var(--muted)">${fDate(s.created_at)}</td>
+          <td>
+            <div style="display:flex;gap:.35rem">
+              ${s.is_running ? `<button class="btn btn-sm btn-outline" onclick="adminStopSession(${s.id})">⏹ Stop</button>` : (s.phone_number?`<button class="btn btn-sm btn-outline" onclick="adminRestartSession(${s.id})">▶ Start</button>`:'')}
+              <button class="btn btn-sm btn-red" onclick="adminDeleteSession(${s.id})">🗑</button>
+            </div>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch (e) { toast(e.message,'error'); }
+}
+
+async function loadPayments() {
+  try {
+    const d = await api('/api/admin/payments');
+    const el = document.getElementById('payments-table');
+    if (!d.payments.length) { el.innerHTML = '<div class="empty-state" style="padding:2rem"><p>No payments</p></div>'; return; }
+    el.innerHTML = `<table>
+      <thead><tr><th>Date</th><th>User</th><th>Reference</th><th>Coins</th><th>Amount</th><th>Status</th></tr></thead>
+      <tbody>${d.payments.map(p => `
+        <tr>
+          <td style="font-size:.78rem">${fDate(p.created_at)}</td>
+          <td style="font-size:.83rem">@${p.username||'deleted'}</td>
+          <td style="font-size:.72rem;color:var(--muted);font-family:monospace">${p.reference}</td>
+          <td><strong>+${fCoins(p.coins)}</strong></td>
+          <td>${fNgn(p.amount_kobo)}</td>
+          <td><span class="badge ${p.status==='success'?'badge-green':p.status==='pending'?'badge-yellow':'badge-red'}">${p.status}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch {}
+}
+
+async function loadSettings() {
+  try {
+    const d = await api('/api/admin/settings');
+    const s = d.settings;
+    const set = (id, key) => { const el=document.getElementById(id); if(el) el.value = s[key]||''; };
+    set('s-site-name','site_name');
+    set('s-signup-coins','signup_coins');
+    set('s-session-cost','session_cost');
+    set('s-max-sessions','max_sessions_per_user');
+    document.getElementById('s-maintenance').value = s['maintenance_mode']||'false';
+    set('s-p1c','coin_pkg_1_coins'); set('s-p1n','coin_pkg_1_ngn');
+    set('s-p2c','coin_pkg_2_coins'); set('s-p2n','coin_pkg_2_ngn');
+    set('s-p3c','coin_pkg_3_coins'); set('s-p3n','coin_pkg_3_ngn');
+    set('s-p4c','coin_pkg_4_coins'); set('s-p4n','coin_pkg_4_ngn');
+    document.getElementById('ps-public').value = s['paystack_public_key']||'';
+    // Don't pre-fill secret key for security
+  } catch {}
+}
+
+async function saveSettings() {
+  const btn   = document.getElementById('save-settings-btn');
+  const alert = document.getElementById('settings-alert');
+  alert.innerHTML = '';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    await api('/api/admin/settings', { method:'POST', body:{
+      site_name:            document.getElementById('s-site-name').value,
+      signup_coins:         document.getElementById('s-signup-coins').value,
+      session_cost:         document.getElementById('s-session-cost').value,
+      max_sessions_per_user:document.getElementById('s-max-sessions').value,
+      maintenance_mode:     document.getElementById('s-maintenance').value,
+      coin_pkg_1_coins:     document.getElementById('s-p1c').value,
+      coin_pkg_1_ngn:       document.getElementById('s-p1n').value,
+      coin_pkg_2_coins:     document.getElementById('s-p2c').value,
+      coin_pkg_2_ngn:       document.getElementById('s-p2n').value,
+      coin_pkg_3_coins:     document.getElementById('s-p3c').value,
+      coin_pkg_3_ngn:       document.getElementById('s-p3n').value,
+      coin_pkg_4_coins:     document.getElementById('s-p4c').value,
+      coin_pkg_4_ngn:       document.getElementById('s-p4n').value,
+    }});
+    alert.innerHTML = '<div class="alert alert-success">✅ Settings saved</div>';
+    toast('Settings saved!');
+  } catch (e) { alert.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+  finally { btn.disabled = false; btn.innerHTML = '💾 Save Settings'; }
+}
+
+async function savePaystackKeys() {
+  const btn    = document.getElementById('save-paystack-btn');
+  const alertEl= document.getElementById('paystack-alert');
+  alertEl.innerHTML = '';
+  const pub = document.getElementById('ps-public').value.trim();
+  const sec = document.getElementById('ps-secret').value.trim();
+  if (!pub || !sec) return alertEl.innerHTML = '<div class="alert alert-error">Both keys are required</div>';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    await api('/api/admin/settings', { method:'POST', body:{ paystack_public_key:pub, paystack_secret_key:sec }});
+    alertEl.innerHTML = '<div class="alert alert-success">✅ Paystack keys saved. Payments are now active.</div>';
+    document.getElementById('ps-secret').value = '';
+    toast('Paystack keys saved!');
+  } catch (e) { alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+  finally { btn.disabled = false; btn.innerHTML = '💾 Save Paystack Keys'; }
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+function openCreditModal()       { document.getElementById('credit-modal').classList.add('open'); }
+function openManualCreditModal() { document.getElementById('manual-credit-modal').classList.add('open'); }
+function closeModal(id)          { document.getElementById(id).classList.remove('open'); }
+
+function quickCredit(uid) {
+  document.getElementById('credit-uid').value = uid;
+  openCreditModal();
+}
+
+async function creditCoins() {
+  const uid    = document.getElementById('credit-uid').value;
+  const amount = document.getElementById('credit-amount').value;
+  const reason = document.getElementById('credit-reason').value;
+  const alertEl= document.getElementById('credit-alert');
+  if (!uid || !amount) return alertEl.innerHTML = '<div class="alert alert-error">User ID and amount required</div>';
+  try {
+    const d = await api('/api/admin/users/'+uid+'/coins', { method:'POST', body:{amount:parseInt(amount),reason} });
+    toast(`Done! @${d.user.username} now has ${fCoins(d.user.coins)} coins`);
+    closeModal('credit-modal');
+    loadUsers(); loadStats();
+  } catch (e) { alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+}
+
+async function manualCredit() {
+  const uid   = document.getElementById('mc-uid').value;
+  const coins = document.getElementById('mc-coins').value;
+  const reason= document.getElementById('mc-reason').value;
+  const alertEl= document.getElementById('mc-alert');
+  if (!uid || !coins) return alertEl.innerHTML = '<div class="alert alert-error">All fields required</div>';
+  try {
+    const d = await api('/api/admin/payments/credit', { method:'POST', body:{user_id:uid,coins,reason} });
+    toast(`✅ Credited ${coins} coins to @${d.user.username}`);
+    closeModal('manual-credit-modal');
+    loadUsers(); loadStats();
+  } catch (e) { alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+}
+
+async function toggleAdmin(uid) {
+  try {
+    const d = await api(`/api/admin/users/${uid}/toggle-admin`, { method:'POST' });
+    toast(d.is_admin ? 'User is now an admin' : 'Admin removed');
+    loadUsers();
+  } catch (e) { toast(e.message,'error'); }
+}
+
+async function toggleBan(uid) {
+  try {
+    const d = await api(`/api/admin/users/${uid}/ban`, { method:'POST' });
+    toast(d.is_banned ? 'User banned' : 'User unbanned');
+    loadUsers();
+  } catch (e) { toast(e.message,'error'); }
+}
+
+async function deleteUser(uid, name) {
+  if (!confirm(`Delete user @${name}? All their sessions will be deleted too.`)) return;
+  try {
+    await api(`/api/admin/users/${uid}`, { method:'DELETE' });
+    toast('User deleted'); loadUsers(); loadStats();
+  } catch (e) { toast(e.message,'error'); }
+}
+
+async function adminStopSession(id) {
+  try { await api(`/api/admin/sessions/${id}/stop`, { method:'POST' }); toast('Stopped'); loadSessions(); }
+  catch (e) { toast(e.message,'error'); }
+}
+
+async function adminRestartSession(id) {
+  try { await api(`/api/admin/sessions/${id}/restart`, { method:'POST' }); toast('Restarting...'); setTimeout(loadSessions,2000); }
+  catch (e) { toast(e.message,'error'); }
+}
+
+async function adminDeleteSession(id) {
+  if (!confirm('Delete this session?')) return;
+  try { await api(`/api/admin/sessions/${id}`, { method:'DELETE' }); toast('Deleted'); loadSessions(); }
+  catch (e) { toast(e.message,'error'); }
+}
+
+async function stopAllSessions() {
+  if (!confirm('Stop ALL running sessions?')) return;
+  try { await api('/api/admin/sessions/stopall', { method:'POST' }); toast('All sessions stopped'); loadSessions(); loadStats(); }
+  catch (e) { toast(e.message,'error'); }
+}
+</script>
+</body>
+</html>

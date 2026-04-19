@@ -1,0 +1,44 @@
+# ══════════════════════════════════════════════
+#  VIPER BOT MD — Render Deploy Config
+#  Push to GitHub, then connect repo in Render
+# ══════════════════════════════════════════════
+
+services:
+  - type: web
+    name: viper-bot-md
+    env: node
+    region: oregon          # or frankfurt if you prefer EU
+    plan: free
+    buildCommand: npm install --production
+    startCommand: node web/server.js
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+
+      # Auto-linked from the Render Postgres below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: viper-db
+          property: connectionString
+
+      # Render generates a random JWT secret automatically
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Set this manually in Render dashboard after first deploy
+      # (Settings → Environment → Add env var)
+      - key: ADMIN_EMAIL
+        sync: false
+
+# Free PostgreSQL database (expires after 90 days on free plan —
+# upgrade to paid or dump+restore before expiry)
+databases:
+  - name: viper-db
+    databaseName: viperbot
+    user: viperbot
+    plan: free
+    region: oregon
