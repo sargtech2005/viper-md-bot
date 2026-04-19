@@ -3,66 +3,162 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Create Account — VIPER BOT MD</title>
+<title>Create Account — VIPER MD BOT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#080d14;--card:#0f1923;--border:#1a2840;--green:#22c55e;--green-dim:#16a34a;--text:#e2e8f0;--muted:#64748b;--red:#ef4444}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem}
-a{color:var(--green);text-decoration:none}
-.logo{font-size:1.4rem;font-weight:800;color:var(--green);margin-bottom:2rem;text-align:center}
-.logo span{color:var(--text)}
-.card{background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:2rem;width:100%;max-width:420px}
-.card h1{font-size:1.4rem;font-weight:700;margin-bottom:.4rem}
-.bonus-badge{display:inline-flex;align-items:center;gap:.4rem;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:.4rem;padding:.3rem .7rem;font-size:.78rem;color:var(--green);margin-bottom:1.5rem}
+:root{
+  --green:#16a34a;--green-pale:#f0fdf4;--green-mid:#bbf7d0;
+  --text:#0f172a;--muted:#64748b;--border:#e2e8f0;--bg:#f8fafc;--white:#ffffff;
+  --red:#ef4444;--red-pale:#fef2f2;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{text-decoration:none;color:inherit}
+
+nav{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1.1rem 2rem;border-bottom:1px solid var(--border);background:var(--white);
+}
+.nav-logo{display:flex;align-items:center;gap:.6rem;font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;color:var(--text)}
+.logo-icon{width:30px;height:30px;border-radius:.4rem;background:var(--green);display:flex;align-items:center;justify-content:center}
+.logo-icon svg{color:white;width:16px;height:16px}
+.logo-text span{color:var(--green)}
+.nav-right{font-size:.875rem;color:var(--muted)}
+.nav-right a{color:var(--green);font-weight:600}
+.nav-right a:hover{text-decoration:underline}
+
+main{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem 1.25rem}
+
+.auth-card{
+  background:var(--white);border:1px solid var(--border);border-radius:1rem;
+  padding:2.25rem;width:100%;max-width:420px;
+  box-shadow:0 4px 24px rgba(0,0,0,.05);
+}
+.card-title{font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;letter-spacing:-.02em;color:var(--text);margin-bottom:.35rem}
+.card-sub{font-size:.875rem;color:var(--muted);margin-bottom:.9rem}
+
+.bonus-badge{
+  display:inline-flex;align-items:center;gap:.45rem;
+  background:var(--green-pale);border:1px solid var(--green-mid);
+  border-radius:.4rem;padding:.35rem .75rem;
+  font-size:.78rem;font-weight:600;color:var(--green);
+  margin-bottom:1.5rem;
+}
+.bonus-badge svg{width:13px;height:13px}
+
 .field{margin-bottom:1.1rem}
-label{display:block;font-size:.825rem;font-weight:600;color:var(--muted);margin-bottom:.4rem}
-input{width:100%;padding:.75rem 1rem;background:#060c14;border:1px solid var(--border);border-radius:.6rem;color:var(--text);font-size:.95rem;outline:none;transition:border-color .2s}
-input:focus{border-color:var(--green)}
-input::placeholder{color:#334155}
+.field label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.05em}
+.input-wrap{position:relative}
+.input-wrap svg{position:absolute;left:.85rem;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted);pointer-events:none}
+input{
+  width:100%;padding:.7rem .9rem .7rem 2.5rem;
+  background:var(--bg);border:1.5px solid var(--border);border-radius:.55rem;
+  color:var(--text);font-size:.925rem;font-family:'DM Sans',sans-serif;
+  outline:none;transition:border-color .15s,box-shadow .15s;
+}
+input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
+input::placeholder{color:#94a3b8}
 .hint{font-size:.75rem;color:var(--muted);margin-top:.3rem}
-.btn{width:100%;padding:.8rem;background:var(--green);color:#000;border:none;border-radius:.6rem;font-size:1rem;font-weight:700;cursor:pointer;transition:background .2s;margin-top:.5rem}
-.btn:hover:not(:disabled){background:var(--green-dim)}
-.btn:disabled{opacity:.6;cursor:not-allowed}
-.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:.5rem;padding:.75rem 1rem;font-size:.85rem;color:var(--red);margin-bottom:1rem;display:none}
-.footer-link{text-align:center;margin-top:1.5rem;font-size:.875rem;color:var(--muted)}
-.loading{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:.4rem}
+
+.error-box{
+  display:flex;align-items:center;gap:.5rem;
+  background:var(--red-pale);border:1px solid rgba(239,68,68,.25);
+  border-radius:.5rem;padding:.7rem .9rem;
+  font-size:.83rem;color:var(--red);margin-bottom:1rem;
+}
+.error-box svg{width:15px;height:15px;flex-shrink:0}
+.error-box.hidden{display:none}
+
+.btn-submit{
+  width:100%;padding:.8rem;background:var(--green);color:var(--white);
+  border:none;border-radius:.55rem;
+  font-family:'DM Sans',sans-serif;font-size:.95rem;font-weight:700;
+  cursor:pointer;transition:background .15s;
+  display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:.25rem;
+}
+.btn-submit:hover:not(:disabled){background:#15803d}
+.btn-submit:disabled{opacity:.6;cursor:not-allowed}
+.btn-submit svg{width:16px;height:16px}
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+.footer-link{text-align:center;margin-top:1.4rem;font-size:.875rem;color:var(--muted)}
+.footer-link a{color:var(--green);font-weight:600}
+.footer-link a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
 
-<div class="logo">🐍 VIPER <span>BOT MD</span></div>
-
-<div class="card">
-  <h1>Create your account</h1>
-  <div class="bonus-badge">🎁 50 free coins on signup — 5 sessions included</div>
-
-  <div class="error" id="error-msg"></div>
-
-  <div class="field">
-    <label>Email address</label>
-    <input type="email" id="email" placeholder="you@example.com" autocomplete="email"/>
+<nav>
+  <div class="nav-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 16c0-4 3-6 6-6s6-2 6-6"/>
+        <circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/>
+        <path d="M4 16c0 1.1.9 2 2 2"/>
+      </svg>
+    </div>
+    <span class="logo-text">VIPER <span>MD</span></span>
   </div>
-  <div class="field">
-    <label>Username</label>
-    <input type="text" id="username" placeholder="viperuser" autocomplete="username"/>
-    <div class="hint">3–20 chars · letters, numbers, underscore only</div>
-  </div>
-  <div class="field">
-    <label>Password</label>
-    <input type="password" id="password" placeholder="Min. 6 characters" autocomplete="new-password"/>
-  </div>
+  <div class="nav-right">Have an account? <a href="/login.html">Sign in</a></div>
+</nav>
 
-  <button class="btn" id="reg-btn" onclick="doRegister()">Create Account & Get 50 Coins</button>
+<main>
+  <div class="auth-card">
+    <div class="card-title">Create account</div>
+    <div class="card-sub">Get started with VIPER MD BOT in seconds</div>
 
-  <div class="footer-link">
-    Already have an account? <a href="/login.html">Sign in</a>
+    <div class="bonus-badge">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 2l1.8 3.6L16 6.3l-3 2.9.7 4.1L10 11.4l-3.7 1.9.7-4.1-3-2.9 4.2-.7z"/></svg>
+      50 free coins on signup — 5 sessions included
+    </div>
+
+    <div class="error-box hidden" id="error-msg">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
+      <span id="error-text"></span>
+    </div>
+
+    <div class="field">
+      <label>Email address</label>
+      <div class="input-wrap">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="14" height="11" rx="1.5"/><path d="M3 7l7 5 7-5"/></svg>
+        <input type="email" id="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Username</label>
+      <div class="input-wrap">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        <input type="text" id="username" placeholder="viperuser" autocomplete="username"/>
+      </div>
+      <div class="hint">3–20 chars · letters, numbers, underscore only</div>
+    </div>
+
+    <div class="field">
+      <label>Password</label>
+      <div class="input-wrap">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="9" width="10" height="8" rx="1.5"/><path d="M7 9V7a3 3 0 016 0v2"/></svg>
+        <input type="password" id="password" placeholder="Min. 6 characters" autocomplete="new-password"/>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="reg-btn" onclick="doRegister()">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+      Create Account &amp; Get 50 Coins
+    </button>
+
+    <div class="footer-link">Already have an account? <a href="/login.html">Sign in</a></div>
   </div>
-</div>
+</main>
 
 <script>
-const errEl = document.getElementById('error-msg');
-const btn   = document.getElementById('reg-btn');
+const errBox  = document.getElementById('error-msg');
+const errText = document.getElementById('error-text');
+const btn     = document.getElementById('reg-btn');
 
 document.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
 
@@ -70,17 +166,15 @@ async function doRegister() {
   const email    = document.getElementById('email').value.trim();
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
-  errEl.style.display = 'none';
-
+  hideError();
   if (!email || !username || !password) return showError('Please fill in all fields');
 
   btn.disabled  = true;
-  btn.innerHTML = '<span class="loading"></span>Creating account...';
+  btn.innerHTML = '<div class="spinner"></div> Creating account...';
 
   try {
-    const r = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const r    = await fetch('/api/auth/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ email, username, password }),
     });
     const data = await r.json();
@@ -89,19 +183,25 @@ async function doRegister() {
   } catch {
     showError('Network error. Please try again.');
   } finally {
-    btn.disabled  = false;
-    btn.innerHTML = 'Create Account & Get 50 Coins';
+    resetBtn();
   }
 }
 
 function showError(msg) {
-  errEl.textContent   = msg;
-  errEl.style.display = 'block';
-  btn.disabled        = false;
-  btn.innerHTML       = 'Create Account & Get 50 Coins';
+  errText.textContent = msg;
+  errBox.classList.remove('hidden');
+  resetBtn();
+}
+function hideError() { errBox.classList.add('hidden'); }
+function resetBtn() {
+  btn.disabled  = false;
+  btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg> Create Account &amp; Get 50 Coins';
 }
 
-fetch('/api/auth/me').then(r => { if (r.ok) window.location.href = '/dashboard.html'; }).catch(()=>{});
+// FIX: Only redirect on confirmed 200, never on network error / server error
+fetch('/api/auth/me', { credentials: 'same-origin' })
+  .then(r => { if (r.status === 200) window.location.href = '/dashboard.html'; })
+  .catch(() => {});
 </script>
 </body>
 </html>

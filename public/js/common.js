@@ -117,3 +117,12 @@ function statusBadge(status, isRunning) {
 function toggleSidebar() {
   document.getElementById('sidebar')?.classList.toggle('open');
 }
+
+// Close sidebar when tapping the dark overlay behind it
+document.addEventListener('click', function(e) {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar || !sidebar.classList.contains('open')) return;
+  if (!sidebar.contains(e.target) && !e.target.closest('.hamburger')) {
+    sidebar.classList.remove('open');
+  }
+});

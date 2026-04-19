@@ -623,6 +623,16 @@ function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
 }
 
+// Close sidebar when clicking the dark overlay behind it (mobile)
+document.addEventListener('click', function(e) {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar.classList.contains('open')) return;
+  // If click is outside the sidebar itself, close it
+  if (!sidebar.contains(e.target) && !e.target.closest('.hamburger')) {
+    sidebar.classList.remove('open');
+  }
+});
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
   const user = await requireLogin();
