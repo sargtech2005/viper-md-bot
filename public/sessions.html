@@ -331,14 +331,43 @@
 
 <!-- ── LOGS MODAL ── -->
 <div class="v-modal-overlay" id="modal-logs">
-  <div class="v-modal v-modal-lg">
+  <div class="v-modal v-modal-lg" style="max-width:580px">
     <div class="v-modal-header">
-      <div class="v-modal-title">Session Logs</div>
-      <button class="v-modal-close" onclick="closeModal('modal-logs')">
+      <div class="v-modal-title" style="display:flex;align-items:center;gap:.5rem">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:17px;height:17px;color:var(--green)"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M7 8h6M7 11h4"/></svg>
+        Session Logs
+      </div>
+      <button class="v-modal-close" onclick="closeLogs()">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
       </button>
     </div>
-    <pre id="logs-content" style="background:var(--bg);border:1px solid var(--border);border-radius:.45rem;padding:1rem;font-size:.72rem;overflow:auto;max-height:400px;white-space:pre-wrap;color:var(--muted);font-family:monospace;line-height:1.6">Loading...</pre>
+
+    <!-- Pair code banner: hidden until PAIR_CODE found in logs -->
+    <div id="log-code-banner" style="display:none;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:.75rem;padding:1rem 1.25rem;margin-bottom:1rem">
+      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--green);margin-bottom:.4rem">✅ Pair Code Found</div>
+      <div style="display:flex;align-items:center;gap:.85rem;flex-wrap:wrap">
+        <div id="log-banner-code" style="font-family:'Syne',monospace;font-size:1.9rem;font-weight:800;letter-spacing:.18em;color:var(--green)">—</div>
+        <button id="log-banner-copy" onclick="copyLogBannerCode()" style="display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .95rem;background:var(--green);color:#fff;border:none;border-radius:.45rem;font-size:.8rem;font-weight:700;cursor:pointer">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:14px;height:14px"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg>
+          Copy Code
+        </button>
+      </div>
+      <div style="font-size:.7rem;color:var(--muted);margin-top:.4rem">Enter this in WhatsApp → Linked Devices → Link with phone number instead</div>
+    </div>
+
+    <!-- Log output -->
+    <pre id="logs-content" style="background:#0d1117;color:#94a3b8;font-size:.72rem;line-height:1.65;border-radius:.6rem;padding:1rem;overflow-y:auto;height:280px;white-space:pre-wrap;word-break:break-all;font-family:'Courier New',monospace;border:1px solid var(--border)"></pre>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:.85rem;flex-wrap:wrap;gap:.5rem">
+      <div style="font-size:.74rem;color:var(--muted);display:flex;align-items:center;gap:.4rem">
+        <span id="log-live-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#6b7280"></span>
+        <span id="log-status-text">—</span>
+      </div>
+      <button class="vbtn vbtn-outline vbtn-sm" onclick="manualRefreshLogs()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><path d="M17 10A7 7 0 113 10"/><path d="M17 10V5h-5"/></svg>
+        Refresh
+      </button>
+    </div>
   </div>
 </div>
 
@@ -367,6 +396,8 @@ let user            = null;
 let pairSessionId   = null;
 let pairEventSource = null;
 let pairCountdown   = null;
+let logPollTimer    = null;   // for live log polling
+let logSessionId    = null;   // which session's logs are open
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 (async () => {
@@ -536,7 +567,9 @@ function openPair(sessionId) {
 
 function closePairModal() {
   stopPairSSE();
+  stopLogPolling();
   closeModal('modal-pair');
+  closeModal('modal-logs');
   pairSessionId = null;
   silentRefresh();
 }
@@ -570,6 +603,9 @@ async function startPairing() {
   document.getElementById('pair-step-phone').style.display = 'none';
   document.getElementById('pair-step-code').style.display  = 'block';
   startPairSSE();
+
+  // Open logs modal immediately so user sees the pair code appear there
+  openLiveLogs(pairSessionId, true);
 }
 
 function startPairSSE() {
@@ -715,14 +751,129 @@ async function deleteSession(id, label) {
 }
 
 async function viewLogs(id) {
-  document.getElementById('logs-content').textContent = 'Loading...';
+  openLiveLogs(id, false);
+}
+
+// ── Live log polling (used by both manual "Logs" button and auto-open on pair)
+function openLiveLogs(id, isPairing) {
+  stopLogPolling();
+  logSessionId = id;
+
+  // Reset banner
+  document.getElementById('log-code-banner').style.display = 'none';
+  document.getElementById('log-banner-code').textContent = '—';
+  document.getElementById('logs-content').innerHTML = '<span style="color:#4b5563;font-style:italic">Connecting…</span>';
+  setLogStatus('connecting');
+
   openModal('modal-logs');
+
+  // Fetch immediately then poll every 2s
+  doFetchLogs(isPairing);
+  logPollTimer = setInterval(() => doFetchLogs(isPairing), 2000);
+}
+
+function closeLogs() {
+  stopLogPolling();
+  closeModal('modal-logs');
+}
+
+function stopLogPolling() {
+  if (logPollTimer) { clearInterval(logPollTimer); logPollTimer = null; }
+}
+
+function setLogStatus(state) {
+  const dot  = document.getElementById('log-live-dot');
+  const text = document.getElementById('log-status-text');
+  if (state === 'live')        { dot.style.background = '#4ade80'; dot.style.animation = 'logpulse 1.5s infinite'; text.textContent = 'Live — auto-refresh'; }
+  else if (state === 'connecting') { dot.style.background = '#facc15'; dot.style.animation = 'logpulse 1.5s infinite'; text.textContent = 'Connecting…'; }
+  else                         { dot.style.background = '#6b7280'; dot.style.animation = 'none';                    text.textContent = 'Idle'; }
+}
+
+function manualRefreshLogs() {
+  if (logSessionId) doFetchLogs(false);
+}
+
+async function doFetchLogs(isPairing) {
+  if (!logSessionId) return;
   try {
-    const d = await api(`/api/sessions/${id}/logs`);
-    document.getElementById('logs-content').textContent = d.logs || 'No logs yet.';
+    const d = await api(`/api/sessions/${logSessionId}/logs`);
+    renderLogContent(d.logs || '', isPairing);
+    setLogStatus('live');
   } catch(e) {
-    document.getElementById('logs-content').textContent = 'Failed: ' + e.message;
+    setLogStatus('idle');
   }
+}
+
+function renderLogContent(raw, isPairing) {
+  const out = document.getElementById('logs-content');
+  if (!raw.trim()) {
+    out.innerHTML = '<span style="color:#4b5563;font-style:italic">No logs yet — bot is starting up…</span>';
+    return;
+  }
+
+  let foundCode = null;
+  const lines = raw.split('\n');
+
+  const html = lines.map(line => {
+    const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // ── PAIR_CODE line: bold, bright green, extra large ─────────────────────
+    if (line.includes('PAIR_CODE:')) {
+      const code = line.split('PAIR_CODE:')[1]?.trim();
+      if (code && !foundCode) foundCode = code;
+      return `<strong style="color:#4ade80;font-size:.82rem;letter-spacing:.04em">► PAIR CODE:  <span style="font-size:1.05rem;letter-spacing:.12em">${code}</span></strong>`;
+    }
+    if (line.includes('BOT_STATUS:CONNECTED') || line.includes('✅') || line.includes('Started')) {
+      return `<span style="color:#4ade80">${esc}</span>`;
+    }
+    if (line.includes('⚠') || line.includes('Reconnecting') || line.includes('408') || line.includes('503')) {
+      return `<span style="color:#fb923c">${esc}</span>`;
+    }
+    if (line.includes('❌') || line.includes('error') || line.includes('Error') || line.includes('LOGGED_OUT')) {
+      return `<span style="color:#f87171">${esc}</span>`;
+    }
+    if (line.includes('🧹') || line.includes('Cleanup') || line.includes('Seeded') || line.includes('Restored')) {
+      return `<span style="color:#60a5fa">${esc}</span>`;
+    }
+    return `<span style="color:#94a3b8">${esc}</span>`;
+  }).join('\n');
+
+  out.innerHTML = html;
+  out.scrollTop = out.scrollHeight;
+
+  // Show the pair code banner if found
+  if (foundCode) {
+    document.getElementById('log-banner-code').textContent = foundCode;
+    document.getElementById('log-code-banner').style.display = 'block';
+
+    // If pairing is in progress, also update the pair modal code display
+    if (isPairing && pairSessionId === logSessionId) {
+      const disp = document.getElementById('pair-code-display');
+      if (disp.style.display === 'none') {
+        document.getElementById('pair-code-loading').style.display = 'none';
+        document.getElementById('pair-code-display').style.display = 'block';
+        document.getElementById('pair-code-value').textContent = foundCode;
+        startPairCountdown(60);
+        silentRefresh();
+      }
+    }
+  }
+}
+
+function copyLogBannerCode() {
+  const code = document.getElementById('log-banner-code').textContent;
+  if (!code || code === '—') return;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('log-banner-copy');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:14px;height:14px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg> Copied!';
+    btn.style.background = '#16a34a';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
+  }).catch(() => {
+    const el = document.getElementById('log-banner-code');
+    const s = window.getSelection(), r = document.createRange();
+    r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r);
+  });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

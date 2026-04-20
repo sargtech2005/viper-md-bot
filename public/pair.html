@@ -20,6 +20,7 @@
   display:inline-flex;align-items:center;justify-content:center;
   font-size:.75rem;font-weight:700;flex-shrink:0;
 }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 </style>
 </head>
 <body>
@@ -136,47 +137,7 @@
     </div>
 
   </div>
-    <!-- ── Logs Fallback Modal ─────────────────────────────────────────────── -->
-    <!-- Opens automatically if pair code doesn't arrive within 20s via SSE.   -->
-    <!-- Polls GET /api/sessions/:id/logs every 5s and extracts PAIR_CODE line. -->
-    <div id="logs-modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;">
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:1rem;padding:1.5rem;width:min(94vw,540px);max-height:85vh;display:flex;flex-direction:column;gap:1rem;box-shadow:0 20px 60px rgba(0,0,0,.4);">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem">
-          <div style="display:flex;align-items:center;gap:.6rem;font-weight:700;font-size:.95rem">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:18px;height:18px;color:var(--green)"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M7 8h6M7 11h4"/></svg>
-            Bot Logs
-          </div>
-          <button onclick="closeLogsModal()" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:.25rem">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px"><path d="M5 5l10 10M15 5L5 15"/></svg>
-          </button>
-        </div>
-
-        <!-- Extracted pair code — shown when found in logs -->
-        <div id="log-pair-found" style="display:none;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:.75rem;padding:1.25rem;text-align:center">
-          <div style="font-size:.75rem;color:var(--muted);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.08em;font-weight:600">Your Pair Code</div>
-          <div id="log-pair-code" style="font-family:'Syne',monospace;font-size:2rem;font-weight:800;letter-spacing:.15em;color:var(--green)">—</div>
-          <button id="log-copy-btn" onclick="copyLogCode()" class="vbtn vbtn-outline vbtn-sm" style="margin-top:.85rem">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg>
-            Copy Code
-          </button>
-        </div>
-
-        <div style="font-size:.78rem;color:var(--muted)">
-          Couldn't display the code automatically — searching logs below.
-          <span id="log-poll-status" style="color:var(--green);margin-left:.35rem"></span>
-        </div>
-
-        <!-- Raw log output -->
-        <pre id="log-output" style="background:var(--surface,#0f1117);color:#a3e635;font-size:.72rem;line-height:1.55;border-radius:.6rem;padding:1rem;overflow-y:auto;max-height:260px;white-space:pre-wrap;word-break:break-all;flex:1">(fetching logs...)</pre>
-
-        <button class="vbtn vbtn-outline vbtn-sm" onclick="fetchLogs(true)">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><path d="M17 10A7 7 0 113 10"/><path d="M17 10V5h-5"/></svg>
-          Refresh Logs
-        </button>
-      </div>
-    </div>
-
-  <footer class="app-footer">
+<footer class="app-footer">
     <div class="app-footer-inner">
       <a href="/dashboard.html" class="app-footer-logo">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 16c0-4 3-6 6-6s6-2 6-6"/><circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/><path d="M4 16c0 1.1.9 2 2 2"/></svg>
@@ -195,37 +156,45 @@
 
 <script src="/js/common.js"></script>
 <script>
-const urlSlot = window.location.pathname.split('/').pop();
-let sessionId  = null;
-let eventSource = null, countdown = null, phone = '';
+/* ─────────────────────────────────────────────────────────────────────────
+   PAIR PAGE — VIPER BOT MD
+   Flow:
+     1. User enters phone → clicks "Get Pair Code"
+     2. API call fires, then IMMEDIATELY the logs modal opens
+     3. Logs modal polls every 2 s, renders each line
+        • PAIR_CODE:XXXX-XXXX line → shown in bold green at top + in log body
+        • copy button beside the code
+     4. SSE stream still runs in background — if code arrives via SSE it also
+        updates the main card (for users that don't need the modal at all)
+     5. "Connected!" closes the modal and shows the success state
+   ─────────────────────────────────────────────────────────────────────────*/
 
-// Logs modal state
-let logPollTimer   = null;
-let logModalOpen   = false;
-let sseCodeTimeout = null;   // fires if no pair_code arrives within 20s
+const urlSlot = window.location.pathname.split('/').pop();
+let sessionId   = null;
+let eventSource = null, countdown = null, phone = '';
+let logPollTimer = null;
 
 (async () => {
   const user = await requireLogin();
   if (!user) return;
-
   try {
     const d = await api(`/api/sessions/byslot/${urlSlot}`);
     sessionId = d.session.id;
-  } catch (e) {
+  } catch {
     sessionId = parseInt(urlSlot);
     if (isNaN(sessionId)) {
       document.body.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--red)">Session not found.</div>';
       return;
     }
   }
-
   document.getElementById('phone-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') startPairing();
   });
 })();
 
+// ── Step 1: user submits phone ──────────────────────────────────────────────
 async function startPairing() {
-  const input   = document.getElementById('phone-input').value.replace(/[^0-9]/g,'');
+  const input   = document.getElementById('phone-input').value.replace(/[^0-9]/g, '');
   const alertEl = document.getElementById('phone-alert');
   const alertTx = document.getElementById('phone-alert-text');
   alertEl.classList.add('hidden');
@@ -241,8 +210,8 @@ async function startPairing() {
   btn.innerHTML = '<div class="vspin" style="width:14px;height:14px"></div> Starting pairing...';
 
   try {
-    await api(`/api/sessions/${sessionId}/pair`, { method:'POST', body:{ phone } });
-  } catch(e) {
+    await api(`/api/sessions/${sessionId}/pair`, { method: 'POST', body: { phone } });
+  } catch (e) {
     alertTx.textContent = e.message;
     alertEl.classList.remove('hidden');
     btn.disabled = false;
@@ -250,87 +219,29 @@ async function startPairing() {
     return;
   }
 
+  // Switch card to "waiting" state
   document.getElementById('step-phone').style.display = 'none';
   document.getElementById('step-code').style.display  = 'block';
+
+  // ── Open logs modal immediately — user will see the code there ────────────
+  openLogsModal();
+
+  // Also start SSE in background
   startSSE();
-}
-
-function startSSE() {
-  stopSSE();
-  eventSource = new EventSource(`/api/sessions/${sessionId}/stream`);
-
-  // ── Auto-open logs modal if pair code doesn't arrive within 20s ──────────
-  sseCodeTimeout = setTimeout(() => {
-    // Only open if we still haven't received the code or connected
-    if (document.getElementById('code-display').style.display  === 'none' &&
-        document.getElementById('code-connected').style.display === 'none') {
-      openLogsModal();
-    }
-  }, 20000);
-
-  eventSource.addEventListener('pair_code', e => {
-    clearTimeout(sseCodeTimeout);
-    const data = JSON.parse(e.data);
-    document.getElementById('code-loading').style.display = 'none';
-    document.getElementById('code-display').style.display = 'block';
-    document.getElementById('pair-code-value').textContent = data.code;
-    startCountdown(60);
-    // If logs modal is open, also show code there
-    showCodeInLogsModal(data.code);
-  });
-
-  eventSource.addEventListener('connected', () => {
-    clearTimeout(sseCodeTimeout);
-    stopLogsPolling();
-    stopSSE();
-    document.getElementById('code-display').style.display    = 'none';
-    document.getElementById('code-loading').style.display    = 'none';
-    document.getElementById('code-connected').style.display  = 'block';
-    closeLogsModal();
-  });
-
-  eventSource.addEventListener('error', e => {
-    clearTimeout(sseCodeTimeout);
-    stopSSE();
-    let msg = 'Connection failed. Please try again.';
-    try { msg = JSON.parse(e.data).message || msg; } catch {}
-    document.getElementById('error-text').textContent = msg;
-    document.getElementById('code-display').style.display  = 'none';
-    document.getElementById('code-loading').style.display  = 'none';
-    document.getElementById('code-error').style.display    = 'block';
-    stopLogsPolling();
-    closeLogsModal();
-  });
-
-  eventSource.addEventListener('logged_out', () => {
-    clearTimeout(sseCodeTimeout);
-    stopSSE();
-    document.getElementById('error-text').textContent = 'Session logged out.';
-    document.getElementById('code-display').style.display  = 'none';
-    document.getElementById('code-loading').style.display  = 'none';
-    document.getElementById('code-error').style.display    = 'block';
-    stopLogsPolling();
-    closeLogsModal();
-  });
-
-  eventSource.onerror = () => {
-    // SSE reconnects automatically — only show error if no code yet
-  };
 }
 
 // ── Logs Modal ──────────────────────────────────────────────────────────────
 function openLogsModal() {
-  logModalOpen = true;
-  const bd = document.getElementById('logs-modal-backdrop');
-  bd.style.display = 'flex';
-  fetchLogs(true);
-  // Poll every 5s for fresh logs + pair code extraction
-  logPollTimer = setInterval(() => fetchLogs(false), 5000);
+  document.getElementById('logs-modal').classList.add('open');
+  document.getElementById('log-code-banner').style.display = 'none';
+  document.getElementById('log-output').innerHTML = '<span style="color:var(--muted);font-style:italic">Connecting to bot…</span>';
+  // Poll immediately then every 2 seconds
+  fetchLogs();
+  logPollTimer = setInterval(fetchLogs, 2000);
 }
 
 function closeLogsModal() {
-  logModalOpen = false;
-  document.getElementById('logs-modal-backdrop').style.display = 'none';
+  document.getElementById('logs-modal').classList.remove('open');
   stopLogsPolling();
 }
 
@@ -338,70 +249,128 @@ function stopLogsPolling() {
   if (logPollTimer) { clearInterval(logPollTimer); logPollTimer = null; }
 }
 
-async function fetchLogs(showSpinner) {
+async function fetchLogs() {
   if (!sessionId) return;
-  const statusEl = document.getElementById('log-poll-status');
-  const outputEl = document.getElementById('log-output');
-  if (showSpinner) {
-    statusEl.textContent = 'Loading...';
-    outputEl.textContent = '(fetching logs...)';
-  } else {
-    statusEl.textContent = 'Refreshing...';
-  }
-
   try {
     const d = await api(`/api/sessions/${sessionId}/logs`);
-    const raw = (d.logs || '').trim() || '(no logs yet)';
-    outputEl.textContent = raw;
-    // Auto-scroll to bottom
-    outputEl.scrollTop = outputEl.scrollHeight;
-    statusEl.textContent = '✓ Live';
+    const raw = (d.logs || '').trim();
+    if (!raw) return;
+    renderLogs(raw);
+  } catch (_) {}
+}
 
-    // ── Extract pair code from log lines ───────────────────────────────────
-    const lines = raw.split('\n');
-    for (const line of lines) {
-      if (line.includes('PAIR_CODE:')) {
-        const raw_code = line.split('PAIR_CODE:')[1]?.trim();
-        if (raw_code) {
-          showCodeInLogsModal(raw_code);
-          // Also update the main UI if code display is still hidden
-          if (document.getElementById('code-display').style.display === 'none' &&
-              document.getElementById('code-connected').style.display === 'none') {
-            document.getElementById('code-loading').style.display = 'none';
-            document.getElementById('code-display').style.display = 'block';
-            document.getElementById('pair-code-value').textContent = raw_code;
-            startCountdown(60);
-          }
-        }
-        break;
-      }
+function renderLogs(raw) {
+  const lines = raw.split('
+');
+  let pairCode = null;
+
+  // Build HTML: highlight the PAIR_CODE line
+  const html = lines.map(line => {
+    const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (line.includes('PAIR_CODE:')) {
+      const code = line.split('PAIR_CODE:')[1]?.trim();
+      if (code && !pairCode) pairCode = code;
+      // Bold, green, large — very visible
+      return `<span style="color:#4ade80;font-weight:800;font-size:.85rem">► PAIR_CODE: <span id="inline-code">${code}</span></span>`;
     }
-  } catch (e) {
-    statusEl.textContent = '⚠ Error';
-    if (showSpinner) outputEl.textContent = 'Could not fetch logs: ' + e.message;
+    if (line.includes('Waiting') || line.includes('waiting')) {
+      return `<span style="color:#facc15">${esc}</span>`;
+    }
+    if (line.includes('✅') || line.includes('CONNECTED') || line.includes('Started')) {
+      return `<span style="color:#4ade80">${esc}</span>`;
+    }
+    if (line.includes('❌') || line.includes('error') || line.includes('Error') || line.includes('failed')) {
+      return `<span style="color:#f87171">${esc}</span>`;
+    }
+    if (line.includes('⚠') || line.includes('Reconnecting')) {
+      return `<span style="color:#fb923c">${esc}</span>`;
+    }
+    return `<span style="color:#94a3b8">${esc}</span>`;
+  }).join('
+');
+
+  const out = document.getElementById('log-output');
+  out.innerHTML = html;
+  out.scrollTop = out.scrollHeight;
+
+  // Show the code banner if we found a code
+  if (pairCode) showCodeBanner(pairCode);
+}
+
+function showCodeBanner(code) {
+  const banner = document.getElementById('log-code-banner');
+  document.getElementById('banner-code').textContent = code;
+  banner.style.display = 'block';
+
+  // Also update the main card so it's consistent
+  if (document.getElementById('code-display').style.display === 'none' &&
+      document.getElementById('code-connected').style.display === 'none') {
+    document.getElementById('code-loading').style.display = 'none';
+    document.getElementById('code-display').style.display = 'block';
+    document.getElementById('pair-code-value').textContent = code;
+    startCountdown(60);
   }
 }
 
-function showCodeInLogsModal(code) {
+function copyBannerCode() {
+  const code = document.getElementById('banner-code').textContent;
   if (!code) return;
-  document.getElementById('log-pair-found').style.display = 'block';
-  document.getElementById('log-pair-code').textContent = code;
-}
-
-function copyLogCode() {
-  const code = document.getElementById('log-pair-code').textContent;
-  if (!code || code === '—') return;
   navigator.clipboard.writeText(code).then(() => {
-    const btn = document.getElementById('log-copy-btn');
-    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg> Copied!';
-    setTimeout(() => {
-      btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg> Copy Code';
-    }, 2000);
+    const btn = document.getElementById('banner-copy-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:15px;height:15px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg> Copied!';
+    btn.style.background = '#16a34a';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
   }).catch(() => {
-    const el = document.getElementById('log-pair-code');
-    const sel = window.getSelection(); const rng = document.createRange();
+    const el = document.getElementById('banner-code');
+    const sel = window.getSelection(), rng = document.createRange();
     rng.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(rng);
   });
+}
+
+// ── SSE (background) ────────────────────────────────────────────────────────
+function startSSE() {
+  stopSSE();
+  eventSource = new EventSource(`/api/sessions/${sessionId}/stream`);
+
+  eventSource.addEventListener('pair_code', e => {
+    const data = JSON.parse(e.data);
+    showCodeBanner(data.code);
+    document.getElementById('code-loading').style.display = 'none';
+    document.getElementById('code-display').style.display = 'block';
+    document.getElementById('pair-code-value').textContent = data.code;
+    startCountdown(60);
+  });
+
+  eventSource.addEventListener('connected', () => {
+    stopSSE(); stopLogsPolling(); closeLogsModal();
+    document.getElementById('code-display').style.display   = 'none';
+    document.getElementById('code-loading').style.display   = 'none';
+    document.getElementById('code-connected').style.display = 'block';
+  });
+
+  eventSource.addEventListener('error', e => {
+    stopSSE();
+    let msg = 'Connection failed. Please try again.';
+    try { msg = JSON.parse(e.data).message || msg; } catch {}
+    document.getElementById('error-text').textContent = msg;
+    document.getElementById('code-display').style.display  = 'none';
+    document.getElementById('code-loading').style.display  = 'none';
+    document.getElementById('code-error').style.display    = 'block';
+  });
+
+  eventSource.addEventListener('logged_out', () => {
+    stopSSE();
+    document.getElementById('error-text').textContent = 'Session logged out.';
+    document.getElementById('code-display').style.display  = 'none';
+    document.getElementById('code-loading').style.display  = 'none';
+    document.getElementById('code-error').style.display    = 'block';
+  });
+}
+
+function stopSSE() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  clearInterval(countdown);
 }
 
 // ── Countdown ───────────────────────────────────────────────────────────────
@@ -419,12 +388,6 @@ function startCountdown(secs) {
   }, 1000);
 }
 
-function stopSSE() {
-  clearTimeout(sseCodeTimeout);
-  if (eventSource) { eventSource.close(); eventSource = null; }
-  clearInterval(countdown);
-}
-
 function copyCode() {
   const code = document.getElementById('pair-code-value').textContent;
   if (!code || code === '—') return;
@@ -434,21 +397,19 @@ function copyCode() {
     setTimeout(() => { btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg> Copy Code'; }, 2000);
   }).catch(() => {
     const el = document.getElementById('pair-code-value');
-    const sel = window.getSelection(); const rng = document.createRange();
+    const sel = window.getSelection(), rng = document.createRange();
     rng.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(rng);
   });
 }
 
 function resetToPhone() {
-  stopSSE();
-  stopLogsPolling();
-  closeLogsModal();
-  document.getElementById('step-code').style.display     = 'none';
-  document.getElementById('step-phone').style.display    = 'block';
-  document.getElementById('code-loading').style.display  = 'block';
-  document.getElementById('code-display').style.display  = 'none';
-  document.getElementById('code-connected').style.display= 'none';
-  document.getElementById('code-error').style.display    = 'none';
+  stopSSE(); stopLogsPolling(); closeLogsModal();
+  document.getElementById('step-code').style.display      = 'none';
+  document.getElementById('step-phone').style.display     = 'block';
+  document.getElementById('code-loading').style.display   = 'block';
+  document.getElementById('code-display').style.display   = 'none';
+  document.getElementById('code-connected').style.display = 'none';
+  document.getElementById('code-error').style.display     = 'none';
   const btn = document.getElementById('pair-btn');
   btn.disabled = false;
   btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M13 10H7M10 7l-3 3 3 3"/></svg> Get Pair Code';
