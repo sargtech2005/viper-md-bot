@@ -147,6 +147,13 @@ function watchLog(sessionId, phone) {
   let   done     = false;
   const deadline = Date.now() + 120_000;
 
+  // Seed seen to current line count so we never replay old content
+  try {
+    if (fs.existsSync(lf)) {
+      seen = fs.readFileSync(lf, 'utf8').split('\n').length;
+    }
+  } catch {}
+
   const iv = setInterval(async () => {
     if (done || Date.now() > deadline) {
       clearInterval(iv);
@@ -249,7 +256,10 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   if (pairNumber && !hadCreds) env.PAIR_NUMBER = pairNumber;
 
   const lf  = logPath(phone);
-  const log = fs.openSync(lf, 'a');
+  // Always truncate the log on each (re-)start so watchLog never replays
+  // stale "CONNECTED" or "PAIR_CODE" lines from a previous session.
+  try { fs.writeFileSync(lf, ''); } catch {}
+  const log = fs.openSync(lf, 'w');
 
   const proc = spawn('node', [NODE_ENTRY], {
     cwd:   ROOT_DIR,

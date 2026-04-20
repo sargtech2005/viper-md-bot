@@ -36,7 +36,6 @@ const ffmpegPath = resolveFFmpeg();
 
 if (!ffmpegPath) {
   console.warn('⚠️  ffmpeg not found. Sticker/media conversion will be limited.');
-  console.warn('   Install it on Termux with:  pkg install ffmpeg');
 }
 
 module.exports = ffmpegPath;
