@@ -124,3 +124,31 @@ boot().catch(e => {
   console.error(e?.stack || '');
   process.exit(1);
 });
+
+// ── Startup / Admin Promotion ─────────────────────────────────────────────────
+// Visit /startup to promote ADMIN_EMAIL to admin in the database.
+// Safe to run multiple times (idempotent). Remove or protect after first use.
+app.get('/startup', async (req, res) => {
+  const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+  if (!adminEmail) {
+    return res.json({ ok: false, message: 'ADMIN_EMAIL env var not set.' });
+  }
+  try {
+    const { query } = require('./db');
+    const r = await query(
+      `UPDATE users SET is_admin = TRUE WHERE LOWER(email) = $1 RETURNING id, email, username`,
+      [adminEmail]
+    );
+    if (!r.rows.length) {
+      return res.json({
+        ok: false,
+        message: `No user found with email "${adminEmail}". Register first, then visit /startup.`
+      });
+    }
+    const u = r.rows[0];
+    console.log(`[Startup] Promoted ${u.email} (id=${u.id}) to admin.`);
+    res.json({ ok: true, message: `✅ ${u.username} (${u.email}) is now admin. You can log out and back in to see the Admin panel.` });
+  } catch(err) {
+    res.status(500).json({ ok: false, message: err.message });
+  }
+});

@@ -2,90 +2,130 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Settings — VIPER BOT MD</title>
-<link rel="stylesheet" href="/css/style.css"/>
+<title>Settings — VIPER MD BOT</title>
+<link rel="stylesheet" href="/css/app.css"/>
 </head>
-<body class="app-layout">
+<body>
 
 <aside class="sidebar" id="sidebar">
-  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 16c0-4 3-6 6-6s6-2 6-6"/>
+        <circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/>
+        <path d="M4 16c0 1.1.9 2 2 2"/>
+      </svg>
+    </div>
+    <span class="logo-text">VIPER <span>MD</span></span>
+  </div>
   <nav id="sidebar-nav"></nav>
-  <div class="nav-user" id="nav-user"></div>
-  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+  <div class="sidebar-footer">
+    <div class="nav-user" id="nav-user"></div>
+    <button class="nav-logout" onclick="logout()">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M13 5l4 5-4 5M17 10H8"/><path d="M8 3H4a1 1 0 00-1 1v12a1 1 0 001 1h4"/></svg>
+      Sign Out
+    </button>
+  </div>
 </aside>
 
 <div class="main-content">
   <header class="topbar">
-    <div style="display:flex;align-items:center;gap:.75rem">
-      <button class="hamburger" onclick="toggleSidebar()">☰</button>
-      <span class="topbar-title">Account Settings</span>
+    <div class="topbar-left">
+      <button class="hamburger" onclick="toggleSidebar()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+      </button>
+      <span class="topbar-title">Settings</span>
     </div>
   </header>
 
-  <div class="page-body" style="max-width:600px">
+  <div class="page-body" style="max-width:580px">
 
-    <!-- Profile Info -->
-    <div class="card" style="margin-bottom:1.25rem">
-      <div class="card-title" style="margin-bottom:1rem">👤 Profile</div>
-      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem">
-        <div style="width:56px;height:56px;background:var(--green-glow);border:2px solid var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;color:var(--green)" id="profile-avatar">?</div>
+    <!-- Profile card -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title" style="margin-bottom:1rem">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
+        Profile
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.1rem">
+        <div id="profile-avatar" style="width:52px;height:52px;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;color:var(--green);flex-shrink:0">?</div>
         <div>
-          <div style="font-weight:700" id="profile-username">Loading...</div>
-          <div style="font-size:.825rem;color:var(--muted)" id="profile-email"></div>
-          <div style="font-size:.8rem;color:var(--green);margin-top:.2rem" id="profile-coins"></div>
+          <div style="font-weight:700;font-size:.95rem" id="profile-username">Loading...</div>
+          <div style="font-size:.8rem;color:var(--muted);margin-top:.1rem" id="profile-email"></div>
+          <div style="font-size:.78rem;color:var(--green);margin-top:.15rem;display:flex;align-items:center;gap:.25rem">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" style="width:11px;height:11px"><circle cx="6" cy="6" r="5"/><path d="M6 3v6M4 5h3a1 1 0 010 2H4"/></svg>
+            <span id="profile-coins"></span>
+          </div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;font-size:.83rem">
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:.65rem">
-          <div style="color:var(--muted)">Member since</div>
-          <div id="profile-joined" style="font-weight:600;margin-top:.2rem">—</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.65rem;font-size:.78rem">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:.45rem;padding:.6rem .75rem">
+          <div style="color:var(--muted);margin-bottom:.2rem">Member since</div>
+          <div style="font-weight:600" id="profile-joined">—</div>
         </div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:.65rem">
-          <div style="color:var(--muted)">Last login</div>
-          <div id="profile-last" style="font-weight:600;margin-top:.2rem">—</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:.45rem;padding:.6rem .75rem">
+          <div style="color:var(--muted);margin-bottom:.2rem">Last login</div>
+          <div style="font-weight:600" id="profile-last">—</div>
         </div>
       </div>
     </div>
 
     <!-- Change Password -->
-    <div class="card" style="margin-bottom:1.25rem">
-      <div class="card-title" style="margin-bottom:1rem">🔒 Change Password</div>
-      <div id="pw-alert"></div>
-      <div class="field">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title" style="margin-bottom:1rem">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="9" width="10" height="8" rx="1.5"/><path d="M7 9V7a3 3 0 016 0v2"/></svg>
+        Change Password
+      </div>
+      <div id="pw-alert" class="v-alert hidden"></div>
+      <div class="vfield">
         <label>Current Password</label>
         <input type="password" id="cur-pw" placeholder="Enter current password"/>
       </div>
-      <div class="field">
+      <div class="vfield">
         <label>New Password</label>
         <input type="password" id="new-pw" placeholder="Min. 6 characters"/>
       </div>
-      <div class="field">
+      <div class="vfield">
         <label>Confirm New Password</label>
         <input type="password" id="confirm-pw" placeholder="Repeat new password"/>
       </div>
-      <button class="btn btn-green" id="pw-btn" onclick="changePassword()">Update Password</button>
+      <button class="vbtn vbtn-green" id="pw-btn" onclick="changePassword()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 10l2 2 4-4"/></svg>
+        Update Password
+      </button>
     </div>
 
     <!-- Change Email -->
-    <div class="card" style="margin-bottom:1.25rem">
-      <div class="card-title" style="margin-bottom:1rem">📧 Change Email</div>
-      <div id="email-alert"></div>
-      <div class="field">
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title" style="margin-bottom:1rem">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="14" height="11" rx="1.5"/><path d="M3 7l7 5 7-5"/></svg>
+        Change Email
+      </div>
+      <div id="email-alert" class="v-alert hidden"></div>
+      <div class="vfield">
         <label>New Email Address</label>
         <input type="email" id="new-email" placeholder="new@email.com"/>
       </div>
-      <div class="field">
+      <div class="vfield">
         <label>Current Password (to confirm)</label>
         <input type="password" id="email-pw" placeholder="Your current password"/>
       </div>
-      <button class="btn btn-outline" id="email-btn" onclick="changeEmail()">Update Email</button>
+      <button class="vbtn vbtn-outline" id="email-btn" onclick="changeEmail()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 10l2 2 4-4"/></svg>
+        Update Email
+      </button>
     </div>
 
     <!-- Danger Zone -->
-    <div class="card" style="border-color:rgba(239,68,68,.3)">
-      <div class="card-title" style="color:var(--red);margin-bottom:.5rem">⚠️ Danger Zone</div>
-      <p style="font-size:.875rem;color:var(--muted);margin-bottom:1rem">Deleting your account is permanent. All sessions and coins will be lost.</p>
-      <button class="btn btn-red" onclick="deleteAccount()">🗑 Delete My Account</button>
+    <div class="card" style="border-color:rgba(239,68,68,.25)">
+      <div class="card-title" style="margin-bottom:.4rem;color:var(--red)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 2l8 14H2z"/><path d="M10 9v4M10 15h.01"/></svg>
+        Danger Zone
+      </div>
+      <p style="font-size:.825rem;color:var(--muted);margin-bottom:1rem">Deleting your account is permanent. All sessions and coins will be lost.</p>
+      <button class="vbtn" style="background:var(--red-pale);color:var(--red);border:1px solid rgba(239,68,68,.3)" onclick="deleteAccount()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="3,6 17,6"/><path d="M8 6V4h4v2M19 6l-1 11a2 2 0 01-2 2H4a2 2 0 01-2-2L1 6"/></svg>
+        Delete My Account
+      </button>
     </div>
 
   </div>
@@ -104,68 +144,70 @@ let currentUser = null;
 async function loadProfile() {
   try {
     const d = await api('/api/auth/me');
-    const u = d.user;
-    currentUser = u;
+    const u = d.user; currentUser = u;
     document.getElementById('profile-avatar').textContent   = u.username[0].toUpperCase();
     document.getElementById('profile-username').textContent  = '@' + u.username;
     document.getElementById('profile-email').textContent     = u.email;
-    document.getElementById('profile-coins').textContent     = fCoins(u.coins) + ' 🪙 coins';
+    document.getElementById('profile-coins').textContent     = fCoins(u.coins) + ' coins';
     document.getElementById('profile-joined').textContent    = fDate(u.created_at);
-    document.getElementById('profile-last').textContent      = fDate(u.last_login) || 'Now';
+    document.getElementById('profile-last').textContent      = fDate(u.last_login) || 'Just now';
     document.getElementById('new-email').placeholder         = u.email;
-  } catch (e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function setAlert(id, msg, type='error') {
+  const el = document.getElementById(id);
+  if (!msg) { el.className = 'v-alert hidden'; return; }
+  el.className = `v-alert v-alert-${type}`;
+  el.innerHTML = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0">${
+    type === 'success'
+      ? '<circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/>'
+      : '<circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/>'
+  }</svg><span>${msg}</span>`;
 }
 
 async function changePassword() {
   const curPw  = document.getElementById('cur-pw').value;
   const newPw  = document.getElementById('new-pw').value;
   const conPw  = document.getElementById('confirm-pw').value;
-  const alertEl= document.getElementById('pw-alert');
-  alertEl.innerHTML = '';
-
-  if (!curPw || !newPw || !conPw) return alertEl.innerHTML = '<div class="alert alert-error">All fields are required</div>';
-  if (newPw.length < 6)           return alertEl.innerHTML = '<div class="alert alert-error">New password must be at least 6 characters</div>';
-  if (newPw !== conPw)            return alertEl.innerHTML = '<div class="alert alert-error">Passwords do not match</div>';
-
+  setAlert('pw-alert', '');
+  if (!curPw||!newPw||!conPw) return setAlert('pw-alert','All fields are required');
+  if (newPw.length<6)         return setAlert('pw-alert','New password must be at least 6 characters');
+  if (newPw !== conPw)        return setAlert('pw-alert','Passwords do not match');
   const btn = document.getElementById('pw-btn');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Updating...';
+  btn.disabled=true; btn.innerHTML='<div class="vspin" style="width:14px;height:14px"></div> Updating...';
   try {
-    await api('/api/auth/change-password', { method:'POST', body:{ currentPassword:curPw, newPassword:newPw } });
-    alertEl.innerHTML = '<div class="alert alert-success">✅ Password updated successfully</div>';
-    document.getElementById('cur-pw').value = '';
-    document.getElementById('new-pw').value = '';
-    document.getElementById('confirm-pw').value = '';
-  } catch (e) {
-    alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
-  } finally { btn.disabled = false; btn.innerHTML = 'Update Password'; }
+    await api('/api/auth/change-password',{method:'POST',body:{currentPassword:curPw,newPassword:newPw}});
+    setAlert('pw-alert','Password updated successfully','success');
+    ['cur-pw','new-pw','confirm-pw'].forEach(id=>document.getElementById(id).value='');
+  } catch(e) { setAlert('pw-alert',e.message); }
+  finally { btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 10l2 2 4-4"/></svg> Update Password'; }
 }
 
 async function changeEmail() {
   const newEmail = document.getElementById('new-email').value.trim();
   const pw       = document.getElementById('email-pw').value;
-  const alertEl  = document.getElementById('email-alert');
-  alertEl.innerHTML = '';
-
-  if (!newEmail || !pw) return alertEl.innerHTML = '<div class="alert alert-error">All fields required</div>';
-
+  setAlert('email-alert','');
+  if (!newEmail||!pw) return setAlert('email-alert','All fields required');
   const btn = document.getElementById('email-btn');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Updating...';
+  btn.disabled=true; btn.innerHTML='<div class="vspin vspin-dark" style="width:14px;height:14px"></div> Updating...';
   try {
-    await api('/api/auth/change-email', { method:'POST', body:{ newEmail, password:pw } });
-    alertEl.innerHTML = '<div class="alert alert-success">✅ Email updated</div>';
+    await api('/api/auth/change-email',{method:'POST',body:{newEmail,password:pw}});
+    setAlert('email-alert','Email updated','success');
     loadProfile();
-  } catch (e) {
-    alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
-  } finally { btn.disabled = false; btn.innerHTML = 'Update Email'; }
+  } catch(e) { setAlert('email-alert',e.message); }
+  finally { btn.disabled=false; btn.innerHTML='<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 10l2 2 4-4"/></svg> Update Email'; }
 }
 
 async function deleteAccount() {
-  if (!confirm('Are you SURE? This will permanently delete your account, all sessions, and coins. This cannot be undone.')) return;
-  if (!confirm('Last chance — delete account permanently?')) return;
+  const ok = await vConfirm('All sessions, coins and data will be permanently lost. This cannot be undone.','Delete your account?');
+  if (!ok) return;
+  const ok2 = await vConfirm('Last chance — are you absolutely sure?','Confirm deletion');
+  if (!ok2) return;
   try {
-    await api('/api/auth/delete-account', { method:'DELETE' });
-    window.location.href = '/';
-  } catch (e) { toast(e.message, 'error'); }
+    await api('/api/auth/delete-account',{method:'DELETE'});
+    window.location.href='/';
+  } catch(e) { toast(e.message,'error'); }
 }
 </script>
 </body>

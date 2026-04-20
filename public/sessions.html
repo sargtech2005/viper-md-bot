@@ -2,64 +2,94 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Sessions — VIPER BOT MD</title>
-<link rel="stylesheet" href="/css/style.css"/>
+<title>My Sessions — VIPER MD BOT</title>
+<link rel="stylesheet" href="/css/app.css"/>
 </head>
-<body class="app-layout">
+<body>
 
 <aside class="sidebar" id="sidebar">
-  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 16c0-4 3-6 6-6s6-2 6-6"/>
+        <circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/>
+        <path d="M4 16c0 1.1.9 2 2 2"/>
+      </svg>
+    </div>
+    <span class="logo-text">VIPER <span>MD</span></span>
+  </div>
   <nav id="sidebar-nav"></nav>
-  <div class="nav-user" id="nav-user"></div>
-  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+  <div class="sidebar-footer">
+    <div class="nav-user" id="nav-user"></div>
+    <button class="nav-logout" onclick="logout()">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M13 5l4 5-4 5M17 10H8"/><path d="M8 3H4a1 1 0 00-1 1v12a1 1 0 001 1h4"/></svg>
+      Sign Out
+    </button>
+  </div>
 </aside>
 
 <div class="main-content">
   <header class="topbar">
-    <div style="display:flex;align-items:center;gap:.75rem">
-      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-left">
+      <button class="hamburger" onclick="toggleSidebar()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+      </button>
       <span class="topbar-title">My Sessions</span>
     </div>
     <div class="topbar-right">
-      <button class="btn btn-green btn-sm" onclick="openCreateModal()">➕ New Session</button>
+      <button class="vbtn vbtn-green vbtn-sm" onclick="openCreate()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+        New Session
+      </button>
     </div>
   </header>
 
   <div class="page-body">
     <div id="sessions-container">
-      <div class="empty-state"><div class="spinner"></div><p>Loading sessions...</p></div>
+      <div class="empty-state"><div class="vspin vspin-dark" style="width:24px;height:24px"></div></div>
     </div>
   </div>
 </div>
 
-<!-- Create Session Modal -->
-<div class="modal-overlay" id="create-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">➕ Create New Session</div>
-      <button class="modal-close" onclick="closeModal('create-modal')">✕</button>
+<!-- ── CREATE SESSION MODAL ── -->
+<div class="v-modal-overlay" id="modal-create">
+  <div class="v-modal">
+    <div class="v-modal-header">
+      <div class="v-modal-title">New Session</div>
+      <button class="v-modal-close" onclick="closeModal('modal-create')">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
     </div>
-    <div id="create-alert"></div>
-    <div class="field">
-      <label>Session Label (optional)</label>
+    <div id="create-alert" class="v-alert v-alert-error hidden">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
+      <span id="create-alert-text"></span>
+    </div>
+    <div class="vfield">
+      <label>Session Label <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
       <input type="text" id="new-label" placeholder="e.g. My Main Bot"/>
-      <div class="field-hint">A name to help you identify this session</div>
+      <div class="vfield-hint">A name to help you identify this session</div>
     </div>
-    <div class="alert alert-info" style="font-size:.83rem">
-      🪙 Creating a session costs <strong>10 coins</strong>. Your current balance: <strong id="modal-coins">—</strong>
+    <div style="background:var(--green-pale);border:1px solid var(--green-mid);border-radius:.45rem;padding:.65rem .85rem;font-size:.82rem;color:var(--green);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg>
+      Creating a session costs <strong style="margin:0 .25rem">10 coins</strong>. Balance: <strong id="modal-coins" style="margin-left:.25rem">—</strong>
     </div>
-    <button class="btn btn-green btn-full" id="create-btn" onclick="createSession()">Create Session</button>
+    <button class="vbtn vbtn-green vbtn-full" id="create-btn" onclick="createSession()">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+      Create Session
+    </button>
   </div>
 </div>
 
-<!-- Logs Modal -->
-<div class="modal-overlay" id="logs-modal">
-  <div class="modal" style="max-width:620px">
-    <div class="modal-header">
-      <div class="modal-title">📄 Session Logs</div>
-      <button class="modal-close" onclick="closeModal('logs-modal')">✕</button>
+<!-- ── LOGS MODAL ── -->
+<div class="v-modal-overlay" id="modal-logs">
+  <div class="v-modal v-modal-lg">
+    <div class="v-modal-header">
+      <div class="v-modal-title">Session Logs</div>
+      <button class="v-modal-close" onclick="closeModal('modal-logs')">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
     </div>
-    <pre id="logs-content" style="background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:1rem;font-size:.75rem;overflow-x:auto;max-height:400px;overflow-y:auto;white-space:pre-wrap;color:var(--muted)">Loading...</pre>
+    <pre id="logs-content" style="background:var(--bg);border:1px solid var(--border);border-radius:.45rem;padding:1rem;font-size:.72rem;overflow:auto;max-height:400px;white-space:pre-wrap;color:var(--muted);font-family:monospace;line-height:1.6">Loading...</pre>
   </div>
 </div>
 
@@ -70,7 +100,6 @@ let sessions = [], user = null;
 (async () => {
   user = await requireLogin();
   if (!user) return;
-  document.getElementById('modal-coins').textContent = fCoins(user.coins) + ' 🪙';
   await loadSessions();
 })();
 
@@ -79,25 +108,25 @@ async function loadSessions() {
     const d = await api('/api/sessions');
     sessions = d.sessions;
     render();
-  } catch (e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 function render() {
   const c = document.getElementById('sessions-container');
   if (!sessions.length) {
-    c.innerHTML = `<div class="card">
-      <div class="empty-state">
-        <div class="empty-icon">📱</div>
-        <h3>No sessions yet</h3>
-        <p>Create a session and pair your WhatsApp number to get started.<br/>Each session costs 10 coins.</p>
-        <button class="btn btn-green" style="margin-top:1rem" onclick="openCreateModal()">➕ Create First Session</button>
-      </div>
-    </div>`;
+    c.innerHTML = `<div class="card"><div class="empty-state">
+      <div class="empty-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 6h4M8 10h4M8 14h2"/></svg></div>
+      <h3>No sessions yet</h3>
+      <p>Create a session and pair your WhatsApp number. Each session costs 10 coins.</p>
+      <button class="vbtn vbtn-green" style="margin-top:.75rem" onclick="openCreate()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+        Create First Session
+      </button>
+    </div></div>`;
     return;
   }
-
-  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
-    ${sessions.map(s => sessionCard(s)).join('')}
+  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:1rem">
+    ${sessions.map(sessionCard).join('')}
   </div>`;
 }
 
@@ -105,58 +134,66 @@ function sessionCard(s) {
   const hasPhone = !!s.phone_number;
   const label    = s.phone_number || s.session_label || `Session #${s.id}`;
   const running  = s.is_running;
-
   return `<div class="card" style="position:relative">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem">
-      <div>
-        <div style="font-size:1rem;font-weight:700">📱 ${label}</div>
-        ${s.session_label && s.phone_number ? `<div style="font-size:.78rem;color:var(--muted)">${s.session_label}</div>` : ''}
-        <div style="font-size:.75rem;color:var(--muted);margin-top:.2rem">Created ${fDate(s.created_at)}</div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.85rem">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.875rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
+        ${s.session_label && s.phone_number ? `<div style="font-size:.75rem;color:var(--muted);margin-top:.1rem">${s.session_label}</div>` : ''}
+        <div style="font-size:.72rem;color:var(--muted2);margin-top:.2rem">${fDate(s.created_at)}</div>
       </div>
-      ${statusBadge(s.status, running)}
+      <div style="margin-left:.5rem;flex-shrink:0">${statusBadge(s.status, running)}</div>
     </div>
-
-    ${s.connected_at ? `<div style="font-size:.78rem;color:var(--green);margin-bottom:.75rem">✅ Connected ${fDate(s.connected_at)}</div>` : ''}
-
-    <div style="display:flex;flex-wrap:wrap;gap:.5rem">
-      ${!hasPhone ? `<a href="/pair/${s.id}" class="btn btn-green btn-sm">🔗 Pair Number</a>` : ''}
-      ${hasPhone ? `<a href="/pair/${s.id}" class="btn btn-outline btn-sm">🔗 Re-pair</a>` : ''}
-      ${hasPhone && !running ? `<button class="btn btn-outline btn-sm" onclick="restartSession(${s.id})">▶ Start</button>` : ''}
-      ${running ? `<button class="btn btn-outline btn-sm" onclick="stopSession(${s.id})">⏹ Stop</button>` : ''}
-      ${hasPhone ? `<button class="btn btn-outline btn-sm" onclick="viewLogs(${s.id})">📄 Logs</button>` : ''}
-      <button class="btn btn-red btn-sm" onclick="deleteSession(${s.id},'${label}')">🗑</button>
+    ${s.connected_at ? `<div style="font-size:.75rem;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:.3rem"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg>Connected ${fDate(s.connected_at)}</div>` : ''}
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem">
+      ${!hasPhone ? `<a href="/pair/${s.id}" class="vbtn vbtn-green vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M10 8v4M10 14h.01"/></svg>Pair Number</a>` : ''}
+      ${hasPhone ? `<a href="/pair/${s.id}" class="vbtn vbtn-outline vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><path d="M4 12v4h4M16 8V4h-4M20 4l-6 6M0 16l6-6"/></svg>Re-pair</a>` : ''}
+      ${hasPhone && !running ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="restartSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polygon points="5,3 19,10 5,17" fill="currentColor" stroke="none"/></svg>Start</button>` : ''}
+      ${running ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="stopSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="4" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></svg>Stop</button>` : ''}
+      ${hasPhone ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="viewLogs(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="2" width="12" height="16" rx="1"/><path d="M7 7h6M7 10h6M7 13h3"/></svg>Logs</button>` : ''}
+      <button class="vbtn vbtn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid rgba(239,68,68,.2)" onclick="deleteSession(${s.id},'${label.replace(/'/g,"\\'")}')">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polyline points="3,6 17,6"/><path d="M8 6V4h4v2M19 6l-1 11a2 2 0 01-2 2H4a2 2 0 01-2-2L1 6"/></svg>
+        Delete
+      </button>
     </div>
   </div>`;
 }
 
-function openCreateModal() {
-  // Refresh coins
-  api('/api/auth/me').then(d => {
-    document.getElementById('modal-coins').textContent = fCoins(d.user.coins) + ' 🪙';
-  }).catch(()=>{});
-  document.getElementById('create-alert').innerHTML = '';
+function openCreate() {
   document.getElementById('new-label').value = '';
-  document.getElementById('create-modal').classList.add('open');
+  setAlert('create-alert', '');
+  api('/api/auth/me').then(d => {
+    document.getElementById('modal-coins').textContent = fCoins(d.user.coins) + ' coins';
+  }).catch(() => {});
+  openModal('modal-create');
 }
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function setAlert(id, msg, type='error') {
+  const el = document.getElementById(id);
+  const tx = document.getElementById(id + '-text');
+  if (!msg) { el.classList.add('hidden'); return; }
+  el.className = `v-alert v-alert-${type}`;
+  if (tx) tx.textContent = msg;
+  else el.textContent = msg;
+}
 
 async function createSession() {
   const btn   = document.getElementById('create-btn');
   const label = document.getElementById('new-label').value.trim();
-  const alert = document.getElementById('create-alert');
-  alert.innerHTML = '';
+  setAlert('create-alert', '');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Creating...';
+  btn.innerHTML = '<div class="vspin" style="width:14px;height:14px"></div> Creating...';
   try {
-    const d = await api('/api/sessions', { method:'POST', body: { label } });
-    closeModal('create-modal');
-    toast('Session created! Now pair your WhatsApp number.', 'success');
-    // Redirect to pair page
+    const d = await api('/api/sessions', { method:'POST', body:{ label } });
+    closeModal('modal-create');
+    toast('Session created! Pair your WhatsApp number now.', 'success');
     window.location.href = `/pair/${d.session.id}`;
-  } catch (e) {
-    alert.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  } catch(e) {
+    setAlert('create-alert', e.message);
     btn.disabled = false;
-    btn.innerHTML = 'Create Session';
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg> Create Session';
   }
 }
 
@@ -165,38 +202,53 @@ async function restartSession(id) {
     await api(`/api/sessions/${id}/restart`, { method:'POST' });
     toast('Session restarting...', 'success');
     setTimeout(loadSessions, 2000);
-  } catch (e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function stopSession(id) {
-  if (!confirm('Stop this session?')) return;
+  const ok = await vConfirm('The bot will stop and disconnect.', 'Stop this session?');
+  if (!ok) return;
   try {
     await api(`/api/sessions/${id}/stop`, { method:'POST' });
     toast('Session stopped');
     await loadSessions();
-  } catch (e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function deleteSession(id, label) {
-  if (!confirm(`Delete session "${label}"? This cannot be undone.`)) return;
+  const ok = await vConfirm(`"${label}" will be permanently deleted. This cannot be undone.`, 'Delete session?');
+  if (!ok) return;
   try {
     await api(`/api/sessions/${id}`, { method:'DELETE' });
     toast('Session deleted');
     await loadSessions();
-  } catch (e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 async function viewLogs(id) {
   document.getElementById('logs-content').textContent = 'Loading...';
-  document.getElementById('logs-modal').classList.add('open');
+  openModal('modal-logs');
   try {
     const d = await api(`/api/sessions/${id}/logs`);
     document.getElementById('logs-content').textContent = d.logs || 'No logs yet.';
-  } catch (e) { document.getElementById('logs-content').textContent = 'Failed to load logs: ' + e.message; }
+  } catch(e) {
+    document.getElementById('logs-content').textContent = 'Failed to load logs: ' + e.message;
+  }
 }
 
-// Auto-refresh every 15s
-setInterval(loadSessions, 15000);
+// Close modals on overlay click
+document.querySelectorAll('.v-modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+});
+
+// Auto-refresh every 15s without triggering auth redirects
+setInterval(async () => {
+  try {
+    const d = await api('/api/sessions');
+    sessions = d.sessions;
+    render();
+  } catch {}
+}, 15000);
 </script>
 </body>
 </html>
