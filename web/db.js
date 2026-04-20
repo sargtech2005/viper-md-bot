@@ -156,6 +156,9 @@ const Sessions = {
   },
   setPhone:     (id,phone)  => query('UPDATE bot_sessions SET phone_number=$2 WHERE id=$1',[id,phone]),
   updateStatus: (id,status) => query(`UPDATE bot_sessions SET status=$2,last_seen=NOW()${status==='connected'?',connected_at=NOW()':''} WHERE id=$1`,[id,status]),
+  updateLabel:  (id,label)  => query('UPDATE bot_sessions SET session_label=$2 WHERE id=$1',[id,label||null]),
+  updateInitialSettings: (id,settings) =>
+    query('UPDATE bot_sessions SET initial_settings=$2 WHERE id=$1',[id, settings ? JSON.stringify(settings) : null]),
   // Save raw creds directory as base64 gzip string
   saveCreds:  (id,data)  => query('UPDATE bot_sessions SET creds_data=$2,creds_updated=NOW() WHERE id=$1',[id,data]),
   loadCreds:  id         => query('SELECT creds_data FROM bot_sessions WHERE id=$1',[id]),

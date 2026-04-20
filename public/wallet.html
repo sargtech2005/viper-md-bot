@@ -276,16 +276,42 @@ function renderPayments(payments) {
     return;
   }
   el.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Date</th><th>Coins</th><th>Amount</th><th>Status</th></tr></thead>
+    <thead><tr><th>Date</th><th>Coins</th><th>Amount</th><th>Status</th><th></th></tr></thead>
     <tbody>${payments.map(p => `
       <tr>
         <td style="font-size:.8rem;color:var(--muted)">${fDate(p.created_at)}</td>
         <td><strong style="color:var(--green)">+${fCoins(p.coins)}</strong></td>
         <td>${fNgn(p.amount_kobo)}</td>
         <td><span class="badge ${p.status==='success'?'badge-green':p.status==='pending'?'badge-yellow':'badge-red'}">${p.status}</span></td>
+        <td>${p.status === 'pending'
+          ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="retryVerify('${p.reference}',this)"
+               title="If you already paid, click to verify and credit your coins">
+               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:11px;height:11px"><path d="M4 4v5h5M16 16v-5h-5"/><path d="M20.49 9A9 9 0 005.64 5.64L2 9M3.51 11A9 9 0 0014.36 14.36L18 11"/></svg>
+               Retry
+             </button>`
+          : ''}</td>
       </tr>`).join('')}
     </tbody>
   </table></div>`;
+}
+
+async function retryVerify(reference, btn) {
+  const origHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<div class="vspin vspin-dark" style="width:11px;height:11px"></div>';
+  try {
+    const v = await api('/api/wallet/verify', { method:'POST', body:{ reference } });
+    if (v.already) {
+      toast('Payment was already verified — balance updated', 'success');
+    } else {
+      toast(`✅ Verified! +${v.coins} coins added. Balance: ${fCoins(v.new_balance)}`, 'success');
+    }
+    await loadWallet();
+  } catch(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = origHTML;
+  }
 }
 
 function renderTransactions(txs) {

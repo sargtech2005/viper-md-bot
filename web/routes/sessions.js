@@ -213,4 +213,77 @@ router.get('/:id/logs', async (req, res) => {
   } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
+// GET /api/sessions/:id/settings — fetch current initial_settings + label
+router.get('/:id/settings', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const sr = await Sessions.findById(id);
+    const s  = sr.rows[0];
+    if (!s) return res.status(404).json({ error: 'Not found' });
+    if (s.user_id !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Not yours' });
+    res.json({ ok: true, label: s.session_label || '', settings: s.initial_settings || {} });
+  } catch { res.status(500).json({ error: 'Failed to load settings' }); }
+});
+
+// PUT /api/sessions/:id/settings — save updated settings to DB and live session dir
+router.put('/:id/settings', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const sr = await Sessions.findById(id);
+    const s  = sr.rows[0];
+    if (!s) return res.status(404).json({ error: 'Not found' });
+    if (s.user_id !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Not yours' });
+
+    const { label, botName, ownerName, prefix, selfMode,
+            autoStatus, autoReact, autoRead, autoTyping } = req.body;
+
+    // Validate
+    if (!botName || !botName.trim())   return res.status(400).json({ error: 'Bot Name is required' });
+    if (!ownerName || !ownerName.trim()) return res.status(400).json({ error: 'Owner Name is required' });
+
+    const newSettings = {
+      botName:   botName.trim(),
+      ownerName: ownerName.trim(),
+      ...(prefix     ? { prefix: prefix.trim() } : {}),
+      ...(selfMode   !== undefined ? { selfMode:   !!selfMode }   : {}),
+      ...(autoStatus !== undefined ? { autoStatus: !!autoStatus } : {}),
+      ...(autoReact  !== undefined ? { autoReact:  !!autoReact }  : {}),
+      ...(autoRead   !== undefined ? { autoRead:   !!autoRead }   : {}),
+      ...(autoTyping !== undefined ? { autoTyping: !!autoTyping } : {}),
+    };
+
+    // Persist to DB
+    await Sessions.updateLabel(id, label);
+    await Sessions.updateInitialSettings(id, newSettings);
+
+    // ── Live update: overwrite the running session's settings.json ──────────
+    // This takes effect immediately on the next bot command — no restart needed.
+    if (s.phone_number) {
+      const path = require('path');
+      const fs   = require('fs');
+      const sessionDir  = path.join('/tmp/viper-sessions', s.phone_number);
+      const dbDir       = path.join(sessionDir, 'db');
+      const settingsFile = path.join(dbDir, 'settings.json');
+      try {
+        if (fs.existsSync(sessionDir)) {
+          fs.mkdirSync(dbDir, { recursive: true });
+          // Merge with any existing keys the user set during the session
+          let existing = {};
+          try { if (fs.existsSync(settingsFile)) existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
+          fs.writeFileSync(settingsFile, JSON.stringify({ ...existing, ...newSettings }, null, 2));
+          console.log(`[Sessions] ✅ Live-updated settings for session ${id} (${s.phone_number})`);
+        }
+      } catch (e) {
+        // Non-fatal — settings will apply on next bot restart
+        console.warn(`[Sessions] Could not write live settings for ${s.phone_number}:`, e.message);
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Sessions] Settings update error:', err.message);
+    res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
+
 module.exports = router;

@@ -240,6 +240,95 @@
   </div>
 </div>
 
+<!-- ===================================================================
+     SESSION SETTINGS MODAL
+=================================================================== -->
+<div class="v-modal-overlay" id="modal-settings">
+  <div class="v-modal" style="max-width:500px">
+    <div class="v-modal-header">
+      <div class="v-modal-title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px;vertical-align:-2px;margin-right:.3rem"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41"/></svg>
+        Session Settings
+      </div>
+      <button class="v-modal-close" onclick="closeModal('modal-settings')">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+
+    <div id="settings-alert" class="v-alert v-alert-error hidden">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
+      <span id="settings-alert-text"></span>
+    </div>
+
+    <div class="sec-div"><div></div><span>Identity</span><div></div></div>
+
+    <div class="vfield" style="margin-bottom:.75rem">
+      <label>Bot Name <span style="color:var(--red);font-weight:700">*</span></label>
+      <input type="text" id="set-botname" placeholder="e.g. ALPHA BOT MD" maxlength="40"/>
+      <div class="vfield-hint">Shown in all bot messages and menus</div>
+    </div>
+
+    <div class="vfield" style="margin-bottom:.9rem">
+      <label>Owner Name / Number <span style="color:var(--red);font-weight:700">*</span></label>
+      <input type="text" id="set-ownername" placeholder="e.g. John or 2348012345678" maxlength="60"/>
+      <div class="vfield-hint">Shown in .ownerinfo command</div>
+    </div>
+
+    <div class="sec-div" style="margin-top:.5rem"><div></div><span>Optional</span><div></div></div>
+
+    <div class="vfield" style="margin-bottom:.7rem">
+      <label>Session Label <span style="font-weight:400;opacity:.7">(dashboard only)</span></label>
+      <input type="text" id="set-label" placeholder="e.g. My Main Bot"/>
+    </div>
+
+    <div class="vfield" style="margin-bottom:.85rem">
+      <label>Command Prefix</label>
+      <input type="text" id="set-prefix" placeholder="." maxlength="3" style="width:5rem"/>
+    </div>
+
+    <div class="vfield" style="margin-bottom:.9rem">
+      <label>Bot Mode</label>
+      <div style="display:flex;gap:.75rem;margin-top:.35rem">
+        <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:.85rem">
+          <input type="radio" name="set-mode" value="public" checked style="accent-color:var(--green)"/> Public
+        </label>
+        <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:.85rem">
+          <input type="radio" name="set-mode" value="private" style="accent-color:var(--green)"/> Private
+        </label>
+      </div>
+    </div>
+
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:.55rem;padding:.5rem .85rem;margin-bottom:1.1rem">
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto Status</div><div class="vtoggle-hint">View WhatsApp statuses automatically</div></div>
+        <label class="vtoggle"><input type="checkbox" id="set-autostatus"/><span class="vtoggle-slider"></span></label>
+      </div>
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto React</div><div class="vtoggle-hint">Auto-react to messages</div></div>
+        <label class="vtoggle"><input type="checkbox" id="set-autoreact"/><span class="vtoggle-slider"></span></label>
+      </div>
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto Read</div><div class="vtoggle-hint">Automatically mark messages as read</div></div>
+        <label class="vtoggle"><input type="checkbox" id="set-autoread"/><span class="vtoggle-slider"></span></label>
+      </div>
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto Typing</div><div class="vtoggle-hint">Show typing indicator</div></div>
+        <label class="vtoggle"><input type="checkbox" id="set-autotyping"/><span class="vtoggle-slider"></span></label>
+      </div>
+    </div>
+
+    <div class="v-alert v-alert-info" style="margin-bottom:1rem">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
+      <span>Changes apply immediately to your live bot — no restart needed.</span>
+    </div>
+
+    <button class="vbtn vbtn-green vbtn-full" id="settings-save-btn" onclick="saveSettings()">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21H3a1 1 0 01-1-1V4a1 1 0 011-1h11l4 4v13a1 1 0 01-1 1z"/><path d="M7 3v5h7V3M7 13h6"/></svg>
+      Save Settings
+    </button>
+  </div>
+</div>
+
 <!-- ── LOGS MODAL ── -->
 <div class="v-modal-overlay" id="modal-logs">
   <div class="v-modal v-modal-lg">
@@ -365,6 +454,9 @@ function sessionCard(s) {
         onclick="deleteSession(${s.id},'${xa(label)}')">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polyline points="3,6 17,6"/><path d="M8 6V4h4v2M19 6l-1 11a2 2 0 01-2 2H4a2 2 0 01-2-2L1 6"/></svg>
         Delete
+      </button>
+      <button class="vbtn vbtn-outline vbtn-sm" onclick="openSettings(${s.id})" title="Edit session settings">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41"/></svg>
       </button>
     </div>
   </div>`;
@@ -658,6 +750,77 @@ document.querySelectorAll('.v-modal-overlay').forEach(ov => {
 document.getElementById('pair-phone-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') startPairing();
 });
+
+// ── Session Settings ─────────────────────────────────────────────────────────
+let settingsSessionId = null;
+
+async function openSettings(id) {
+  settingsSessionId = id;
+  setAlert('settings-alert', '');
+
+  // Reset form
+  ['set-botname','set-ownername','set-label','set-prefix'].forEach(i => {
+    document.getElementById(i).value = '';
+  });
+  document.querySelector('input[name="set-mode"][value="public"]').checked = true;
+  ['set-autostatus','set-autoreact','set-autoread','set-autotyping'].forEach(i => {
+    document.getElementById(i).checked = false;
+  });
+
+  openModal('modal-settings');
+
+  // Load current settings
+  try {
+    const d = await api(`/api/sessions/${id}/settings`);
+    const s = d.settings || {};
+    document.getElementById('set-label').value     = d.label || '';
+    document.getElementById('set-botname').value   = s.botName   || '';
+    document.getElementById('set-ownername').value = s.ownerName || '';
+    document.getElementById('set-prefix').value    = s.prefix    || '';
+    document.querySelector(`input[name="set-mode"][value="${s.selfMode ? 'private' : 'public'}"]`).checked = true;
+    document.getElementById('set-autostatus').checked = !!s.autoStatus;
+    document.getElementById('set-autoreact').checked  = !!s.autoReact;
+    document.getElementById('set-autoread').checked   = !!s.autoRead;
+    document.getElementById('set-autotyping').checked = !!s.autoTyping;
+  } catch(e) {
+    setAlert('settings-alert', 'Could not load current settings: ' + e.message);
+  }
+}
+
+async function saveSettings() {
+  const botName   = document.getElementById('set-botname').value.trim();
+  const ownerName = document.getElementById('set-ownername').value.trim();
+  const label     = document.getElementById('set-label').value.trim();
+  const prefix    = document.getElementById('set-prefix').value.trim();
+  const selfMode  = document.querySelector('input[name="set-mode"]:checked')?.value === 'private';
+  const autoStatus = document.getElementById('set-autostatus').checked;
+  const autoReact  = document.getElementById('set-autoreact').checked;
+  const autoRead   = document.getElementById('set-autoread').checked;
+  const autoTyping = document.getElementById('set-autotyping').checked;
+
+  setAlert('settings-alert', '');
+  if (!botName)   return setAlert('settings-alert', 'Bot Name is required.');
+  if (!ownerName) return setAlert('settings-alert', 'Owner Name is required.');
+
+  const btn = document.getElementById('settings-save-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="vspin" style="width:14px;height:14px"></div> Saving...';
+
+  try {
+    await api(`/api/sessions/${settingsSessionId}/settings`, {
+      method: 'PUT',
+      body: { label, botName, ownerName, prefix: prefix || '.', selfMode, autoStatus, autoReact, autoRead, autoTyping },
+    });
+    closeModal('modal-settings');
+    await silentRefresh();
+    toast('Settings saved — changes are live on your bot.', 'success');
+  } catch(e) {
+    setAlert('settings-alert', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21H3a1 1 0 01-1-1V4a1 1 0 011-1h11l4 4v13a1 1 0 01-1 1z"/><path d="M7 3v5h7V3M7 13h6"/></svg> Save Settings';
+  }
+}
 
 window.addEventListener('beforeunload', stopPairSSE);
 </script>

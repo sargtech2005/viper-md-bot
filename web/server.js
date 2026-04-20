@@ -36,11 +36,6 @@ if (!process.env.JWT_SECRET) {
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-// Webhook needs raw body — mount BEFORE express.json()
-// Must be mounted directly so express.raw() runs before json() middleware
-const { webhookHandler } = require('./routes/wallet');
-app.post('/api/wallet/webhook', express.raw({ type: 'application/json' }), webhookHandler);
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

@@ -174,7 +174,10 @@ function watchLog(sessionId, phone) {
           PAIR_CACHE.set(sessionId, code);   // cache so late SSE joiners get it
           emit(sessionId, 'pair_code', { code });
         }
-        if (line.toUpperCase().includes('CONNECTED') || line.includes('connected successfully')) {
+        // Use a dedicated machine-readable token (BOT_STATUS:CONNECTED) instead of
+        // the generic string "CONNECTED" — which was matching "Reconnecting..." and
+        // prematurely killing the watcher before the pair code arrived.
+        if (line.includes('BOT_STATUS:CONNECTED')) {
           done = true; clearInterval(iv);
           PAIR_CACHE.delete(sessionId);      // code no longer needed
           emit(sessionId, 'connected', { message: 'Bot connected!' });

@@ -215,6 +215,8 @@ async function startBot() {
       console.log(`║  📱  Bot: ${num.padEnd(27)}║`);
       console.log(`║  👑  Owner: ${String(ownerRaw).padEnd(26)}║`);
       console.log('╚══════════════════════════════════════╝\n');
+      // Machine-readable token — watchLog listens for exactly this string
+      console.log('BOT_STATUS:CONNECTED');
 
       if (config.autoBio) {
         try {
