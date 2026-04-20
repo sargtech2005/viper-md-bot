@@ -482,18 +482,26 @@ async function startPairing() {
 
 function startPairSSE() {
   stopPairSSE();
+  let gotCode = false;
+  let connected = false;
+
   pairEventSource = new EventSource(`/api/sessions/${pairSessionId}/stream`);
 
+  // ── Custom bot events ────────────────────────────────────────────────────
   pairEventSource.addEventListener('pair_code', e => {
-    const { code } = JSON.parse(e.data);
-    document.getElementById('pair-code-loading').style.display = 'none';
-    document.getElementById('pair-code-display').style.display = 'block';
-    document.getElementById('pair-code-value').textContent     = code;
-    startPairCountdown(60);
-    silentRefresh();
+    try {
+      const { code } = JSON.parse(e.data);
+      gotCode = true;
+      document.getElementById('pair-code-loading').style.display = 'none';
+      document.getElementById('pair-code-display').style.display = 'block';
+      document.getElementById('pair-code-value').textContent     = code;
+      startPairCountdown(60);
+      silentRefresh();
+    } catch(err) { console.warn('[SSE] pair_code parse error', err); }
   });
 
   pairEventSource.addEventListener('connected', () => {
+    connected = true;
     stopPairSSE();
     document.getElementById('pair-code-display').style.display = 'none';
     document.getElementById('pair-code-loading').style.display = 'none';
@@ -501,10 +509,13 @@ function startPairSSE() {
     silentRefresh();
   });
 
+  // Custom server-sent 'error' event (has JSON data — from our bot logic)
   pairEventSource.addEventListener('error', e => {
-    stopPairSSE();
-    let msg = 'Connection failed. Please try again.';
+    // Only handle if it has actual data (server-sent error, not native SSE network error)
+    if (!e.data) return;
+    let msg = 'Pairing failed. Please try again.';
     try { msg = JSON.parse(e.data).message || msg; } catch {}
+    stopPairSSE();
     document.getElementById('pair-error-text').textContent     = msg;
     document.getElementById('pair-code-display').style.display = 'none';
     document.getElementById('pair-code-loading').style.display = 'none';
@@ -520,6 +531,17 @@ function startPairSSE() {
     document.getElementById('pair-error').style.display        = 'block';
     silentRefresh();
   });
+
+  // ── Native SSE network error (reconnect) — do NOT close the modal ────────
+  // The browser auto-reconnects; we just keep showing spinner unless we
+  // already have a code displayed.
+  pairEventSource.onerror = () => {
+    if (connected) return;
+    // If we already showed a code, keep showing it — don't reset
+    if (gotCode) return;
+    // Still loading — let browser retry, don't show error state
+    console.warn('[SSE] Network hiccup, browser will auto-reconnect...');
+  };
 }
 
 function startPairCountdown(secs) {

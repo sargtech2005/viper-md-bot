@@ -81,12 +81,16 @@ module.exports = {
       t += `┗❐\n\n`;
       t += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${botName}* 🐍`;
 
-      // ── Robust image path: try multiple locations ──────────────────────────
+      // ── Per-session image first, then fallback to default ────────────────
+      // Each user's .setmenuimage is stored in their own SESSION_DIR/db/
+      const sessionImgPath = database.getSetting('menuImagePath', null);
       const imgCandidates = [
+        sessionImgPath,
+        path.join(database.DB_PATH, 'menu_image.jpg'),
         path.join(__dirname, '../../utils/bot_image.jpg'),
         path.join(__dirname, '../utils/bot_image.jpg'),
         path.resolve(process.cwd(), 'utils/bot_image.jpg'),
-      ];
+      ].filter(Boolean);
       const imgPath = imgCandidates.find(p => fs.existsSync(p)) || null;
 
       const ctx = {

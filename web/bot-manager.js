@@ -213,14 +213,27 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
 
   const sd = sessionDir(phone);
 
-  // ── Fresh pairing: wipe any stale /tmp creds so useMultiFileAuthState
-  //    starts completely clean. If old files exist, state.creds.registered
-  //    would be true and requestPairingCode() would be silently skipped.
+  // ── Fresh pairing: wipe stale WA auth files but PRESERVE settings.json
+  //    so user's botName/prefix/ownerName etc are kept on re-pair.
   if (pairNumber && !hadCreds) {
     try {
       if (fs.existsSync(sd)) {
+        const dbDir = path.join(sd, 'db');
+        // Back up settings.json before wiping
+        let savedSettings = null;
+        const settingsFile = path.join(dbDir, 'settings.json');
+        if (fs.existsSync(settingsFile)) {
+          savedSettings = fs.readFileSync(settingsFile);
+        }
         fs.rmSync(sd, { recursive: true, force: true });
-        console.log(`[BotMgr] 🧹 Cleared stale session files for ${phone}`);
+        // Restore settings.json after wipe
+        if (savedSettings) {
+          fs.mkdirSync(dbDir, { recursive: true });
+          fs.writeFileSync(settingsFile, savedSettings);
+          console.log(`[BotMgr] 🧹 Cleared stale creds for ${phone} (settings preserved)`);
+        } else {
+          console.log(`[BotMgr] 🧹 Cleared stale session files for ${phone}`);
+        }
       }
     } catch (e) {
       console.warn(`[BotMgr] Could not clear stale session for ${phone}:`, e.message);
@@ -236,23 +249,26 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   try {
     const dbPath       = path.join(sd, 'db');
     const settingsFile = path.join(dbPath, 'settings.json');
-    if (!fs.existsSync(settingsFile)) {
+    {
       const sr    = await Sessions.findById(sessionId);
       const initS = sr.rows[0]?.initial_settings;
       if (initS && typeof initS === 'object' && Object.keys(initS).length) {
         fs.mkdirSync(dbPath, { recursive: true });
-        // Map camelCase keys to the exact keys database.js / config.js reads
-        const mapped = {};
-        if (initS.botName)    mapped.botName    = initS.botName;
-        if (initS.ownerName)  mapped.ownerName  = initS.ownerName;
-        if (initS.prefix)     mapped.prefix     = initS.prefix;
-        if (initS.selfMode !== undefined)   mapped.selfMode   = initS.selfMode;
-        if (initS.autoStatus !== undefined) mapped.autoStatus = initS.autoStatus;
-        if (initS.autoReact  !== undefined) mapped.autoReact  = initS.autoReact;
-        if (initS.autoRead   !== undefined) mapped.autoRead   = initS.autoRead;
-        if (initS.autoTyping !== undefined) mapped.autoTyping = initS.autoTyping;
+        // Load any existing settings so we don't overwrite user's in-session changes
+        let existing = {};
+        try { if (fs.existsSync(settingsFile)) existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
+        // Only set keys from initS that aren't already set (first-time seed)
+        const mapped = { ...existing };
+        if (!mapped.botName    && initS.botName)    mapped.botName    = initS.botName;
+        if (!mapped.ownerName  && initS.ownerName)  mapped.ownerName  = initS.ownerName;
+        if (!mapped.prefix     && initS.prefix)     mapped.prefix     = initS.prefix;
+        if (mapped.selfMode   === undefined && initS.selfMode   !== undefined) mapped.selfMode   = initS.selfMode;
+        if (mapped.autoStatus === undefined && initS.autoStatus !== undefined) mapped.autoStatus = initS.autoStatus;
+        if (mapped.autoReact  === undefined && initS.autoReact  !== undefined) mapped.autoReact  = initS.autoReact;
+        if (mapped.autoRead   === undefined && initS.autoRead   !== undefined) mapped.autoRead   = initS.autoRead;
+        if (mapped.autoTyping === undefined && initS.autoTyping !== undefined) mapped.autoTyping = initS.autoTyping;
         fs.writeFileSync(settingsFile, JSON.stringify(mapped, null, 2));
-        console.log(`[BotMgr] ✅ Seeded initial settings for ${phone}:`, mapped);
+        console.log(`[BotMgr] ✅ Seeded/merged initial settings for ${phone}:`, mapped);
       }
     }
   } catch (e) {
