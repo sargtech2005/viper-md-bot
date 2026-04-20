@@ -1,5 +1,7 @@
 /**
  * Category menu builder — VIPER BOT MD
+ * NOTE: config.botName / config.prefix are Proxy-backed — they automatically
+ * return the per-session value from the session DB. No extra DB calls needed here.
  */
 const config = require('../config');
 const { loadCommands } = require('./commandLoader');
@@ -30,17 +32,25 @@ function getBotImage() {
 
 // ── Shared newsletter context ────────────────────────────────────────────────
 function newsletterCtx() {
-  return {
-    contextInfo: {
-      forwardingScore: 1,
-      isForwarded: true,
-      forwardedNewsletterMessageInfo: {
-        newsletterJid: config.newsletterJid,
-        newsletterName: config.botName,
-        serverMessageId: -1,
+  // newsletterJid can be overridden per-session with .setnewsletter
+  try {
+    const database = require('../database');
+    const jid  = database.getSetting('newsletterJid', config.newsletterJid);
+    const name = database.getSetting('botName',        config.botName);
+    return {
+      contextInfo: {
+        forwardingScore: 1,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid:       jid,
+          newsletterName:      name,
+          serverMessageId:    -1,
+        },
       },
-    },
-  };
+    };
+  } catch (_) {
+    return {};
+  }
 }
 
 // ── Send a category menu (with bot_image.jpg caption if available) ────────────

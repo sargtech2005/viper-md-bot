@@ -1,7 +1,8 @@
 /**
  * ᴍᴇɴᴜ ᴄᴏᴍᴍᴀɴᴅ — VIPER BOT MD
  */
-const config  = require('../../config');
+const config   = require('../../config');
+const database = require('../../database');
 const { loadCommands } = require('../../utils/commandLoader');
 const fs   = require('fs');
 const path = require('path');
@@ -45,17 +46,24 @@ module.exports = {
 
       const total  = [...cmds.keys()].filter(k => cmds.get(k).name === k).length;
       const user   = extra.sender.split('@')[0];
-      const owner  = Array.isArray(config.ownerName) ? config.ownerName.join(' & ') : config.ownerName;
+      // Per-session owner display name — falls back to paired number, then config
+      const ownerDisplay = database.getSetting('ownerDisplayName', null)
+                        || database.getSetting('ownerDisplayNumber', null)
+                        || process.env.SESSION_NUMBER
+                        || (Array.isArray(config.ownerName) ? config.ownerName.join(' & ') : config.ownerName);
+      const botName = database.getSetting('botName', config.botName);
+      const prefix  = database.getSetting('prefix',  config.prefix);
+      const selfMode = database.getSetting('selfMode', config.selfMode);
       const now    = new Date().toLocaleString('en-NG',{ timeZone: config.timezone });
 
       let t = '';
-      t += `┏❐ 《 *${sc('viper bot md')} v${config.botVersion}* 》 ❐\n`;
+      t += `┏❐ 《 *${sc(botName)} v${config.botVersion}* 》 ❐\n`;
       t += `┃\n`;
       t += `┣◆ 👤 ${sc('user')}: @${user}\n`;
       t += `┣◆ 🕐 ${sc('time')}: ${now}\n`;
-      t += `┣◆ ⚡ ${sc('prefix')}: ${config.prefix}\n`;
+      t += `┣◆ ⚡ ${sc('prefix')}: ${prefix}\n`;
       t += `┣◆ 📦 ${sc('commands')}: ${total}\n`;
-      t += `┣◆ 👑 ${sc('owner')}: ${owner}\n`;
+      t += `┣◆ 👑 ${sc('owner')}: ${ownerDisplay}\n`;
       t += `┃\n`;
       t += `┣◆ *📂 ${sc('categories')}* — ᴛʏᴘᴇ ᴛᴏ ᴏᴘᴇɴ:\n`;
       t += `┃\n`;
@@ -68,10 +76,10 @@ module.exports = {
       }
 
       t += `┃\n`;
-      t += `┣◆ 💡 ${sc('example')}: *${config.prefix}admin* → see admin cmds\n`;
-      t += `┣◆ 🐍 ${sc('mode')}: *${config.selfMode ? 'ᴘʀɪᴠᴀᴛᴇ' : 'ᴘᴜʙʟɪᴄ'}*\n`;
+      t += `┣◆ 💡 ${sc('example')}: *${prefix}admin* → see admin cmds\n`;
+      t += `┣◆ 🐍 ${sc('mode')}: *${selfMode ? 'ᴘʀɪᴠᴀᴛᴇ' : 'ᴘᴜʙʟɪᴄ'}*\n`;
       t += `┗❐\n\n`;
-      t += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
+      t += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${botName}* 🐍`;
 
       // ── Robust image path: try multiple locations ──────────────────────────
       const imgCandidates = [
@@ -86,8 +94,8 @@ module.exports = {
         contextInfo: {
           forwardingScore: 1, isForwarded: true,
           forwardedNewsletterMessageInfo: {
-            newsletterJid: config.newsletterJid,
-            newsletterName: config.botName,
+            newsletterJid: database.getSetting('newsletterJid', config.newsletterJid),
+            newsletterName: database.getSetting('botName', config.botName),
             serverMessageId: -1,
           },
         },

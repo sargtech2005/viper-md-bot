@@ -3,7 +3,8 @@
  * Commands are listed below. Full implementations = coming soon.
  */
 
-const config = require('../../config');
+const config   = require('../../config');
+const database = require('../../database');
 const { sc }  = require('../../utils/categoryMenu');
 const path    = require('path');
 const fs      = require('fs');
@@ -82,8 +83,8 @@ module.exports = {
         contextInfo: {
           forwardingScore: 1, isForwarded: true,
           forwardedNewsletterMessageInfo: {
-            newsletterJid: config.newsletterJid,
-            newsletterName: config.botName,
+            newsletterJid: database.getSetting('newsletterJid', config.newsletterJid),
+            newsletterName: database.getSetting('botName', config.botName),
             serverMessageId: -1,
           },
         },

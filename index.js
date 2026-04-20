@@ -201,16 +201,19 @@ async function startBot() {
 
     if (connection === 'open') {
       lastActivity = Date.now();
-      const num   = sock.user.id.split(':')[0];
-      const owner = Array.isArray(config.ownerName)
-        ? config.ownerName.join(' & ')
-        : config.ownerName;
+      const num      = sock.user.id.split(':')[0];
+      // Read per-session values from DB so the banner reflects what this user set
+      const database = require('./database');
+      const botName  = database.getSetting('botName',  config.botName);
+      const ownerRaw = database.getSetting('ownerDisplayName', null)
+                    || database.getSetting('ownerDisplayNumber', null)
+                    || process.env.SESSION_NUMBER
+                    || (Array.isArray(config.ownerName) ? config.ownerName.join(' & ') : config.ownerName);
 
       console.log('\n╔══════════════════════════════════════╗');
-      console.log('║  ✅  VIPER BOT MD — CONNECTED! 🐍    ║');
+      console.log(`║  ✅  ${botName.padEnd(32)} ║`);
       console.log(`║  📱  Bot: ${num.padEnd(27)}║`);
-      console.log(`║  🤖  ${config.botName.padEnd(34)}║`);
-      console.log(`║  👑  Owner: ${owner.padEnd(26)}║`);
+      console.log(`║  👑  Owner: ${String(ownerRaw).padEnd(26)}║`);
       console.log('╚══════════════════════════════════════╝\n');
 
       if (config.autoBio) {

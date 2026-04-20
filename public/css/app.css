@@ -293,9 +293,67 @@ svg{display:block;flex-shrink:0}
 .vtoggle-track::after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .vtoggle input:checked+.vtoggle-track::after{left:21px}
 
+/* ══ COIN PACKAGES ════════════════════════════ */
+.pkg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.75rem}
+.pkg-card{
+  border:1.5px solid var(--border);border-radius:.65rem;
+  padding:1rem .85rem;text-align:center;cursor:pointer;
+  background:var(--bg);transition:all .15s;position:relative;
+}
+.pkg-card:hover{border-color:var(--green);background:var(--green-pale)}
+.pkg-card.selected{border-color:var(--green);background:var(--green-pale);box-shadow:0 0 0 3px rgba(22,163,74,.12)}
+.pkg-label{font-size:.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.35rem}
+.pkg-coins{font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;color:var(--text);line-height:1}
+.pkg-price{font-size:.82rem;font-weight:700;color:var(--green);margin-top:.35rem}
+.pkg-save{
+  position:absolute;top:-.55rem;right:-.55rem;
+  background:var(--green);color:white;font-size:.65rem;font-weight:700;
+  padding:.15rem .4rem;border-radius:100px;
+}
+
+/* ══ TABLE ════════════════════════════════════ */
+.table-wrap{overflow-x:auto}
+.table-wrap table{width:100%;border-collapse:collapse;font-size:.83rem}
+.table-wrap th{text-align:left;font-size:.7rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:.6rem .75rem;border-bottom:2px solid var(--border)}
+.table-wrap td{padding:.65rem .75rem;border-bottom:1px solid var(--border);color:var(--text)}
+.table-wrap tr:last-child td{border-bottom:none}
+.table-wrap tr:hover td{background:var(--bg)}
+
+/* ══ MOBILE DROPDOWN NAV ══════════════════════
+   On desktop the sidebar sits fixed on the left.
+   On mobile the sidebar is hidden and the hamburger
+   opens a compact dropdown panel below the topbar.
+   ═══════════════════════════════════════════════ */
+.nav-dropdown{
+  display:none; /* shown by JS on mobile */
+  position:fixed;
+  top:var(--topbar-h);left:0;right:0;
+  z-index:300;
+  background:var(--white);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 8px 24px rgba(15,23,42,.1);
+  padding:.5rem .75rem .75rem;
+  animation:dropIn .18s ease;
+}
+.nav-dropdown.open{display:block}
+@keyframes dropIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.nav-dropdown-links{display:flex;flex-direction:column;gap:.1rem;margin-bottom:.6rem}
+.nav-dropdown-links .nav-link{border-radius:.4rem}
+.nav-dropdown-divider{height:1px;background:var(--border);margin:.35rem 0}
+.nav-dropdown-user{
+  display:flex;align-items:center;gap:.55rem;
+  padding:.5rem .65rem;border-radius:.45rem;background:var(--bg);margin-bottom:.45rem;
+}
+.nav-dropdown-footer{display:flex;align-items:center;gap:.55rem}
+.nav-dropdown-footer .nav-logout{flex:1}
+.nav-dropdown-backdrop{
+  display:none;position:fixed;inset:0;z-index:299;
+  background:rgba(15,23,42,.2);backdrop-filter:blur(1px);
+}
+.nav-dropdown-backdrop.open{display:block}
+
 @media(max-width:768px){
-  .sidebar{transform:translateX(-100%)}
-  .sidebar.open{transform:none;box-shadow:0 0 0 100vw rgba(0,0,0,.25)}
+  .sidebar{display:none}
   .main-content{margin-left:0}
   .hamburger{display:flex}
   .page-body{padding:1rem}
@@ -303,4 +361,5 @@ svg{display:block;flex-shrink:0}
 }
 @media(max-width:480px){
   .stats-grid{grid-template-columns:1fr 1fr}
+  .pkg-grid{grid-template-columns:repeat(2,1fr)}
 }

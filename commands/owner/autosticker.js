@@ -1,5 +1,8 @@
 /**
- * .autosticker — toggle auto sticker mode (per-session)
+ * .autosticker — toggle auto sticker conversion (per-session)
+ *
+ * When ON, every image or video sent in the chat is automatically
+ * converted into a WhatsApp sticker and sent back — no command needed.
  */
 const config   = require('../../config');
 const database = require('../../database');
@@ -8,7 +11,7 @@ module.exports = {
   name: 'autosticker',
   aliases: ['stickertoggle'],
   category: 'owner',
-  description: 'Toggle auto sticker mode on/off',
+  description: 'Auto-convert all received images/videos into stickers',
   usage: '.autosticker on/off',
   ownerOnly: true,
 

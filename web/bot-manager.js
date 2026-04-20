@@ -36,6 +36,7 @@ const NODE_ENTRY = path.join(ROOT_DIR, 'index.js');
 const PROCS          = new Map(); // sessionId → { proc, phone }
 const SSE_SUBS       = new Map(); // sessionId → Set<res>
 const CREDS_TIMERS   = new Map(); // sessionId → intervalId
+const PAIR_CACHE     = new Map(); // sessionId → last pair code (cleared on connect)
 
 function sessionDir(phone) { return path.join(TMP_ROOT, phone); }
 function logPath(phone)    { return path.join(TMP_LOGS, `${phone}.log`); }
@@ -57,6 +58,17 @@ function emit(sessionId, event, data) {
 function subscribe(sessionId, res) {
   if (!SSE_SUBS.has(sessionId)) SSE_SUBS.set(sessionId, new Set());
   SSE_SUBS.get(sessionId).add(res);
+
+  // ── Replay cached pair code to late-joining SSE clients ──────────────────
+  // Race condition: the bot can generate the pair code before the browser's
+  // EventSource connection is fully established. Without this replay, the
+  // user sees the spinner forever even though the code was already emitted.
+  const cached = PAIR_CACHE.get(sessionId);
+  if (cached) {
+    try {
+      res.write(`event: pair_code\ndata: ${JSON.stringify({ code: cached })}\n\n`);
+    } catch (_) {}
+  }
 }
 function unsubscribe(sessionId, res) {
   SSE_SUBS.get(sessionId)?.delete(res);
@@ -152,10 +164,12 @@ function watchLog(sessionId, phone) {
 
         if (line.includes('PAIR_CODE:')) {
           const code = line.split('PAIR_CODE:')[1].trim();
+          PAIR_CACHE.set(sessionId, code);   // cache so late SSE joiners get it
           emit(sessionId, 'pair_code', { code });
         }
         if (line.toUpperCase().includes('CONNECTED') || line.includes('connected successfully')) {
           done = true; clearInterval(iv);
+          PAIR_CACHE.delete(sessionId);      // code no longer needed
           emit(sessionId, 'connected', { message: 'Bot connected!' });
           await Sessions.updateStatus(sessionId, 'connected');
           // Save creds immediately after connect
@@ -164,6 +178,7 @@ function watchLog(sessionId, phone) {
         }
         if (line.includes(`LOGGED_OUT:${phone}`) || line.includes('loggedOut')) {
           done = true; clearInterval(iv);
+          PAIR_CACHE.delete(sessionId);
           stopCredsSync(sessionId);
           stopSession(sessionId);
           // Wipe creds from DB on logout

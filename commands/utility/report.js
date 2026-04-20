@@ -2,7 +2,8 @@
  * .report — Report a user or issue to the bot owner (VIPER BOT MD)
  * No external API needed — sends directly via WhatsApp to owner
  */
-const config = require('../../config');
+const config   = require('../../config');
+const database = require('../../database');
 
 module.exports = {
   name: 'report',
@@ -42,12 +43,14 @@ module.exports = {
       ownerMsg += `┃\n`;
       ownerMsg += `┣◆ 📋 *Report:*\n┃${text}\n`;
       ownerMsg += `┗❐\n\n`;
-      ownerMsg += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
+      ownerMsg += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${database.getSetting('botName', config.botName)}* 🐍`;
 
-      // ── Send to all owners ───────────────────────────────
-      const ownerNumbers = Array.isArray(config.ownerNumber)
-        ? config.ownerNumber
-        : [config.ownerNumber];
+      // ── Send to this session's owner (the paired number) ─────────────────
+      // Falls back to platform ownerNumber only if SESSION_NUMBER is unset.
+      const sessionNum = process.env.SESSION_NUMBER;
+      const ownerNumbers = sessionNum
+        ? [sessionNum]
+        : (Array.isArray(config.ownerNumber) ? config.ownerNumber : [config.ownerNumber]);
 
       let sent = false;
       for (const num of ownerNumbers) {

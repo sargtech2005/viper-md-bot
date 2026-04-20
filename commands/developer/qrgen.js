@@ -2,7 +2,8 @@
  * .qrgen <text>  (VIPER BOT MD)
  * Generates a QR code image using the qrcode npm package.
  */
-const config = require('../../config');
+const config   = require('../../config');
+const database = require('../../database');
 const { sc } = require('../../utils/categoryMenu');
 const QRCode = require('qrcode');
 const path   = require('path');

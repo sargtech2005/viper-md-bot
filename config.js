@@ -3,9 +3,23 @@
  * ║     ᴠɪᴘᴇʀ ʙᴏᴛ ᴍᴅ — ᴄᴏɴꜰɪɢ           ║
  * ║  Owner: Sarg-Tech & Viper             ║
  * ╚═══════════════════════════════════════╝
+ *
+ * NOTE: All scalar settings below that can be changed by the bot owner
+ * (botName, prefix, selfMode, autoRead, autoTyping, autoSticker,
+ *  autoReact, autoStatus) are automatically overridden per-session by
+ * the session's settings.json DB when a user runs the corresponding
+ * set command (.setbotname, .setprefix, .mode, etc.).
+ *
+ * This is achieved by the Proxy wrapper at the bottom of this file.
+ * You do NOT need to touch individual command files — they all read
+ * config.botName / config.prefix etc. and get the session-specific
+ * value transparently.
+ *
+ * ownerNumber / ownerName are NOT proxied — they are the platform
+ * super-owner list and must never be overridden per-session.
  */
 
-module.exports = {
+const raw = {
     ownerNumber: ['2348083086811', '2349041088690'],
     ownerName:   ['Sarg-Tech', 'Viper'],
     ownerGithub: ['remzytech001', 'sargtech1'],
@@ -30,7 +44,7 @@ module.exports = {
     autoSticker:   false,
     autoReact:     false,
     autoReactMode: 'bot',
-    autoDownload:  false,
+    autoStatus:    false,   // renamed from autoDownload
 
     telegramBotToken: process.env.TG_BOT_TOKEN || '',
     telegramOwnerId:  process.env.TG_OWNER_ID  || '6952558480',
@@ -58,26 +72,64 @@ module.exports = {
         autosticker:           false,
     },
 
-    apiKeys: { openai: '', deepai: '', remove_bg: '' },
-
     messages: {
-        wait:           '⏳ ᴄʜɪʟʟ... ᴅᴏɪɴɢ ᴛʜᴇ ᴛʜɪɴɢ... 🔄',
-        success:        '✅ ᴅᴏɴᴇ! ᴇᴀꜱʏ ᴡᴏʀᴋ 😎',
-        error:          '❌ ꜱᴏᴍᴇᴛʜɪɴɢ ʙʟᴇᴡ ᴜᴘ 💀 Try again!',
-        ownerOnly:      '*📛 ᴛʜɪꜱ ɪꜱ ᴀɴ ᴏᴡɴᴇʀ ᴄᴏᴍᴍᴀɴᴅ.*\n\n😆 Your boldness is appreciated but this is strictly owner territory. Nice try though 💀',
-        adminOnly:      '*🛡️ ᴀᴅᴍɪɴꜱ ᴏɴʟʏ!*\n\n😂 Go get a promotion first before coming here with that energy 💀',
-        groupOnly:      '*👥 ɢʀᴏᴜᴘ-ᴏɴʟʏ ᴄᴍᴅ!*\n\n😅 What are you doing in DMs bestie? Join a group first 🤦',
-        privateOnly:    '*💬 ᴅᴍꜱ ᴏɴʟʏ!*\n\n😏 Slide into my DMs for this one. Not here in public 😂',
-        botAdminNeeded: '*🤖 ɪ ɴᴇᴇᴅ ᴀᴅᴍɪɴ!*\n\n😤 Make me admin first! I don\'t do free labour 💀',
-        invalidCommand: '❓ ɴᴏᴛ ᴀ ᴄᴏᴍᴍᴀɴᴅ ʙᴇꜱᴛɪᴇ 😅 Try *.menu* to see what I can actually do 🐍',
+        ownerOnly:  '❌ *Owner only command!*\n\nOnly the bot owner can use this.',
+        adminOnly:  '❌ *Admins only!*\n\nYou need admin rights to run this command.',
+        groupOnly:  '❌ *Group command!*\n\nThis command only works in groups.',
+        privateOnly:'❌ *Private command!*\n\nThis command only works in private chat.',
+        botAdmin:   '❌ *Bot needs admin!*\n\nMake the bot an admin first.',
+        cooldown:   '⏱ *Slow down!*\n\nWait a moment before using this command again.',
     },
 
-    timezone:    'Africa/Lagos',
     maxWarnings: 3,
-
-    social: {
-        github:   'https://github.com/remzytech001',
-        github2:  'https://github.com/sargtech1',
-        channel:  'https://whatsapp.com/channel/0029VbCbMBtAe5VuprvXah23',
-    },
+    antiSpamThreshold: 5,
+    antiSpamWindow: 10000,
 };
+
+// ── Per-session config override via Proxy ─────────────────────────────────
+// Keys in this set are automatically read from the session's settings.json
+// (via database.getSetting) before falling back to the raw defaults above.
+// This means every command that reads config.botName, config.prefix, etc.
+// automatically gets the session-specific value — no command files needed
+// to be changed individually.
+const SESSION_OVERRIDABLE = new Set([
+    'botName',
+    'prefix',
+    'selfMode',
+    'autoRead',
+    'autoTyping',
+    'autoSticker',
+    'autoReact',
+    'autoReactMode',
+    'autoStatus',
+    // legacy key kept for backward-compat reads
+    'autoDownload',
+]);
+
+module.exports = new Proxy(raw, {
+    get(target, prop) {
+        if (typeof prop === 'string' && SESSION_OVERRIDABLE.has(prop)) {
+            try {
+                // Lazy-require to avoid circular dependency during module init.
+                // Node caches modules so this is effectively free after first load.
+                const database = require('./database');
+                // autoDownload is the legacy key — redirect to autoStatus in DB
+                const dbKey = prop === 'autoDownload' ? 'autoStatus' : prop;
+                const val = database.getSetting(dbKey, undefined);
+                if (val !== null && val !== undefined) return val;
+            } catch (_) {
+                // database not ready yet (rare, e.g. during very early boot) — use raw
+            }
+        }
+        return target[prop];
+    },
+    // Allow direct assignment to raw (e.g. config.prefix = '!' would be unusual
+    // but shouldn't silently fail — write to raw and let DB take precedence)
+    set(target, prop, value) {
+        target[prop] = value;
+        return true;
+    },
+    // Ensure JSON.stringify and Object.keys still work on the raw object
+    ownKeys: (target) => Reflect.ownKeys(target),
+    getOwnPropertyDescriptor: (target, prop) => Reflect.getOwnPropertyDescriptor(target, prop),
+});
