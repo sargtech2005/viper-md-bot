@@ -47,6 +47,7 @@ async function initDB() {
     // Add creds_data column if upgrading from older schema
     await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_data TEXT`);
     await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_updated TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TIMESTAMPTZ`);
 
     await client.query(`CREATE TABLE IF NOT EXISTS coin_transactions (
       id          SERIAL PRIMARY KEY,
@@ -84,6 +85,7 @@ async function initDB() {
       ['coin_pkg_2_coins','300'], ['coin_pkg_2_ngn','1200'],
       ['coin_pkg_3_coins','600'], ['coin_pkg_3_ngn','2000'],
       ['coin_pkg_4_coins','1500'],['coin_pkg_4_ngn','4000'],
+      ['daily_coins_enabled','false'], ['daily_coins_amount','10'],
     ];
     for (const [k,v] of defaults)
       await client.query(`INSERT INTO site_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO NOTHING`,[k,v]);

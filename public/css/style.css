@@ -205,3 +205,14 @@ tr:hover td{background:rgba(255,255,255,.02)}
   .stats-grid{grid-template-columns:1fr}
   .pkg-grid{grid-template-columns:1fr 1fr}
 }
+
+/* ── PUBLIC SITE FOOTER ── */
+.site-footer{background:#0d1117;border-top:1px solid rgba(255,255,255,.07);padding:2rem 1.5rem 1.5rem}
+.site-footer-inner{max-width:900px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.site-footer-logo{display:flex;align-items:center;gap:.45rem;font-family:'Syne',sans-serif;font-weight:800;font-size:.85rem;color:#f1f5f9;text-decoration:none;letter-spacing:.01em}
+.site-footer-logo svg{width:18px;height:18px;color:#22c55e}
+.site-footer-links{display:flex;gap:1.25rem;flex-wrap:wrap}
+.site-footer-links a{font-size:.78rem;color:#94a3b8;text-decoration:none;transition:color .15s}
+.site-footer-links a:hover{color:#22c55e}
+.site-footer-copy{font-size:.72rem;color:#475569;width:100%;text-align:center;margin-top:.5rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.06)}
+@media(max-width:500px){.site-footer-inner{flex-direction:column;align-items:flex-start}.site-footer-links{gap:.75rem}}

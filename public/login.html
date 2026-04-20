@@ -180,5 +180,21 @@ fetch('/api/auth/me', { credentials: 'same-origin' })
   .then(r => { if (r.status === 200) window.location.href = '/dashboard.html'; })
   .catch(() => {});
 </script>
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <a href="/" class="site-footer-logo">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 16c0-4 3-6 6-6s6-2 6-6"/><circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/><path d="M4 16c0 1.1.9 2 2 2"/></svg>
+      VIPER MD
+    </a>
+    <div class="site-footer-links">
+      <a href="/">Home</a>
+      <a href="/login.html">Sign In</a>
+      <a href="/register.html">Register</a>
+      <a href="/dashboard.html">Dashboard</a>
+    </div>
+    <div class="site-footer-copy">&copy; 2026 VIPER MD Bot. All rights reserved.</div>
+  </div>
+</footer>
 </body>
 </html>

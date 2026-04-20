@@ -99,6 +99,10 @@
         <div class="pair-code-box">
           <div class="pair-code" id="pair-code-value">—</div>
           <div class="pair-countdown">Code expires in <span id="timer">60</span>s</div>
+          <button class="vbtn vbtn-outline vbtn-sm" id="copy-btn" onclick="copyCode()" style="margin-top:.85rem">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg>
+            Copy Code
+          </button>
         </div>
         <div style="margin:1rem 0">
           <div style="font-weight:700;font-size:.875rem;margin-bottom:.75rem">How to link:</div>
@@ -132,6 +136,21 @@
     </div>
 
   </div>
+  <footer class="app-footer">
+    <div class="app-footer-inner">
+      <a href="/dashboard.html" class="app-footer-logo">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 16c0-4 3-6 6-6s6-2 6-6"/><circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/><path d="M4 16c0 1.1.9 2 2 2"/></svg>
+        VIPER MD
+      </a>
+      <div class="app-footer-links">
+        <a href="/dashboard.html">Dashboard</a>
+        <a href="/sessions.html">Sessions</a>
+        <a href="/wallet.html">Wallet</a>
+        <a href="/settings.html">Settings</a>
+      </div>
+      <div class="app-footer-copy">&copy; 2026 VIPER MD Bot. All rights reserved.</div>
+    </div>
+  </footer>
 </div>
 
 <script src="/js/common.js"></script>
@@ -240,6 +259,21 @@ function startCountdown(secs) {
 function stopSSE() {
   if (eventSource) { eventSource.close(); eventSource = null; }
   clearInterval(countdown);
+}
+
+function copyCode() {
+  const code = document.getElementById('pair-code-value').textContent;
+  if (!code || code === '—') return;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg> Copied!';
+    setTimeout(() => { btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg> Copy Code'; }, 2000);
+  }).catch(() => {
+    // fallback: select text
+    const el = document.getElementById('pair-code-value');
+    const sel = window.getSelection(); const rng = document.createRange();
+    rng.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(rng);
+  });
 }
 
 function resetToPhone() {

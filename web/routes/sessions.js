@@ -80,6 +80,8 @@ router.post('/:id/pair', async (req, res) => {
 
     if (BotMgr.isRunning(sessionId)) BotMgr.stopSession(sessionId);
 
+    // Clear stored creds so re-pair generates a fresh pair code
+    await Sessions.saveCreds(sessionId, null);
     await Sessions.setPhone(sessionId, cleanPhone);
     await Sessions.updateStatus(sessionId, 'pairing');
 

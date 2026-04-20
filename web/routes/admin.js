@@ -164,6 +164,7 @@ router.post('/settings', async (req, res) => {
       'paystack_public_key','paystack_secret_key',
       'coin_pkg_1_coins','coin_pkg_1_ngn','coin_pkg_2_coins','coin_pkg_2_ngn',
       'coin_pkg_3_coins','coin_pkg_3_ngn','coin_pkg_4_coins','coin_pkg_4_ngn',
+      'daily_coins_enabled','daily_coins_amount',
     ];
     const updates = {};
     for (const k of allowed) if (req.body[k] !== undefined) updates[k] = req.body[k];

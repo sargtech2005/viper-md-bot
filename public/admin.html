@@ -2,480 +2,681 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Admin Panel — VIPER BOT MD</title>
-<link rel="stylesheet" href="/css/style.css"/>
+<title>Admin Panel — VIPER MD BOT</title>
+<link rel="stylesheet" href="/css/app.css"/>
 </head>
-<body class="app-layout">
+<body>
 
 <aside class="sidebar" id="sidebar">
-  <div class="sidebar-logo">🐍 <span>VIPER BOT MD</span></div>
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 16c0-4 3-6 6-6s6-2 6-6"/>
+        <circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/>
+        <path d="M4 16c0 1.1.9 2 2 2"/>
+      </svg>
+    </div>
+    <span class="logo-text">VIPER <span>MD</span></span>
+  </div>
   <nav id="sidebar-nav"></nav>
-  <div class="nav-user" id="nav-user"></div>
-  <button class="nav-logout" onclick="logout()">🚪 Logout</button>
+  <div class="sidebar-footer">
+    <div class="nav-user" id="nav-user"></div>
+    <button class="nav-logout" onclick="logout()">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M13 5l4 5-4 5M17 10H8"/><path d="M8 3H4a1 1 0 00-1 1v12a1 1 0 001 1h4"/></svg>
+      Sign Out
+    </button>
+  </div>
 </aside>
 
 <div class="main-content">
   <header class="topbar">
-    <div style="display:flex;align-items:center;gap:.75rem">
-      <button class="hamburger" onclick="toggleSidebar()">☰</button>
-      <span class="topbar-title">👑 Admin Panel</span>
+    <div class="topbar-left">
+      <button class="hamburger" onclick="toggleSidebar()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+      </button>
+      <span class="topbar-title">Admin Panel</span>
     </div>
     <div class="topbar-right">
-      <button class="btn btn-outline btn-sm" onclick="loadAll()">🔄 Refresh</button>
+      <button class="vbtn vbtn-outline vbtn-sm" onclick="loadAll()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12a8 8 0 1016 0 8 8 0 00-16 0"/><path d="M4 8v4h4"/></svg>
+        Refresh
+      </button>
     </div>
   </header>
 
   <div class="page-body">
 
-    <!-- Stats -->
-    <div class="stats-grid" style="margin-bottom:1.5rem">
-      <div class="stat-card stat-green"><div class="stat-label">Total Users</div><div class="stat-value" id="st-users">—</div></div>
-      <div class="stat-card stat-blue"><div class="stat-label">Total Sessions</div><div class="stat-value" id="st-sessions">—</div></div>
-      <div class="stat-card"><div class="stat-label">Connected Now</div><div class="stat-value" id="st-connected">—</div></div>
-      <div class="stat-card stat-purple"><div class="stat-label">Total Revenue</div><div class="stat-value" id="st-revenue">—</div></div>
+    <!-- Stats Row -->
+    <div class="stats-grid" style="margin-bottom:1.25rem">
+      <div class="stat-card">
+        <div class="stat-top">
+          <div class="stat-label">Total Users</div>
+          <div class="stat-icon green">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="6" r="3"/><path d="M2 18c0-4 3-6 6-6s6 2 6 6"/><circle cx="15" cy="7" r="2"/><path d="M18 18c0-3-1.5-5-3-5.5"/></svg>
+          </div>
+        </div>
+        <div class="stat-value green" id="st-users">—</div>
+        <div class="stat-sub">Registered accounts</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top">
+          <div class="stat-label">Total Sessions</div>
+          <div class="stat-icon blue">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 6h4M8 10h4"/></svg>
+          </div>
+        </div>
+        <div class="stat-value" id="st-sessions">—</div>
+        <div class="stat-sub">All time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top">
+          <div class="stat-label">Connected Now</div>
+          <div class="stat-icon yellow">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg>
+          </div>
+        </div>
+        <div class="stat-value" id="st-connected">—</div>
+        <div class="stat-sub">Live bots</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-top">
+          <div class="stat-label">Total Revenue</div>
+          <div class="stat-icon red">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg>
+          </div>
+        </div>
+        <div class="stat-value" id="st-revenue">—</div>
+        <div class="stat-sub">From payments</div>
+      </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('users')">👥 Users</div>
-      <div class="tab" onclick="switchTab('sessions')">📱 Sessions</div>
-      <div class="tab" onclick="switchTab('payments')">💳 Payments</div>
-      <div class="tab" onclick="switchTab('settings')">⚙️ Site Settings</div>
-      <div class="tab" onclick="switchTab('paystack')">🔑 Paystack Keys</div>
+    <!-- Tab Bar -->
+    <div class="admin-tabs">
+      <div class="admin-tab active" onclick="switchTab('users',this)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="6" r="3"/><path d="M2 18c0-4 3-6 6-6s6 2 6 6"/></svg>
+        Users
+      </div>
+      <div class="admin-tab" onclick="switchTab('sessions',this)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 6h4M8 10h4"/></svg>
+        Sessions
+      </div>
+      <div class="admin-tab" onclick="switchTab('payments',this)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="6" width="16" height="12" rx="1.5"/><path d="M2 10h16M6 14h2M10 14h4"/></svg>
+        Payments
+      </div>
+      <div class="admin-tab" onclick="switchTab('settings',this)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M4.2 15.8l1.4-1.4M14.4 5.6l1.4-1.4"/></svg>
+        Settings
+      </div>
+      <div class="admin-tab" onclick="switchTab('paystack',this)">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12v4h4M16 8V4h-4M20 4l-6 6M0 16l6-6"/></svg>
+        Paystack
+      </div>
     </div>
 
-    <!-- Users Tab -->
-    <div class="tab-panel active" id="tab-users">
+    <!-- ══ USERS PANEL ══ -->
+    <div class="admin-panel active" id="panel-users">
       <div class="card">
-        <div class="section-header" style="flex-wrap:wrap;gap:.5rem">
-          <div class="section-title">All Users</div>
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="6" r="3"/><path d="M2 18c0-4 3-6 6-6s6 2 6 6"/></svg>
+              All Users
+            </div>
+            <div class="card-sub">Manage accounts, coins and permissions</div>
+          </div>
           <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-            <input type="text" id="user-search" placeholder="Search email or username..." style="padding:.4rem .75rem;background:var(--bg);border:1px solid var(--border);border-radius:.4rem;color:var(--text);font-size:.83rem;width:200px" oninput="searchUsers()"/>
-            <button class="btn btn-green btn-sm" onclick="openCreditModal()">➕ Credit Coins</button>
+            <input type="text" id="user-search" placeholder="Search email or username…"
+              class="a-search" oninput="searchUsers()"/>
+            <button class="vbtn vbtn-green vbtn-sm" onclick="openCreditModal()">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg>
+              Adjust Coins
+            </button>
           </div>
         </div>
-        <div class="table-wrap" id="users-table">
-          <div class="empty-state"><div class="spinner"></div></div>
+        <div style="overflow-x:auto" id="users-table">
+          <div class="empty-state"><div class="vspin vspin-dark" style="width:20px;height:20px"></div></div>
         </div>
       </div>
     </div>
 
-    <!-- Sessions Tab -->
-    <div class="tab-panel" id="tab-sessions">
+    <!-- ══ SESSIONS PANEL ══ -->
+    <div class="admin-panel" id="panel-sessions">
       <div class="card">
-        <div class="section-header">
-          <div class="section-title">All Sessions</div>
-          <button class="btn btn-red btn-sm" onclick="stopAllSessions()">🛑 Stop All</button>
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 6h4M8 10h4"/></svg>
+              All Sessions
+            </div>
+            <div class="card-sub">Monitor and manage every bot session</div>
+          </div>
+          <button class="vbtn vbtn-sm a-btn-red" onclick="stopAllSessions()">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></svg>
+            Stop All
+          </button>
         </div>
-        <div class="table-wrap" id="sessions-table">
-          <div class="empty-state"><div class="spinner"></div></div>
+        <div style="overflow-x:auto" id="sessions-table">
+          <div class="empty-state"><div class="vspin vspin-dark" style="width:20px;height:20px"></div></div>
         </div>
       </div>
     </div>
 
-    <!-- Payments Tab -->
-    <div class="tab-panel" id="tab-payments">
+    <!-- ══ PAYMENTS PANEL ══ -->
+    <div class="admin-panel" id="panel-payments">
       <div class="card">
-        <div class="section-header">
-          <div class="section-title">Payment History</div>
-          <button class="btn btn-outline btn-sm" onclick="openManualCreditModal()">✋ Manual Credit</button>
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="6" width="16" height="12" rx="1.5"/><path d="M2 10h16M6 14h2M10 14h4"/></svg>
+              Payment History
+            </div>
+            <div class="card-sub">All transactions and top-ups</div>
+          </div>
+          <button class="vbtn vbtn-outline vbtn-sm" onclick="openManualCreditModal()">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+            Manual Credit
+          </button>
         </div>
-        <div class="table-wrap" id="payments-table">
-          <div class="empty-state"><div class="spinner"></div></div>
+        <div style="overflow-x:auto" id="payments-table">
+          <div class="empty-state"><div class="vspin vspin-dark" style="width:20px;height:20px"></div></div>
         </div>
       </div>
     </div>
 
-    <!-- Site Settings Tab -->
-    <div class="tab-panel" id="tab-settings">
-      <div class="card">
-        <div class="card-title" style="margin-bottom:1.25rem">⚙️ Site Settings</div>
-        <div id="settings-alert"></div>
-        <div class="form-row">
-          <div class="field">
-            <label>Site Name</label>
-            <input type="text" id="s-site-name" placeholder="VIPER BOT MD"/>
+    <!-- ══ SETTINGS PANEL ══ -->
+    <div class="admin-panel" id="panel-settings">
+      <div id="settings-alert"></div>
+
+      <!-- Daily Free Coins Card -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title" style="margin-bottom:.35rem">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg>
+          Daily Free Coins
+        </div>
+        <div class="card-sub" style="margin-bottom:1.1rem">When enabled, users can claim free coins once every 24 hours directly from their dashboard.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:1.25rem;align-items:flex-end">
+          <div>
+            <div class="a-label">Enable Daily Bonus</div>
+            <label class="vtoggle">
+              <input type="checkbox" id="s-daily-enabled" onchange="updateDailyPreview()"/>
+              <span class="vtoggle-track"></span>
+              <span id="daily-toggle-label" style="font-size:.83rem;font-weight:600;color:var(--text)">Off</span>
+            </label>
           </div>
-          <div class="field">
-            <label>Signup Bonus Coins</label>
-            <input type="number" id="s-signup-coins" min="0"/>
+          <div>
+            <div class="a-label">Coins Per Claim</div>
+            <input type="number" id="s-daily-amount" min="1" max="9999" class="a-input" style="width:110px" oninput="updateDailyPreview()"/>
+          </div>
+          <div id="daily-preview" class="v-alert v-alert-success" style="display:none;margin:0;align-items:center;gap:.4rem">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg>
+            Users get <strong id="daily-preview-val" style="margin:0 .2rem">—</strong> coins every 24 hrs
           </div>
         </div>
-        <div class="form-row">
-          <div class="field">
-            <label>Session Cost (coins)</label>
-            <input type="number" id="s-session-cost" min="1"/>
-          </div>
-          <div class="field">
-            <label>Max Sessions Per User (0 = unlimited)</label>
-            <input type="number" id="s-max-sessions" min="0"/>
-          </div>
+      </div>
+
+      <!-- General Settings Card -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title" style="margin-bottom:1rem">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="3"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2"/></svg>
+          General Settings
         </div>
-        <div class="field">
-          <label>Maintenance Mode</label>
-          <select id="s-maintenance">
+        <div class="a-grid2">
+          <div><div class="a-label">Site Name</div><input type="text" id="s-site-name" class="a-input" placeholder="VIPER BOT MD"/></div>
+          <div><div class="a-label">Signup Bonus Coins</div><input type="number" id="s-signup-coins" class="a-input" min="0"/></div>
+          <div><div class="a-label">Session Cost (coins)</div><input type="number" id="s-session-cost" class="a-input" min="1"/></div>
+          <div><div class="a-label">Max Sessions Per User <span style="font-weight:400">(0 = unlimited)</span></div><input type="number" id="s-max-sessions" class="a-input" min="0"/></div>
+        </div>
+        <div style="margin-top:.85rem">
+          <div class="a-label">Maintenance Mode</div>
+          <select id="s-maintenance" class="a-input" style="width:auto;min-width:200px">
             <option value="false">Off — Site is live</option>
             <option value="true">On — Under maintenance</option>
           </select>
         </div>
-        <div style="margin-top:.75rem">
-          <div class="card-title" style="margin-bottom:1rem">🪙 Coin Packages (NGN prices)</div>
-          <div class="form-row">
-            <div class="field"><label>Package 1 — Coins</label><input type="number" id="s-p1c" min="1"/></div>
-            <div class="field"><label>Package 1 — Price (₦)</label><input type="number" id="s-p1n" min="100"/></div>
+      </div>
+
+      <!-- Coin Packages Card -->
+      <div class="card" style="margin-bottom:1rem">
+        <div class="card-title" style="margin-bottom:1rem">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 2l2.5 5 5.5.8-4 3.9.9 5.5L10 14.5l-4.9 2.7.9-5.5-4-3.9 5.5-.8z"/></svg>
+          Coin Packages <span style="font-size:.75rem;font-weight:400;letter-spacing:0;text-transform:none;color:var(--muted)">(NGN prices)</span>
+        </div>
+        <div class="a-grid2">
+          <div style="background:var(--bg);border-radius:.5rem;padding:.85rem">
+            <div class="a-pkg-title">Package 1</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+              <div><div class="a-label">Coins</div><input type="number" id="s-p1c" class="a-input" min="1"/></div>
+              <div><div class="a-label">Price (₦)</div><input type="number" id="s-p1n" class="a-input" min="100"/></div>
+            </div>
           </div>
-          <div class="form-row">
-            <div class="field"><label>Package 2 — Coins</label><input type="number" id="s-p2c" min="1"/></div>
-            <div class="field"><label>Package 2 — Price (₦)</label><input type="number" id="s-p2n" min="100"/></div>
+          <div style="background:var(--bg);border-radius:.5rem;padding:.85rem">
+            <div class="a-pkg-title">Package 2</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+              <div><div class="a-label">Coins</div><input type="number" id="s-p2c" class="a-input" min="1"/></div>
+              <div><div class="a-label">Price (₦)</div><input type="number" id="s-p2n" class="a-input" min="100"/></div>
+            </div>
           </div>
-          <div class="form-row">
-            <div class="field"><label>Package 3 — Coins</label><input type="number" id="s-p3c" min="1"/></div>
-            <div class="field"><label>Package 3 — Price (₦)</label><input type="number" id="s-p3n" min="100"/></div>
+          <div style="background:var(--bg);border-radius:.5rem;padding:.85rem">
+            <div class="a-pkg-title">Package 3</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+              <div><div class="a-label">Coins</div><input type="number" id="s-p3c" class="a-input" min="1"/></div>
+              <div><div class="a-label">Price (₦)</div><input type="number" id="s-p3n" class="a-input" min="100"/></div>
+            </div>
           </div>
-          <div class="form-row">
-            <div class="field"><label>Package 4 — Coins</label><input type="number" id="s-p4c" min="1"/></div>
-            <div class="field"><label>Package 4 — Price (₦)</label><input type="number" id="s-p4n" min="100"/></div>
+          <div style="background:var(--bg);border-radius:.5rem;padding:.85rem">
+            <div class="a-pkg-title">Package 4</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+              <div><div class="a-label">Coins</div><input type="number" id="s-p4c" class="a-input" min="1"/></div>
+              <div><div class="a-label">Price (₦)</div><input type="number" id="s-p4n" class="a-input" min="100"/></div>
+            </div>
           </div>
         </div>
-        <button class="btn btn-green" id="save-settings-btn" onclick="saveSettings()">💾 Save Settings</button>
       </div>
+
+      <button class="vbtn vbtn-green" id="save-settings-btn" onclick="saveSettings()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3H7L3 7v10a1 1 0 001 1h13a1 1 0 001-1V4a1 1 0 00-1-1z"/><path d="M13 3v6H7V3M7 13h6"/></svg>
+        Save All Settings
+      </button>
     </div>
 
-    <!-- Paystack Keys Tab -->
-    <div class="tab-panel" id="tab-paystack">
+    <!-- ══ PAYSTACK PANEL ══ -->
+    <div class="admin-panel" id="panel-paystack">
       <div class="card">
-        <div class="card-title" style="margin-bottom:.5rem">🔑 Paystack Configuration</div>
-        <p style="font-size:.85rem;color:var(--muted);margin-bottom:1.25rem">
-          Get your keys from your <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" style="color:var(--green)">Paystack Dashboard → Settings → Developer</a>.
-          Use <strong>Live keys</strong> for real payments, <strong>Test keys</strong> for development.
+        <div class="card-title" style="margin-bottom:.4rem">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12v4h4M16 8V4h-4M20 4l-6 6M0 16l6-6"/></svg>
+          Paystack Configuration
+        </div>
+        <p style="font-size:.82rem;color:var(--muted);margin-bottom:1.25rem">
+          Get your keys from the <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" style="color:var(--green);font-weight:600">Paystack Dashboard → Settings → Developer</a>. Use <strong>Live keys</strong> for real payments.
         </p>
         <div id="paystack-alert"></div>
-        <div class="field">
-          <label>Public Key (pk_live_... or pk_test_...)</label>
-          <input type="text" id="ps-public" placeholder="pk_live_xxxxxxxxxxxx"/>
-          <div class="field-hint">This key is used in the frontend to initialize Paystack popup</div>
+        <div style="margin-bottom:.9rem">
+          <div class="a-label">Public Key (pk_live_… or pk_test_…)</div>
+          <input type="text" id="ps-public" class="a-input" placeholder="pk_live_xxxxxxxxxxxx"/>
+          <div style="font-size:.74rem;color:var(--muted);margin-top:.3rem">Used in the frontend to initialize Paystack popup</div>
         </div>
-        <div class="field">
-          <label>Secret Key (sk_live_... or sk_test_...)</label>
-          <input type="password" id="ps-secret" placeholder="sk_live_xxxxxxxxxxxx"/>
-          <div class="field-hint">⚠️ Keep this secret. Used server-side to verify payments.</div>
+        <div style="margin-bottom:.9rem">
+          <div class="a-label">Secret Key (sk_live_… or sk_test_…)</div>
+          <input type="password" id="ps-secret" class="a-input" placeholder="sk_live_xxxxxxxxxxxx"/>
+          <div style="font-size:.74rem;color:var(--muted);margin-top:.3rem">⚠️ Keep this private. Used server-side to verify payments.</div>
         </div>
-        <div class="field">
-          <label>Webhook URL (add this in Paystack Dashboard → API Keys)</label>
-          <input type="text" id="webhook-url" readonly style="color:var(--muted);cursor:text"/>
+        <div style="margin-bottom:1.1rem">
+          <div class="a-label">Webhook URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(paste this in Paystack Dashboard → API Keys)</span></div>
+          <div style="display:flex;gap:.5rem;align-items:center">
+            <input type="text" id="webhook-url" readonly class="a-input" style="color:var(--muted);cursor:text;flex:1"/>
+            <button class="vbtn vbtn-outline vbtn-sm" onclick="copyWebhook()">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg>
+              Copy
+            </button>
+          </div>
         </div>
-        <button class="btn btn-green" id="save-paystack-btn" onclick="savePaystackKeys()">💾 Save Paystack Keys</button>
+        <button class="vbtn vbtn-green" id="save-paystack-btn" onclick="savePaystackKeys()">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3H7L3 7v10a1 1 0 001 1h13a1 1 0 001-1V4a1 1 0 00-1-1z"/><path d="M13 3v6H7V3M7 13h6"/></svg>
+          Save Paystack Keys
+        </button>
       </div>
     </div>
 
+  </div><!-- /page-body -->
+
+  <footer class="app-footer">
+    <div class="app-footer-inner">
+      <a href="/dashboard.html" class="app-footer-logo">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 16c0-4 3-6 6-6s6-2 6-6"/><circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/><path d="M4 16c0 1.1.9 2 2 2"/></svg>
+        VIPER MD
+      </a>
+      <div class="app-footer-links">
+        <a href="/dashboard.html">Dashboard</a>
+        <a href="/sessions.html">Sessions</a>
+        <a href="/wallet.html">Wallet</a>
+        <a href="/settings.html">Settings</a>
+      </div>
+      <div class="app-footer-copy">&copy; 2026 VIPER MD Bot. All rights reserved.</div>
+    </div>
+  </footer>
+</div><!-- /main-content -->
+
+<!-- ══ ADJUST COINS MODAL ══ -->
+<div class="v-modal-overlay" id="credit-modal">
+  <div class="v-modal">
+    <div class="v-modal-header">
+      <div class="v-modal-title">Adjust User Coins</div>
+      <button class="v-modal-close" onclick="closeModal('credit-modal')">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+    <div id="credit-alert" class="v-alert v-alert-error hidden"><span id="credit-alert-text"></span></div>
+    <div style="margin-bottom:.9rem"><div class="a-label">User ID</div><input type="number" id="credit-uid" class="a-input" placeholder="User ID"/></div>
+    <div style="margin-bottom:.9rem"><div class="a-label">Amount <span style="font-weight:400;text-transform:none">(+ add / − deduct)</span></div><input type="number" id="credit-amount" class="a-input" placeholder="e.g. 100 or -50"/></div>
+    <div style="margin-bottom:1rem"><div class="a-label">Reason (optional)</div><input type="text" id="credit-reason" class="a-input" placeholder="e.g. Bonus for active user"/></div>
+    <button class="vbtn vbtn-green vbtn-full" onclick="creditCoins()">Apply Adjustment</button>
   </div>
 </div>
 
-<!-- Credit Coins Modal -->
-<div class="modal-overlay" id="credit-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">➕ Adjust User Coins</div>
-      <button class="modal-close" onclick="closeModal('credit-modal')">✕</button>
+<!-- ══ MANUAL CREDIT MODAL ══ -->
+<div class="v-modal-overlay" id="manual-credit-modal">
+  <div class="v-modal">
+    <div class="v-modal-header">
+      <div class="v-modal-title">Manual Credit</div>
+      <button class="v-modal-close" onclick="closeModal('manual-credit-modal')">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
     </div>
-    <div id="credit-alert"></div>
-    <div class="field">
-      <label>User ID</label>
-      <input type="number" id="credit-uid" placeholder="User ID"/>
-    </div>
-    <div class="field">
-      <label>Amount (positive = add, negative = deduct)</label>
-      <input type="number" id="credit-amount" placeholder="e.g. 100 or -50"/>
-    </div>
-    <div class="field">
-      <label>Reason</label>
-      <input type="text" id="credit-reason" placeholder="Optional reason"/>
-    </div>
-    <button class="btn btn-green btn-full" onclick="creditCoins()">Apply</button>
+    <div id="mc-alert" class="v-alert v-alert-error hidden"><span id="mc-alert-text"></span></div>
+    <div style="margin-bottom:.9rem"><div class="a-label">User ID</div><input type="number" id="mc-uid" class="a-input" placeholder="User ID"/></div>
+    <div style="margin-bottom:.9rem"><div class="a-label">Coins to Add</div><input type="number" id="mc-coins" class="a-input" min="1" placeholder="e.g. 100"/></div>
+    <div style="margin-bottom:1rem"><div class="a-label">Reason</div><input type="text" id="mc-reason" class="a-input" placeholder="e.g. Bank transfer payment"/></div>
+    <button class="vbtn vbtn-green vbtn-full" onclick="manualCredit()">Credit Coins</button>
   </div>
 </div>
 
-<!-- Manual Credit Modal -->
-<div class="modal-overlay" id="manual-credit-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">✋ Manual Credit</div>
-      <button class="modal-close" onclick="closeModal('manual-credit-modal')">✕</button>
-    </div>
-    <div id="mc-alert"></div>
-    <div class="field"><label>User ID</label><input type="number" id="mc-uid" placeholder="User ID"/></div>
-    <div class="field"><label>Coins to Add</label><input type="number" id="mc-coins" min="1" placeholder="e.g. 100"/></div>
-    <div class="field"><label>Reason</label><input type="text" id="mc-reason" placeholder="e.g. Bank transfer payment"/></div>
-    <button class="btn btn-green btn-full" onclick="manualCredit()">Credit Coins</button>
-  </div>
-</div>
+<style>
+/* Admin-scoped helpers */
+.a-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.38rem}
+.a-input{width:100%;padding:.45rem .75rem;border:1px solid var(--border);border-radius:.45rem;font-size:.85rem;background:var(--white);color:var(--text);outline:none;box-sizing:border-box;font-family:inherit;transition:border-color .15s}
+.a-input:focus{border-color:var(--green)}
+.a-grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.a-pkg-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.6rem}
+.a-btn-red{background:var(--red-pale);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+.a-search{padding:.4rem .75rem;background:var(--bg);border:1px solid var(--border);border-radius:.45rem;color:var(--text);font-size:.82rem;width:175px;outline:none;font-family:inherit;transition:border-color .15s}
+.a-search:focus{border-color:var(--green)}
+.admin-tbl{width:100%;border-collapse:collapse;font-size:.81rem}
+.admin-tbl th{text-align:left;padding:.55rem .75rem;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
+.admin-tbl td{padding:.6rem .75rem;border-bottom:1px solid var(--border);vertical-align:middle}
+.admin-tbl tr:last-child td{border-bottom:none}
+.admin-tbl tr:hover td{background:var(--bg)}
+@media(max-width:640px){.a-grid2{grid-template-columns:1fr!important}.a-search{width:130px}}
+</style>
 
 <script src="/js/common.js"></script>
 <script>
-let allUsers    = [];
-let allSessions = [];
+let allUsers=[], allSessions=[];
 
-(async () => {
+(async()=>{
   const user = await requireLogin(true);
   if (!user) return;
-  document.getElementById('webhook-url').value = window.location.origin + '/api/wallet/webhook';
+  document.getElementById('webhook-url').value = window.location.origin+'/api/wallet/webhook';
   await loadAll();
 })();
 
-async function loadAll() {
-  await Promise.all([ loadStats(), loadUsers(), loadSessions(), loadPayments(), loadSettings() ]);
+async function loadAll(){
+  await Promise.all([loadStats(),loadUsers(),loadSessions(),loadPayments(),loadSettings()]);
 }
 
-async function loadStats() {
-  try {
-    const d = await api('/api/admin/stats');
-    document.getElementById('st-users').textContent     = d.stats.total_users;
-    document.getElementById('st-sessions').textContent  = d.stats.total_sessions;
-    document.getElementById('st-connected').textContent = d.stats.connected;
-    document.getElementById('st-revenue').textContent   = '₦' + d.stats.revenue_ngn.toLocaleString();
-  } catch {}
+/* ── STATS ── */
+async function loadStats(){
+  try{
+    const d=await api('/api/admin/stats');
+    document.getElementById('st-users').textContent    = d.stats.total_users;
+    document.getElementById('st-sessions').textContent = d.stats.total_sessions;
+    document.getElementById('st-connected').textContent= d.stats.connected;
+    document.getElementById('st-revenue').textContent  = '₦'+d.stats.revenue_ngn.toLocaleString();
+  }catch{}
 }
 
-async function loadUsers() {
-  try {
-    const d = await api('/api/admin/users?limit=100');
-    allUsers = d.users;
-    renderUsers(allUsers);
-  } catch (e) { toast(e.message,'error'); }
+/* ── USERS ── */
+async function loadUsers(){
+  try{
+    const d=await api('/api/admin/users?limit=100');
+    allUsers=d.users; renderUsers(allUsers);
+  }catch(e){toast(e.message,'error');}
+}
+function renderUsers(users){
+  const el=document.getElementById('users-table');
+  if(!users.length){el.innerHTML='<div class="empty-state"><p>No users found</p></div>';return;}
+  el.innerHTML=`<table class="admin-tbl">
+  <thead><tr><th>ID</th><th>User</th><th>Email</th><th>Coins</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+  <tbody>${users.map(u=>`
+    <tr>
+      <td style="color:var(--muted2);font-size:.74rem">#${u.id}</td>
+      <td><strong>@${u.username}</strong>${u.is_admin?' <span class="badge badge-green">Admin</span>':''}</td>
+      <td style="color:var(--muted);font-size:.79rem">${u.email}</td>
+      <td><strong>${fCoins(u.coins)}</strong> <span style="color:var(--muted2);font-size:.73rem">coins</span></td>
+      <td>${u.is_banned?'<span class="badge badge-red">Banned</span>':'<span class="badge badge-green">Active</span>'}</td>
+      <td style="color:var(--muted2);font-size:.75rem">${fDate(u.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          <button class="vbtn vbtn-outline vbtn-sm" onclick="quickCredit(${u.id})" title="Adjust coins">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg>
+          </button>
+          <button class="vbtn vbtn-outline vbtn-sm" onclick="toggleAdmin(${u.id})" title="${u.is_admin?'Remove admin':'Make admin'}">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 2l1.5 4h4.5l-3.5 2.5 1.5 4L10 10l-4 2.5 1.5-4L4 6h4.5z"/></svg>
+          </button>
+          <button class="vbtn vbtn-outline vbtn-sm" onclick="toggleBan(${u.id})" title="${u.is_banned?'Unban':'Ban'}">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M4.2 4.2l11.6 11.6"/></svg>
+          </button>
+          <button class="vbtn vbtn-sm a-btn-red" onclick="deleteUser(${u.id},'${u.username.replace(/'/g,"\\'")}')">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3,6 17,6"/><path d="M8 6V4h4v2M19 6l-1 11a2 2 0 01-2 2H4a2 2 0 01-2-2L1 6"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`).join('')}
+  </tbody></table>`;
+}
+function searchUsers(){
+  const q=document.getElementById('user-search').value.toLowerCase();
+  renderUsers(q?allUsers.filter(u=>u.email.includes(q)||u.username.includes(q)):allUsers);
 }
 
-function renderUsers(users) {
-  const el = document.getElementById('users-table');
-  if (!users.length) { el.innerHTML = '<div class="empty-state" style="padding:2rem"><p>No users found</p></div>'; return; }
-  el.innerHTML = `<table>
-    <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Coins</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
-    <tbody>${users.map(u => `
+/* ── SESSIONS ── */
+async function loadSessions(){
+  try{
+    const d=await api('/api/admin/sessions');
+    allSessions=d.sessions;
+    const el=document.getElementById('sessions-table');
+    if(!d.sessions.length){el.innerHTML='<div class="empty-state"><p>No sessions yet</p></div>';return;}
+    el.innerHTML=`<table class="admin-tbl">
+    <thead><tr><th>ID</th><th>Number</th><th>Owner</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+    <tbody>${d.sessions.map(s=>`
       <tr>
-        <td style="font-size:.8rem;color:var(--muted)">#${u.id}</td>
-        <td><strong>@${u.username}</strong> ${u.is_admin?'<span class="badge badge-purple">Admin</span>':''}</td>
-        <td style="font-size:.82rem;color:var(--muted)">${u.email}</td>
-        <td><strong>${fCoins(u.coins)} 🪙</strong></td>
-        <td>${u.is_banned?'<span class="badge badge-red">Banned</span>':'<span class="badge badge-green">Active</span>'}</td>
-        <td style="font-size:.78rem;color:var(--muted)">${fDate(u.created_at)}</td>
+        <td style="color:var(--muted2);font-size:.74rem">#${s.id}</td>
+        <td><strong>${s.phone_number||'Not paired'}</strong>${s.session_label?`<div style="font-size:.73rem;color:var(--muted)">${s.session_label}</div>`:''}</td>
+        <td style="font-size:.81rem">@${s.username}</td>
+        <td>${statusBadge(s.status,s.is_running)}</td>
+        <td style="color:var(--muted2);font-size:.75rem">${fDate(s.created_at)}</td>
         <td>
-          <div style="display:flex;gap:.35rem;flex-wrap:wrap">
-            <button class="btn btn-sm btn-outline" onclick="quickCredit(${u.id})" title="Adjust coins">🪙</button>
-            <button class="btn btn-sm btn-outline" onclick="toggleAdmin(${u.id})" title="${u.is_admin?'Remove admin':'Make admin'}">${u.is_admin?'⬇️':'👑'}</button>
-            <button class="btn btn-sm btn-outline" onclick="toggleBan(${u.id})" title="${u.is_banned?'Unban':'Ban'}">${u.is_banned?'✅':'🚫'}</button>
-            <button class="btn btn-sm btn-red" onclick="deleteUser(${u.id},'${u.username}')" title="Delete user">🗑</button>
+          <div style="display:flex;gap:.3rem">
+            ${s.is_running
+              ?`<button class="vbtn vbtn-outline vbtn-sm" onclick="adminStopSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:11px;height:11px"><rect x="4" y="4" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></svg> Stop</button>`
+              :(s.phone_number?`<button class="vbtn vbtn-outline vbtn-sm" onclick="adminRestartSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:11px;height:11px"><polygon points="5,3 19,10 5,17" fill="currentColor" stroke="none"/></svg> Start</button>`:'')}
+            <button class="vbtn vbtn-sm a-btn-red" onclick="adminDeleteSession(${s.id})">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:11px;height:11px"><polyline points="3,6 17,6"/><path d="M8 6V4h4v2M19 6l-1 11a2 2 0 01-2 2H4a2 2 0 01-2-2L1 6"/></svg>
+            </button>
           </div>
         </td>
       </tr>`).join('')}
-    </tbody>
-  </table>`;
+    </tbody></table>`;
+  }catch(e){toast(e.message,'error');}
 }
 
-function searchUsers() {
-  const q = document.getElementById('user-search').value.toLowerCase();
-  if (!q) { renderUsers(allUsers); return; }
-  renderUsers(allUsers.filter(u => u.email.includes(q) || u.username.includes(q)));
+/* ── PAYMENTS ── */
+async function loadPayments(){
+  try{
+    const d=await api('/api/admin/payments');
+    const el=document.getElementById('payments-table');
+    if(!d.payments.length){el.innerHTML='<div class="empty-state"><p>No payments yet</p></div>';return;}
+    el.innerHTML=`<table class="admin-tbl">
+    <thead><tr><th>Date</th><th>User</th><th>Reference</th><th>Coins</th><th>Amount</th><th>Status</th></tr></thead>
+    <tbody>${d.payments.map(p=>`
+      <tr>
+        <td style="font-size:.75rem;color:var(--muted)">${fDate(p.created_at)}</td>
+        <td style="font-size:.81rem">@${p.username||'deleted'}</td>
+        <td style="font-size:.7rem;color:var(--muted2);font-family:monospace">${p.reference}</td>
+        <td><strong>+${fCoins(p.coins)}</strong></td>
+        <td>${fNgn(p.amount_kobo)}</td>
+        <td><span class="badge ${p.status==='success'?'badge-green':p.status==='pending'?'badge-yellow':'badge-red'}">${p.status}</span></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  }catch{}
 }
 
-async function loadSessions() {
-  try {
-    const d = await api('/api/admin/sessions');
-    allSessions = d.sessions;
-    const el = document.getElementById('sessions-table');
-    if (!d.sessions.length) { el.innerHTML = '<div class="empty-state" style="padding:2rem"><p>No sessions</p></div>'; return; }
-    el.innerHTML = `<table>
-      <thead><tr><th>ID</th><th>Number</th><th>Owner</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-      <tbody>${d.sessions.map(s => `
-        <tr>
-          <td style="font-size:.8rem;color:var(--muted)">#${s.id}</td>
-          <td><strong>${s.phone_number||'Not paired'}</strong>${s.session_label?`<div style="font-size:.75rem;color:var(--muted)">${s.session_label}</div>`:''}</td>
-          <td style="font-size:.83rem">@${s.username}</td>
-          <td>${statusBadge(s.status,s.is_running)}</td>
-          <td style="font-size:.78rem;color:var(--muted)">${fDate(s.created_at)}</td>
-          <td>
-            <div style="display:flex;gap:.35rem">
-              ${s.is_running ? `<button class="btn btn-sm btn-outline" onclick="adminStopSession(${s.id})">⏹ Stop</button>` : (s.phone_number?`<button class="btn btn-sm btn-outline" onclick="adminRestartSession(${s.id})">▶ Start</button>`:'')}
-              <button class="btn btn-sm btn-red" onclick="adminDeleteSession(${s.id})">🗑</button>
-            </div>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-  } catch (e) { toast(e.message,'error'); }
+/* ── SETTINGS ── */
+async function loadSettings(){
+  try{
+    const d=await api('/api/admin/settings'); const s=d.settings;
+    const set=(id,key)=>{const el=document.getElementById(id);if(el&&s[key]!==undefined)el.value=s[key];};
+    set('s-site-name','site_name'); set('s-signup-coins','signup_coins');
+    set('s-session-cost','session_cost'); set('s-max-sessions','max_sessions_per_user');
+    document.getElementById('s-maintenance').value=s['maintenance_mode']||'false';
+    set('s-p1c','coin_pkg_1_coins');set('s-p1n','coin_pkg_1_ngn');
+    set('s-p2c','coin_pkg_2_coins');set('s-p2n','coin_pkg_2_ngn');
+    set('s-p3c','coin_pkg_3_coins');set('s-p3n','coin_pkg_3_ngn');
+    set('s-p4c','coin_pkg_4_coins');set('s-p4n','coin_pkg_4_ngn');
+    const dailyOn=s['daily_coins_enabled']==='true';
+    document.getElementById('s-daily-enabled').checked=dailyOn;
+    document.getElementById('s-daily-amount').value=s['daily_coins_amount']||'10';
+    updateDailyPreview();
+    set('ps-public','paystack_public_key');
+  }catch{}
 }
 
-async function loadPayments() {
-  try {
-    const d = await api('/api/admin/payments');
-    const el = document.getElementById('payments-table');
-    if (!d.payments.length) { el.innerHTML = '<div class="empty-state" style="padding:2rem"><p>No payments</p></div>'; return; }
-    el.innerHTML = `<table>
-      <thead><tr><th>Date</th><th>User</th><th>Reference</th><th>Coins</th><th>Amount</th><th>Status</th></tr></thead>
-      <tbody>${d.payments.map(p => `
-        <tr>
-          <td style="font-size:.78rem">${fDate(p.created_at)}</td>
-          <td style="font-size:.83rem">@${p.username||'deleted'}</td>
-          <td style="font-size:.72rem;color:var(--muted);font-family:monospace">${p.reference}</td>
-          <td><strong>+${fCoins(p.coins)}</strong></td>
-          <td>${fNgn(p.amount_kobo)}</td>
-          <td><span class="badge ${p.status==='success'?'badge-green':p.status==='pending'?'badge-yellow':'badge-red'}">${p.status}</span></td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-  } catch {}
+function updateDailyPreview(){
+  const on=document.getElementById('s-daily-enabled').checked;
+  const amt=document.getElementById('s-daily-amount').value||'—';
+  document.getElementById('daily-toggle-label').textContent=on?'On':'Off';
+  document.getElementById('daily-preview-val').textContent=amt;
+  document.getElementById('daily-preview').style.display=on?'flex':'none';
 }
 
-async function loadSettings() {
-  try {
-    const d = await api('/api/admin/settings');
-    const s = d.settings;
-    const set = (id, key) => { const el=document.getElementById(id); if(el) el.value = s[key]||''; };
-    set('s-site-name','site_name');
-    set('s-signup-coins','signup_coins');
-    set('s-session-cost','session_cost');
-    set('s-max-sessions','max_sessions_per_user');
-    document.getElementById('s-maintenance').value = s['maintenance_mode']||'false';
-    set('s-p1c','coin_pkg_1_coins'); set('s-p1n','coin_pkg_1_ngn');
-    set('s-p2c','coin_pkg_2_coins'); set('s-p2n','coin_pkg_2_ngn');
-    set('s-p3c','coin_pkg_3_coins'); set('s-p3n','coin_pkg_3_ngn');
-    set('s-p4c','coin_pkg_4_coins'); set('s-p4n','coin_pkg_4_ngn');
-    document.getElementById('ps-public').value = s['paystack_public_key']||'';
-    // Don't pre-fill secret key for security
-  } catch {}
-}
-
-async function saveSettings() {
-  const btn   = document.getElementById('save-settings-btn');
-  const alert = document.getElementById('settings-alert');
-  alert.innerHTML = '';
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
-  try {
-    await api('/api/admin/settings', { method:'POST', body:{
-      site_name:            document.getElementById('s-site-name').value,
-      signup_coins:         document.getElementById('s-signup-coins').value,
-      session_cost:         document.getElementById('s-session-cost').value,
-      max_sessions_per_user:document.getElementById('s-max-sessions').value,
-      maintenance_mode:     document.getElementById('s-maintenance').value,
-      coin_pkg_1_coins:     document.getElementById('s-p1c').value,
-      coin_pkg_1_ngn:       document.getElementById('s-p1n').value,
-      coin_pkg_2_coins:     document.getElementById('s-p2c').value,
-      coin_pkg_2_ngn:       document.getElementById('s-p2n').value,
-      coin_pkg_3_coins:     document.getElementById('s-p3c').value,
-      coin_pkg_3_ngn:       document.getElementById('s-p3n').value,
-      coin_pkg_4_coins:     document.getElementById('s-p4c').value,
-      coin_pkg_4_ngn:       document.getElementById('s-p4n').value,
+async function saveSettings(){
+  const btn=document.getElementById('save-settings-btn');
+  const alertEl=document.getElementById('settings-alert');
+  alertEl.innerHTML='';
+  btn.disabled=true;
+  btn.innerHTML='<div class="vspin" style="width:14px;height:14px"></div> Saving…';
+  try{
+    await api('/api/admin/settings',{method:'POST',body:{
+      site_name:             document.getElementById('s-site-name').value,
+      signup_coins:          document.getElementById('s-signup-coins').value,
+      session_cost:          document.getElementById('s-session-cost').value,
+      max_sessions_per_user: document.getElementById('s-max-sessions').value,
+      maintenance_mode:      document.getElementById('s-maintenance').value,
+      daily_coins_enabled:   document.getElementById('s-daily-enabled').checked?'true':'false',
+      daily_coins_amount:    document.getElementById('s-daily-amount').value,
+      coin_pkg_1_coins:document.getElementById('s-p1c').value, coin_pkg_1_ngn:document.getElementById('s-p1n').value,
+      coin_pkg_2_coins:document.getElementById('s-p2c').value, coin_pkg_2_ngn:document.getElementById('s-p2n').value,
+      coin_pkg_3_coins:document.getElementById('s-p3c').value, coin_pkg_3_ngn:document.getElementById('s-p3n').value,
+      coin_pkg_4_coins:document.getElementById('s-p4c').value, coin_pkg_4_ngn:document.getElementById('s-p4n').value,
     }});
-    alert.innerHTML = '<div class="alert alert-success">✅ Settings saved</div>';
+    alertEl.innerHTML='<div class="v-alert v-alert-success">Settings saved successfully.</div>';
     toast('Settings saved!');
-  } catch (e) { alert.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
-  finally { btn.disabled = false; btn.innerHTML = '💾 Save Settings'; }
+  }catch(e){
+    alertEl.innerHTML=`<div class="v-alert v-alert-error">${e.message}</div>`;
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3H7L3 7v10a1 1 0 001 1h13a1 1 0 001-1V4a1 1 0 00-1-1z"/><path d="M13 3v6H7V3M7 13h6"/></svg> Save All Settings';
+  }
 }
 
-async function savePaystackKeys() {
-  const btn    = document.getElementById('save-paystack-btn');
-  const alertEl= document.getElementById('paystack-alert');
-  alertEl.innerHTML = '';
-  const pub = document.getElementById('ps-public').value.trim();
-  const sec = document.getElementById('ps-secret').value.trim();
-  if (!pub || !sec) return alertEl.innerHTML = '<div class="alert alert-error">Both keys are required</div>';
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
-  try {
-    await api('/api/admin/settings', { method:'POST', body:{ paystack_public_key:pub, paystack_secret_key:sec }});
-    alertEl.innerHTML = '<div class="alert alert-success">✅ Paystack keys saved. Payments are now active.</div>';
-    document.getElementById('ps-secret').value = '';
+/* ── PAYSTACK ── */
+async function savePaystackKeys(){
+  const btn=document.getElementById('save-paystack-btn');
+  const alertEl=document.getElementById('paystack-alert');
+  alertEl.innerHTML='';
+  const pub=document.getElementById('ps-public').value.trim();
+  const sec=document.getElementById('ps-secret').value.trim();
+  if(!pub||!sec){alertEl.innerHTML='<div class="v-alert v-alert-error">Both keys are required</div>';return;}
+  btn.disabled=true;btn.innerHTML='<div class="vspin" style="width:14px;height:14px"></div> Saving…';
+  try{
+    await api('/api/admin/settings',{method:'POST',body:{paystack_public_key:pub,paystack_secret_key:sec}});
+    alertEl.innerHTML='<div class="v-alert v-alert-success">Paystack keys saved. Payments are now active.</div>';
+    document.getElementById('ps-secret').value='';
     toast('Paystack keys saved!');
-  } catch (e) { alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
-  finally { btn.disabled = false; btn.innerHTML = '💾 Save Paystack Keys'; }
+  }catch(e){alertEl.innerHTML=`<div class="v-alert v-alert-error">${e.message}</div>`;}
+  finally{btn.disabled=false;btn.innerHTML='<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3H7L3 7v10a1 1 0 001 1h13a1 1 0 001-1V4a1 1 0 00-1-1z"/><path d="M13 3v6H7V3M7 13h6"/></svg> Save Paystack Keys';}
+}
+function copyWebhook(){
+  navigator.clipboard.writeText(document.getElementById('webhook-url').value)
+    .then(()=>toast('Webhook URL copied!')).catch(()=>{});
 }
 
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById(`tab-${name}`).classList.add('active');
+/* ── TABS ── */
+function switchTab(name,el){
+  document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.admin-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
 }
 
-function openCreditModal()       { document.getElementById('credit-modal').classList.add('open'); }
-function openManualCreditModal() { document.getElementById('manual-credit-modal').classList.add('open'); }
-function closeModal(id)          { document.getElementById(id).classList.remove('open'); }
-
-function quickCredit(uid) {
-  document.getElementById('credit-uid').value = uid;
-  openCreditModal();
+/* ── MODALS ── */
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function openCreditModal(){setAlert('credit-alert','');openModal('credit-modal');}
+function openManualCreditModal(){setAlert('mc-alert','');openModal('manual-credit-modal');}
+function setAlert(id,msg,type='error'){
+  const el=document.getElementById(id);
+  if(!msg){el.classList.add('hidden');return;}
+  el.className=`v-alert v-alert-${type}`;
+  const tx=document.getElementById(id+'-text');
+  if(tx)tx.textContent=msg;else el.textContent=msg;
 }
+function quickCredit(uid){document.getElementById('credit-uid').value=uid;openCreditModal();}
 
-async function creditCoins() {
-  const uid    = document.getElementById('credit-uid').value;
-  const amount = document.getElementById('credit-amount').value;
-  const reason = document.getElementById('credit-reason').value;
-  const alertEl= document.getElementById('credit-alert');
-  if (!uid || !amount) return alertEl.innerHTML = '<div class="alert alert-error">User ID and amount required</div>';
-  try {
-    const d = await api('/api/admin/users/'+uid+'/coins', { method:'POST', body:{amount:parseInt(amount),reason} });
+async function creditCoins(){
+  const uid=document.getElementById('credit-uid').value;
+  const amount=document.getElementById('credit-amount').value;
+  const reason=document.getElementById('credit-reason').value;
+  setAlert('credit-alert','');
+  if(!uid||!amount){setAlert('credit-alert','User ID and amount are required');return;}
+  try{
+    const d=await api('/api/admin/users/'+uid+'/coins',{method:'POST',body:{amount:parseInt(amount),reason}});
     toast(`Done! @${d.user.username} now has ${fCoins(d.user.coins)} coins`);
-    closeModal('credit-modal');
-    loadUsers(); loadStats();
-  } catch (e) { alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+    closeModal('credit-modal');loadUsers();loadStats();
+  }catch(e){setAlert('credit-alert',e.message);}
+}
+async function manualCredit(){
+  const uid=document.getElementById('mc-uid').value;
+  const coins=document.getElementById('mc-coins').value;
+  const reason=document.getElementById('mc-reason').value;
+  setAlert('mc-alert','');
+  if(!uid||!coins){setAlert('mc-alert','All fields are required');return;}
+  try{
+    const d=await api('/api/admin/payments/credit',{method:'POST',body:{user_id:uid,coins,reason}});
+    toast(`Credited ${coins} coins to @${d.user.username}`);
+    closeModal('manual-credit-modal');loadUsers();loadStats();
+  }catch(e){setAlert('mc-alert',e.message);}
 }
 
-async function manualCredit() {
-  const uid   = document.getElementById('mc-uid').value;
-  const coins = document.getElementById('mc-coins').value;
-  const reason= document.getElementById('mc-reason').value;
-  const alertEl= document.getElementById('mc-alert');
-  if (!uid || !coins) return alertEl.innerHTML = '<div class="alert alert-error">All fields required</div>';
-  try {
-    const d = await api('/api/admin/payments/credit', { method:'POST', body:{user_id:uid,coins,reason} });
-    toast(`✅ Credited ${coins} coins to @${d.user.username}`);
-    closeModal('manual-credit-modal');
-    loadUsers(); loadStats();
-  } catch (e) { alertEl.innerHTML = `<div class="alert alert-error">${e.message}</div>`; }
+/* ── USER ACTIONS ── */
+async function toggleAdmin(uid){
+  try{const d=await api(`/api/admin/users/${uid}/toggle-admin`,{method:'POST'});toast(d.is_admin?'Admin granted':'Admin removed');loadUsers();}
+  catch(e){toast(e.message,'error');}
+}
+async function toggleBan(uid){
+  try{const d=await api(`/api/admin/users/${uid}/ban`,{method:'POST'});toast(d.is_banned?'User banned':'User unbanned');loadUsers();}
+  catch(e){toast(e.message,'error');}
+}
+async function deleteUser(uid,name){
+  const ok=await vConfirm(`@${name} and all their sessions will be permanently deleted.`,'Delete user?');
+  if(!ok)return;
+  try{await api(`/api/admin/users/${uid}`,{method:'DELETE'});toast('User deleted');loadUsers();loadStats();}
+  catch(e){toast(e.message,'error');}
 }
 
-async function toggleAdmin(uid) {
-  try {
-    const d = await api(`/api/admin/users/${uid}/toggle-admin`, { method:'POST' });
-    toast(d.is_admin ? 'User is now an admin' : 'Admin removed');
-    loadUsers();
-  } catch (e) { toast(e.message,'error'); }
+/* ── SESSION ACTIONS ── */
+async function adminStopSession(id){
+  try{await api(`/api/admin/sessions/${id}/stop`,{method:'POST'});toast('Session stopped');loadSessions();}
+  catch(e){toast(e.message,'error');}
+}
+async function adminRestartSession(id){
+  try{await api(`/api/admin/sessions/${id}/restart`,{method:'POST'});toast('Session starting…');setTimeout(loadSessions,2000);}
+  catch(e){toast(e.message,'error');}
+}
+async function adminDeleteSession(id){
+  const ok=await vConfirm('This session will be permanently deleted.','Delete session?');
+  if(!ok)return;
+  try{await api(`/api/admin/sessions/${id}`,{method:'DELETE'});toast('Deleted');loadSessions();}
+  catch(e){toast(e.message,'error');}
+}
+async function stopAllSessions(){
+  const ok=await vConfirm('All running sessions will be stopped immediately.','Stop all sessions?');
+  if(!ok)return;
+  try{await api('/api/admin/sessions/stopall',{method:'POST'});toast('All sessions stopped');loadSessions();loadStats();}
+  catch(e){toast(e.message,'error');}
 }
 
-async function toggleBan(uid) {
-  try {
-    const d = await api(`/api/admin/users/${uid}/ban`, { method:'POST' });
-    toast(d.is_banned ? 'User banned' : 'User unbanned');
-    loadUsers();
-  } catch (e) { toast(e.message,'error'); }
-}
-
-async function deleteUser(uid, name) {
-  if (!confirm(`Delete user @${name}? All their sessions will be deleted too.`)) return;
-  try {
-    await api(`/api/admin/users/${uid}`, { method:'DELETE' });
-    toast('User deleted'); loadUsers(); loadStats();
-  } catch (e) { toast(e.message,'error'); }
-}
-
-async function adminStopSession(id) {
-  try { await api(`/api/admin/sessions/${id}/stop`, { method:'POST' }); toast('Stopped'); loadSessions(); }
-  catch (e) { toast(e.message,'error'); }
-}
-
-async function adminRestartSession(id) {
-  try { await api(`/api/admin/sessions/${id}/restart`, { method:'POST' }); toast('Restarting...'); setTimeout(loadSessions,2000); }
-  catch (e) { toast(e.message,'error'); }
-}
-
-async function adminDeleteSession(id) {
-  if (!confirm('Delete this session?')) return;
-  try { await api(`/api/admin/sessions/${id}`, { method:'DELETE' }); toast('Deleted'); loadSessions(); }
-  catch (e) { toast(e.message,'error'); }
-}
-
-async function stopAllSessions() {
-  if (!confirm('Stop ALL running sessions?')) return;
-  try { await api('/api/admin/sessions/stopall', { method:'POST' }); toast('All sessions stopped'); loadSessions(); loadStats(); }
-  catch (e) { toast(e.message,'error'); }
-}
+document.querySelectorAll('.v-modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 </script>
 </body>
 </html>

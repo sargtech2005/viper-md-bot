@@ -265,7 +265,34 @@ svg{display:block;flex-shrink:0}
 }
 .topbar-coins svg{width:13px;height:13px}
 
-/* ══ RESPONSIVE ═══════════════════════════════ */
+/* ══ APP FOOTER ════════════════════════════════ */
+.app-footer{border-top:1px solid var(--border);padding:1.1rem 1.5rem;background:var(--white)}
+.app-footer-inner{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.65rem}
+.app-footer-logo{display:flex;align-items:center;gap:.4rem;font-family:'Syne',sans-serif;font-weight:700;font-size:.78rem;color:var(--text);text-decoration:none}
+.app-footer-logo svg{width:16px;height:16px;color:var(--green)}
+.app-footer-links{display:flex;gap:1.1rem}
+.app-footer-links a{font-size:.76rem;color:var(--muted);text-decoration:none}
+.app-footer-links a:hover{color:var(--green)}
+.app-footer-copy{font-size:.73rem;color:var(--muted2)}
+@media(max-width:600px){.app-footer-inner{flex-direction:column;align-items:flex-start;gap:.5rem}.app-footer-links{flex-wrap:wrap;gap:.65rem}}
+
+/* ══ ADMIN TABS ════════════════════════════════ */
+.admin-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.25rem;overflow-x:auto}
+.admin-tab{padding:.55rem 1.1rem;font-size:.8rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);white-space:nowrap;margin-bottom:-2px;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:.35rem}
+.admin-tab svg{width:13px;height:13px}
+.admin-tab:hover{color:var(--text)}
+.admin-tab.active{color:var(--green);border-bottom-color:var(--green)}
+.admin-panel{display:none}
+.admin-panel.active{display:block}
+
+/* ══ TOGGLE SWITCH ═════════════════════════════ */
+.vtoggle{position:relative;display:inline-flex;align-items:center;cursor:pointer;gap:.6rem;font-size:.83rem;font-weight:500}
+.vtoggle input{position:absolute;opacity:0;width:0;height:0}
+.vtoggle-track{width:40px;height:22px;background:var(--border);border-radius:100px;transition:background .2s;flex-shrink:0;position:relative}
+.vtoggle input:checked+.vtoggle-track{background:var(--green)}
+.vtoggle-track::after{content:'';position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.vtoggle input:checked+.vtoggle-track::after{left:21px}
+
 @media(max-width:768px){
   .sidebar{transform:translateX(-100%)}
   .sidebar.open{transform:none;box-shadow:0 0 0 100vw rgba(0,0,0,.25)}

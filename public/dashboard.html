@@ -50,7 +50,6 @@
 
   <div class="page-body">
     <div class="stats-grid">
-      <div class="stat-card">
         <div class="stat-top">
           <div class="stat-label">Coin Balance</div>
           <div class="stat-icon green"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg></div>
@@ -108,7 +107,7 @@
             </div>
             <div class="card-sub">Coin transactions</div>
           </div>
-          <a href="/wallet.html" class="vbtn vbtn-outline vbtn-sm">Wallet</a>
+          <a href="/wallet.html" class="vbtn vbtn-outline vbtn-sm">View All</a>
         </div>
         <div id="tx-list"><div style="text-align:center;padding:1.5rem"><div class="vspin vspin-dark" style="width:20px;height:20px;margin:0 auto"></div></div></div>
       </div>
@@ -135,6 +134,21 @@
       </div>
     </div>
   </div>
+  <footer class="app-footer">
+    <div class="app-footer-inner">
+      <a href="/dashboard.html" class="app-footer-logo">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 16c0-4 3-6 6-6s6-2 6-6"/><circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/><path d="M4 16c0 1.1.9 2 2 2"/></svg>
+        VIPER MD
+      </a>
+      <div class="app-footer-links">
+        <a href="/dashboard.html">Dashboard</a>
+        <a href="/sessions.html">Sessions</a>
+        <a href="/wallet.html">Wallet</a>
+        <a href="/settings.html">Settings</a>
+      </div>
+      <div class="app-footer-copy">© 2026 VIPER MD Bot. All rights reserved.</div>
+    </div>
+  </footer>
 </div>
 
 <script src="/js/common.js"></script>
@@ -142,6 +156,12 @@
 (async () => {
   const user = await requireLogin();
   if (!user) return;
+
+  // Try daily coins claim silently
+  try {
+    const dc = await api('/api/auth/claim-daily', { method: 'POST' });
+    if (dc.claimed) toast(`🎁 Daily bonus! +${dc.amount} coins credited`, 'success');
+  } catch {}
 
   document.getElementById('topbar-coin-val').textContent = Number(user.coins).toLocaleString() + ' coins';
 
@@ -180,7 +200,7 @@
     if (!d.transactions.length) {
       tl.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 10h14"/></svg></div><p>No transactions yet</p></div>`;
     } else {
-      tl.innerHTML = d.transactions.slice(0,6).map(t => `
+      tl.innerHTML = d.transactions.slice(0,2).map(t => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--border)">
           <div style="font-size:.8rem;color:var(--muted)">${t.description||t.type}</div>
           <div style="font-weight:700;font-size:.83rem;color:${t.amount>0?'var(--green)':'var(--red)'}">${t.amount>0?'+':''}${t.amount}</div>

@@ -45,6 +45,27 @@ router.post('/login', async (req,res) => {
 
 // FIX: clearCookie must pass the same options used when setting the cookie
 // otherwise the browser won't clear it (mismatched path/secure/sameSite)
+router.post('/claim-daily', requireAuth, async (req, res) => {
+  try {
+    const { Settings, query } = require('../db');
+    const enabled = await Settings.get('daily_coins_enabled');
+    if (enabled !== 'true') return res.json({ ok: true, claimed: false, reason: 'disabled' });
+
+    const amount = parseInt((await Settings.get('daily_coins_amount')) || '10');
+    const r = await query('SELECT last_daily_claim FROM users WHERE id=$1', [req.user.id]);
+    const lastClaim = r.rows[0]?.last_daily_claim;
+    const now = new Date();
+    if (lastClaim) {
+      const diffHours = (now - new Date(lastClaim)) / 3600000;
+      if (diffHours < 24) return res.json({ ok: true, claimed: false, next_in: Math.ceil(24 - diffHours) });
+    }
+    await Users.updateCoins(req.user.id, amount);
+    await query('UPDATE users SET last_daily_claim=NOW() WHERE id=$1', [req.user.id]);
+    await Transactions.create({ userId: req.user.id, type: 'daily_bonus', amount, description: `Daily free coins — ${amount} coins` });
+    res.json({ ok: true, claimed: true, amount });
+  } catch (err) { res.status(500).json({ error: 'Failed to claim daily bonus' }); }
+});
+
 router.post('/logout', (req, res) =>
   res.clearCookie('viper_token', {
     httpOnly: true,
