@@ -28,9 +28,11 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/sessions — create (costs coins)
+// Body: { label?, prefix?, selfMode? }
+// prefix and selfMode are optional initial settings saved to the session
 router.post('/', async (req, res) => {
   try {
-    const { label } = req.body;
+    const { label, prefix, selfMode } = req.body;
     const [costStr, maxStr] = await Promise.all([
       Settings.get('session_cost'), Settings.get('max_sessions_per_user'),
     ]);
@@ -49,15 +51,37 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: `Max ${max} sessions per user` });
     }
 
+    // Build optional initial settings (only include what user explicitly provided)
+    const initialSettings = {};
+    if (prefix && prefix.trim().length > 0 && prefix.trim().length <= 3)
+      initialSettings.prefix = prefix.trim();
+    if (selfMode === true || selfMode === 'true')
+      initialSettings.selfMode = true;
+
     await Users.updateCoins(req.user.id, -cost);
     await Transactions.create({ userId: req.user.id, type: 'session_create', amount: -cost, description: `Created session${label?': '+label:''}` });
-    const session = await Sessions.create({ userId: req.user.id, phoneNumber: null, label });
+    const session = await Sessions.create({
+      userId: req.user.id, phoneNumber: null, label,
+      initialSettings: Object.keys(initialSettings).length ? initialSettings : null,
+    });
     res.json({ ok: true, session });
   } catch (err) {
     console.error('[Sessions] Create:', err.message);
     try { const c = parseInt(await Settings.get('session_cost')||'10'); await Users.updateCoins(req.user.id, c); } catch {}
     res.status(500).json({ error: 'Failed to create session' });
   }
+});
+
+// GET /api/sessions/byslot/:slot — resolve a user's per-slot URL to the real session
+router.get('/byslot/:slot', async (req, res) => {
+  try {
+    const slot = parseInt(req.params.slot);
+    if (!slot || isNaN(slot)) return res.status(400).json({ error: 'Invalid slot' });
+    const r = await Sessions.findBySlot(req.user.id, slot);
+    const s = r.rows[0];
+    if (!s) return res.status(404).json({ error: 'Session not found' });
+    res.json({ ok: true, session: { ...s, is_running: BotMgr.isRunning(s.id) } });
+  } catch { res.status(500).json({ error: 'Failed to resolve slot' }); }
 });
 
 // POST /api/sessions/:id/pair

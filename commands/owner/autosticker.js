@@ -1,19 +1,8 @@
 /**
- * .autosticker — toggle auto sticker mode  (VIPER BOT MD)
+ * .autosticker — toggle auto sticker mode (per-session)
  */
-const config = require('../../config');
-const fs     = require('fs');
-const path   = require('path');
-
-function saveConfig(key, value) {
-  try {
-    const p = path.join(__dirname, '../../config.js');
-    let s = fs.readFileSync(p, 'utf8');
-    s = s.replace(new RegExp(`(${key}:\\s*)(true|false)`), `$1${value}`);
-    fs.writeFileSync(p, s, 'utf8');
-    delete require.cache[require.resolve('../../config')];
-  } catch (_) {}
-}
+const config   = require('../../config');
+const database = require('../../database');
 
 module.exports = {
   name: 'autosticker',
@@ -24,16 +13,16 @@ module.exports = {
   ownerOnly: true,
 
   async execute(sock, msg, args, extra) {
-    const state = args[0]?.toLowerCase();
+    const current = database.getSetting('autoSticker', config.autoSticker);
+    const state   = args[0]?.toLowerCase();
     if (!state || !['on','off'].includes(state))
-      return extra.reply(`😅 *on* or *off* — make up your mind!\nUsage: *.autosticker on/off*\nCurrently: ${config.autoSticker ? '🟢 ON' : '🔴 OFF'}`);
+      return extra.reply(`😅 *on* or *off* — make up your mind!\nUsage: *.autosticker on/off*\nCurrently: ${current ? '🟢 ON' : '🔴 OFF'}`);
 
     const val = state === 'on';
-    if (config.autoSticker === val)
+    if (current === val)
       return extra.reply(`😹 Auto Sticker is *already ${state.toUpperCase()}* 💀 Nothing to change here!`);
 
-    config.autoSticker = val;
-    saveConfig('autoSticker', val);
+    database.updateSettings({ autoSticker: val });
     await extra.reply(`✅ *Auto Sticker* → ${val ? '🟢 *ON*' : '🔴 *OFF*'}\n\n> Boss said so 👑`);
   },
 };

@@ -1,6 +1,8 @@
 /**
- * Anti-Call Command - Enable or disable anti-call system
+ * .anticall — toggle anti-call system (per-session)
  */
+const config   = require('../../config');
+const database = require('../../database');
 
 module.exports = {
   name: 'anticall',
@@ -10,48 +12,21 @@ module.exports = {
   usage: '.anticall on/off',
 
   async execute(sock, msg, args, extra) {
-    if (!args[0]) {
-      return extra.reply('Usage: .anticall on/off');
-    }
+    const current = database.getSetting('anticall', config.defaultGroupSettings?.anticall ?? false);
+    const option  = args[0]?.toLowerCase();
 
-    const option = args[0].toLowerCase();
-
-    if (!['on', 'off'].includes(option)) {
-      return extra.reply('Usage: .anticall on/off');
-    }
+    if (!option || !['on','off'].includes(option))
+      return extra.reply(`Usage: *.anticall on/off*\nCurrently: ${current ? '🟢 ON' : '🔴 OFF'}`);
 
     const enabled = option === 'on';
+    if (current === enabled)
+      return extra.reply(`😹 Anti-call is *already ${option.toUpperCase()}* 💀`);
 
-    // Update the default setting in config
-    const fs = require('fs');
-    const path = require('path');
-    const configPath = path.join(__dirname, '../../config.js');
-    
-    try {
-      // Read the current config file
-      let configFile = fs.readFileSync(configPath, 'utf8');
-      
-      // Update the anticall setting
-      if (enabled) {
-        configFile = configFile.replace(/anticall:\s*false/g, 'anticall: true');
-      } else {
-        configFile = configFile.replace(/anticall:\s*true/g, 'anticall: false');
-      }
-      
-      // Write the updated config file
-      fs.writeFileSync(configPath, configFile);
-      
-      // Clear the config cache so the next require gets the updated version
-      delete require.cache[require.resolve('../../config')];
-      
-      await extra.reply(
-        enabled
-          ? '✅ Anti-call enabled. Calls will be auto-rejected & blocked.'
-          : '❌ Anti-call disabled.'
-      );
-    } catch (err) {
-      console.error('[anticall cmd] error:', err);
-      extra.reply('❌ Error updating anti-call setting.');
-    }
-  }
+    database.updateSettings({ anticall: enabled });
+    await extra.reply(
+      enabled
+        ? '✅ Anti-call *enabled*. Calls will be auto-rejected & blocked.'
+        : '❌ Anti-call *disabled*.'
+    );
+  },
 };

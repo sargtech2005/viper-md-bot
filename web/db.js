@@ -48,6 +48,10 @@ async function initDB() {
     await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_data TEXT`);
     await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_updated TIMESTAMPTZ`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TIMESTAMPTZ`);
+    // Per-user sequential slot (fills gaps when sessions deleted)
+    await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS user_slot INTEGER`);
+    // Optional initial bot settings supplied at session-creation time (JSON)
+    await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS initial_settings JSONB`);
 
     await client.query(`CREATE TABLE IF NOT EXISTS coin_transactions (
       id          SERIAL PRIMARY KEY,
@@ -126,9 +130,28 @@ const Users = {
 const Sessions = {
   findById:    id    => query('SELECT * FROM bot_sessions WHERE id=$1',[id]),
   findByPhone: phone => query('SELECT * FROM bot_sessions WHERE phone_number=$1',[phone]),
-  findByUser:  uid   => query('SELECT id,user_id,phone_number,session_label,status,created_at,connected_at,last_seen FROM bot_sessions WHERE user_id=$1 ORDER BY created_at DESC',[uid]),
-  create: async ({userId,phoneNumber,label})=>{
-    const r=await query(`INSERT INTO bot_sessions(user_id,phone_number,session_label,status) VALUES($1,$2,$3,'pending') RETURNING *`,[userId,phoneNumber||null,label||null]);
+  findByUser:  uid   => query('SELECT id,user_id,phone_number,session_label,status,user_slot,created_at,connected_at,last_seen FROM bot_sessions WHERE user_id=$1 ORDER BY user_slot ASC',[uid]),
+  // Resolve a user's session by their per-user slot number (1, 2, 3 ...)
+  findBySlot: (uid, slot) => query('SELECT * FROM bot_sessions WHERE user_id=$1 AND user_slot=$2',[uid,slot]),
+  // Find the lowest available slot for a user (fills gaps: 1→2→3, deleting 1 frees it)
+  nextSlot: async (uid) => {
+    const r = await query(
+      `SELECT COALESCE(MIN(t.n),1) AS next_slot
+       FROM generate_series(1,1000) AS t(n)
+       WHERE t.n NOT IN (
+         SELECT user_slot FROM bot_sessions WHERE user_id=$1 AND user_slot IS NOT NULL
+       )`,
+      [uid]
+    );
+    return parseInt(r.rows[0].next_slot);
+  },
+  create: async ({userId,phoneNumber,label,initialSettings})=>{
+    const slot = await Sessions.nextSlot(userId);
+    const r=await query(
+      `INSERT INTO bot_sessions(user_id,phone_number,session_label,status,user_slot,initial_settings)
+       VALUES($1,$2,$3,'pending',$4,$5) RETURNING *`,
+      [userId, phoneNumber||null, label||null, slot, initialSettings ? JSON.stringify(initialSettings) : null]
+    );
     return r.rows[0];
   },
   setPhone:     (id,phone)  => query('UPDATE bot_sessions SET phone_number=$2 WHERE id=$1',[id,phone]),
@@ -137,7 +160,7 @@ const Sessions = {
   saveCreds:  (id,data)  => query('UPDATE bot_sessions SET creds_data=$2,creds_updated=NOW() WHERE id=$1',[id,data]),
   loadCreds:  id         => query('SELECT creds_data FROM bot_sessions WHERE id=$1',[id]),
   delete: id => query('DELETE FROM bot_sessions WHERE id=$1',[id]),
-  listAll:(l=100,o=0)=>query(`SELECT s.id,s.user_id,s.phone_number,s.session_label,s.status,s.created_at,s.connected_at,s.last_seen,u.username,u.email FROM bot_sessions s JOIN users u ON s.user_id=u.id ORDER BY s.created_at DESC LIMIT $1 OFFSET $2`,[l,o]),
+  listAll:(l=100,o=0)=>query(`SELECT s.id,s.user_id,s.phone_number,s.session_label,s.status,s.user_slot,s.created_at,s.connected_at,s.last_seen,u.username,u.email FROM bot_sessions s JOIN users u ON s.user_id=u.id ORDER BY s.created_at DESC LIMIT $1 OFFSET $2`,[l,o]),
   count:         ()     => query('SELECT COUNT(*) FROM bot_sessions'),
   countByStatus: status => query('SELECT COUNT(*) FROM bot_sessions WHERE status=$1',[status]),
   countByUser:   uid    => query('SELECT COUNT(*) FROM bot_sessions WHERE user_id=$1',[uid]),

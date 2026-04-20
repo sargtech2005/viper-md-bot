@@ -1,19 +1,8 @@
 /**
- * .autodownload — toggle auto media download  (VIPER BOT MD)
+ * .autodownload — toggle auto media download (per-session)
  */
-const config = require('../../config');
-const fs     = require('fs');
-const path   = require('path');
-
-function saveConfig(key, value) {
-  try {
-    const p = path.join(__dirname, '../../config.js');
-    let s = fs.readFileSync(p, 'utf8');
-    s = s.replace(new RegExp(`(${key}:\\s*)(true|false)`), `$1${value}`);
-    fs.writeFileSync(p, s, 'utf8');
-    delete require.cache[require.resolve('../../config')];
-  } catch (_) {}
-}
+const config   = require('../../config');
+const database = require('../../database');
 
 module.exports = {
   name: 'autodownload',
@@ -24,16 +13,16 @@ module.exports = {
   ownerOnly: true,
 
   async execute(sock, msg, args, extra) {
-    const state = args[0]?.toLowerCase();
+    const current = database.getSetting('autoDownload', config.autoDownload);
+    const state   = args[0]?.toLowerCase();
     if (!state || !['on','off'].includes(state))
-      return extra.reply(`😅 *on* or *off* — don't leave me guessing!\nUsage: *.autodownload on/off*\nCurrently: ${config.autoDownload ? '🟢 ON' : '🔴 OFF'}`);
+      return extra.reply(`😅 *on* or *off* — don't leave me guessing!\nUsage: *.autodownload on/off*\nCurrently: ${current ? '🟢 ON' : '🔴 OFF'}`);
 
     const val = state === 'on';
-    if (config.autoDownload === val)
+    if (current === val)
       return extra.reply(`😹 Auto Download is *already ${state.toUpperCase()}* 💀 Try something different na!`);
 
-    config.autoDownload = val;
-    saveConfig('autoDownload', val);
+    database.updateSettings({ autoDownload: val });
     await extra.reply(`✅ *Auto Download* → ${val ? '🟢 *ON*' : '🔴 *OFF*'}\n\n> Boss said so 👑`);
   },
 };

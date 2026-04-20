@@ -155,12 +155,29 @@
 
 <script src="/js/common.js"></script>
 <script>
-const sessionId = window.location.pathname.split('/').pop();
+// The URL uses the per-user slot number (e.g. /pair/1, /pair/2).
+// We resolve it to the real DB session id before any API call.
+const urlSlot = window.location.pathname.split('/').pop();
+let sessionId  = null;   // real DB id — set after slot resolution
 let eventSource = null, countdown = null, phone = '';
 
 (async () => {
   const user = await requireLogin();
   if (!user) return;
+
+  // Resolve slot → real session id
+  try {
+    const d = await api(`/api/sessions/byslot/${urlSlot}`);
+    sessionId = d.session.id;
+  } catch (e) {
+    // Fallback: slot might already be the DB id (old sessions without user_slot)
+    sessionId = parseInt(urlSlot);
+    if (isNaN(sessionId)) {
+      document.body.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--red)">Session not found.</div>';
+      return;
+    }
+  }
+
   document.getElementById('phone-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') startPairing();
   });

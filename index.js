@@ -147,6 +147,7 @@ async function startBot() {
   //   "Enter code on linked device" prompt on the phone.
   // ──────────────────────────────────────────────────────────────────────────
   let pairCodeRequested = false;
+  let pairAttempts      = 0;
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -154,20 +155,24 @@ async function startBot() {
     if (qr) {
       if (pairNumber && !pairCodeRequested && !state.creds?.registered) {
         // ── PAIR CODE MODE ───────────────────────────────────────────────
+        // The qr event fires each time WA is ready for a new device.
+        // requestPairingCode() at this point makes WA show the
+        // "Enter code on linked device" prompt on the phone.
         pairCodeRequested = true;
+        pairAttempts++;
         try {
-          // Small delay to ensure socket is fully ready
-          await new Promise(r => setTimeout(r, 500));
+          // Slight delay — some WA servers need a moment after QR is issued
+          await new Promise(r => setTimeout(r, 800));
           const code = await sock.requestPairingCode(pairNumber);
-          // Format: XXXX-XXXX for readability
-          const fmt = code.length === 8
+          const fmt  = code?.length === 8
             ? `${code.slice(0,4)}-${code.slice(4)}`
             : code;
           console.log(`PAIR_CODE:${fmt}`);
         } catch (e) {
           console.error('❌ Pair code error:', e.message);
           console.error('💡 Make sure the number is registered on WhatsApp');
-          pairCodeRequested = false;  // allow retry
+          // Allow up to 3 retries on next qr event
+          if (pairAttempts < 3) pairCodeRequested = false;
         }
       } else if (!pairNumber) {
         // ── QR MODE ──────────────────────────────────────────────────────

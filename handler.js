@@ -11,6 +11,13 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 
+// ── Per-session setting lookup ─────────────────────────────────────────────
+// Reads from the session's settings.json first; falls back to config default.
+// This ensures every paired session has its own independent settings.
+function dbSetting(key) {
+  return database.getSetting(key, config[key]);
+}
+
 // Group metadata cache to prevent rate limiting
 const groupMetadataCache = new Map();
 const CACHE_TTL = 60000; // 1 minute cache
@@ -395,11 +402,7 @@ const handleMessage = async (sock, msg) => {
     
     // Auto-React System
     try {
-      // Clear cache to get fresh config values
-      delete require.cache[require.resolve('./config')];
-      const config = require('./config');
-
-      if (config.autoReact && msg.message && !msg.key.fromMe) {
+      if (dbSetting('autoReact') && msg.message && !msg.key.fromMe) {
         const content = msg.message.ephemeralMessage?.message || msg.message;
         const text =
           content.conversation ||
@@ -409,7 +412,7 @@ const handleMessage = async (sock, msg) => {
         const jid = msg.key.remoteJid;
         const emojis = ['❤️','🔥','👌','💀','😁','✨','👍','🤨','😎','😂','🤝','💫'];
         
-        const mode = config.autoReactMode || 'bot';
+        const mode = dbSetting('autoReactMode') || 'bot';
 
         if (mode === 'bot') {
           const prefixList = ['.', '/', '#'];
@@ -676,7 +679,7 @@ const handleMessage = async (sock, msg) => {
         // Only process if it's an image or video (not documents)
         if (mediaMessage) {
           // Skip if message has a command prefix (let command handle it)
-          if (!body.startsWith(config.prefix)) {
+          if (!body.startsWith(dbSetting('prefix'))) {
             try {
               // Import sticker command logic
               const stickerCmd = commands.get('sticker');
@@ -765,10 +768,10 @@ const handleMessage = async (sock, msg) => {
     
     
     // Check if message starts with prefix
-    if (!body.startsWith(config.prefix)) return;
+    if (!body.startsWith(dbSetting('prefix'))) return;
     
     // Parse command
-    const args = body.slice(config.prefix.length).trim().split(/\s+/);
+    const args = body.slice(dbSetting('prefix').length).trim().split(/\s+/);
     const commandName = args.shift().toLowerCase();
     
     // Get command
@@ -776,7 +779,7 @@ const handleMessage = async (sock, msg) => {
     if (!command) return;
     
     // Check self mode (private mode) - only owner can use commands
-    if (config.selfMode && !isOwner(sender)) {
+    if (dbSetting('selfMode') && !isOwner(sender)) {
       return;
     }
     
@@ -809,7 +812,7 @@ const handleMessage = async (sock, msg) => {
     }
     
     // Auto-typing
-    if (config.autoTyping) {
+    if (dbSetting('autoTyping')) {
       await sock.sendPresenceUpdate('composing', from);
     }
     

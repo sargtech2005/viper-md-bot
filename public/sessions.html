@@ -63,11 +63,42 @@
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
       <span id="create-alert-text"></span>
     </div>
+
+    <!-- Session name -->
     <div class="vfield">
-      <label>Session Label <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+      <label>Session Name <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.7">(optional)</span></label>
       <input type="text" id="new-label" placeholder="e.g. My Main Bot"/>
-      <div class="vfield-hint">A name to help you identify this session</div>
+      <div class="vfield-hint">Helps you identify this session in your dashboard</div>
     </div>
+
+    <!-- Divider -->
+    <div style="display:flex;align-items:center;gap:.6rem;margin:.3rem 0 .9rem">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:.72rem;color:var(--muted);letter-spacing:.05em">INITIAL SETTINGS <span style="opacity:.6">(optional)</span></span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <!-- Command prefix -->
+    <div class="vfield" style="margin-bottom:.75rem">
+      <label>Command Prefix <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.7">(default: .)</span></label>
+      <input type="text" id="new-prefix" placeholder="." maxlength="3" style="width:5rem"/>
+      <div class="vfield-hint">Character(s) before commands, e.g. <code>.</code> or <code>!</code> or <code>/</code></div>
+    </div>
+
+    <!-- Bot mode -->
+    <div class="vfield" style="margin-bottom:1rem">
+      <label>Bot Mode <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.7">(default: Public)</span></label>
+      <div style="display:flex;gap:.5rem;margin-top:.35rem">
+        <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:.85rem">
+          <input type="radio" name="new-mode" value="public" checked style="accent-color:var(--green)"/> Public
+        </label>
+        <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:.85rem">
+          <input type="radio" name="new-mode" value="private" style="accent-color:var(--green)"/> Private
+        </label>
+      </div>
+      <div class="vfield-hint">Private = only you can use commands</div>
+    </div>
+
     <div style="background:var(--green-pale);border:1px solid var(--green-mid);border-radius:.45rem;padding:.65rem .85rem;font-size:.82rem;color:var(--green);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg>
       Creating a session costs <strong style="margin:0 .25rem">10 coins</strong>. Balance: <strong id="modal-coins" style="margin-left:.25rem">—</strong>
@@ -160,8 +191,8 @@ function sessionCard(s) {
     </div>
     ${s.connected_at ? `<div style="font-size:.75rem;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:.3rem"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg>Connected ${fDate(s.connected_at)}</div>` : ''}
     <div style="display:flex;flex-wrap:wrap;gap:.4rem">
-      ${!hasPhone ? `<a href="/pair/${s.id}" class="vbtn vbtn-green vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M10 8v4M10 14h.01"/></svg>Pair Number</a>` : ''}
-      ${hasPhone ? `<a href="/pair/${s.id}" class="vbtn vbtn-outline vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><path d="M4 12v4h4M16 8V4h-4M20 4l-6 6M0 16l6-6"/></svg>Re-pair</a>` : ''}
+      ${!hasPhone ? `<a href="/pair/${s.user_slot || s.id}" class="vbtn vbtn-green vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M10 8v4M10 14h.01"/></svg>Pair Number</a>` : ''}
+      ${hasPhone ? `<a href="/pair/${s.user_slot || s.id}" class="vbtn vbtn-outline vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><path d="M4 12v4h4M16 8V4h-4M20 4l-6 6M0 16l6-6"/></svg>Re-pair</a>` : ''}
       ${hasPhone && !running ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="restartSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polygon points="5,3 19,10 5,17" fill="currentColor" stroke="none"/></svg>Start</button>` : ''}
       ${running ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="stopSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="4" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></svg>Stop</button>` : ''}
       ${hasPhone ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="viewLogs(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="2" width="12" height="16" rx="1"/><path d="M7 7h6M7 10h6M7 13h3"/></svg>Logs</button>` : ''}
@@ -174,7 +205,10 @@ function sessionCard(s) {
 }
 
 function openCreate() {
-  document.getElementById('new-label').value = '';
+  document.getElementById('new-label').value  = '';
+  document.getElementById('new-prefix').value = '';
+  const pubRadio = document.querySelector('input[name="new-mode"][value="public"]');
+  if (pubRadio) pubRadio.checked = true;
   setAlert('create-alert', '');
   api('/api/auth/me').then(d => {
     document.getElementById('modal-coins').textContent = fCoins(d.user.coins) + ' coins';
@@ -195,16 +229,18 @@ function setAlert(id, msg, type='error') {
 }
 
 async function createSession() {
-  const btn   = document.getElementById('create-btn');
-  const label = document.getElementById('new-label').value.trim();
+  const btn      = document.getElementById('create-btn');
+  const label    = document.getElementById('new-label').value.trim();
+  const prefix   = (document.getElementById('new-prefix')?.value || '').trim();
+  const selfMode = document.querySelector('input[name="new-mode"]:checked')?.value === 'private';
   setAlert('create-alert', '');
   btn.disabled = true;
   btn.innerHTML = '<div class="vspin" style="width:14px;height:14px"></div> Creating...';
   try {
-    const d = await api('/api/sessions', { method:'POST', body:{ label } });
+    const d = await api('/api/sessions', { method:'POST', body:{ label, prefix: prefix||undefined, selfMode } });
     closeModal('modal-create');
     toast('Session created! Pair your WhatsApp number now.', 'success');
-    window.location.href = `/pair/${d.session.id}`;
+    window.location.href = `/pair/${d.session.user_slot || d.session.id}`;
   } catch(e) {
     setAlert('create-alert', e.message);
     btn.disabled = false;

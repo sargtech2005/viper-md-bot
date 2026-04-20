@@ -190,7 +190,41 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   const hadCreds = await restoreCredsFromDb(sessionId, phone);
 
   const sd = sessionDir(phone);
+
+  // ── Fresh pairing: wipe any stale /tmp creds so useMultiFileAuthState
+  //    starts completely clean. If old files exist, state.creds.registered
+  //    would be true and requestPairingCode() would be silently skipped.
+  if (pairNumber && !hadCreds) {
+    try {
+      if (fs.existsSync(sd)) {
+        fs.rmSync(sd, { recursive: true, force: true });
+        console.log(`[BotMgr] 🧹 Cleared stale session files for ${phone}`);
+      }
+    } catch (e) {
+      console.warn(`[BotMgr] Could not clear stale session for ${phone}:`, e.message);
+    }
+  }
+
   if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
+
+  // ── Seed initial_settings into settings.json (only on first start) ─────────
+  // If the user supplied prefix/selfMode at session-creation time, write them
+  // to the per-session DB file so the bot picks them up on first message.
+  try {
+    const dbPath     = path.join(sd, 'db');
+    const settingsFile = path.join(dbPath, 'settings.json');
+    if (!fs.existsSync(settingsFile)) {
+      const sr = await Sessions.findById(sessionId);
+      const initS = sr.rows[0]?.initial_settings;
+      if (initS && typeof initS === 'object' && Object.keys(initS).length) {
+        fs.mkdirSync(dbPath, { recursive: true });
+        fs.writeFileSync(settingsFile, JSON.stringify(initS, null, 2));
+        console.log(`[BotMgr] ✅ Seeded initial settings for ${phone}:`, initS);
+      }
+    }
+  } catch (e) {
+    console.warn(`[BotMgr] Could not seed initial settings for ${phone}:`, e.message);
+  }
 
   const env = {
     ...process.env,
