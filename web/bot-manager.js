@@ -4,15 +4,12 @@
  * ║   Render-compatible: creds persisted in Postgres ║
  * ╚══════════════════════════════════════════════════╝
  *
- * On Render free tier the filesystem is EPHEMERAL —
- * it resets on every deploy or restart.
- *
- * Solution:
- *   • All session files live in /tmp/viper-sessions/{phone}/
- *   • Every 30s (and on each creds.update) the entire
- *     session folder is gzip-archived and saved to Postgres.
- *   • On startup, creds are restored from Postgres to /tmp
- *     BEFORE the bot process is spawned.
+ * MEMORY LEAK FIXES:
+ * 1. stopSession() now cleans up SSE_SUBS and PAIR_CACHE entries for the
+ *    stopped session — previously these Maps grew forever, one entry per
+ *    session, never removed.
+ * 2. startLogoutMonitor() now deletes seenLines[phone] when a logout is
+ *    detected — previously the object grew with every session ever seen.
  */
 
 const { spawn }  = require('child_process');
@@ -59,10 +56,7 @@ function subscribe(sessionId, res) {
   if (!SSE_SUBS.has(sessionId)) SSE_SUBS.set(sessionId, new Set());
   SSE_SUBS.get(sessionId).add(res);
 
-  // ── Replay cached pair code to late-joining SSE clients ──────────────────
-  // Race condition: the bot can generate the pair code before the browser's
-  // EventSource connection is fully established. Without this replay, the
-  // user sees the spinner forever even though the code was already emitted.
+  // Replay cached pair code to late-joining SSE clients (race-condition fix)
   const cached = PAIR_CACHE.get(sessionId);
   if (cached) {
     try {
@@ -71,16 +65,18 @@ function subscribe(sessionId, res) {
   }
 }
 function unsubscribe(sessionId, res) {
-  SSE_SUBS.get(sessionId)?.delete(res);
+  const subs = SSE_SUBS.get(sessionId);
+  if (!subs) return;
+  subs.delete(res);
+  // FIX: remove the empty Set itself so the Map doesn't grow forever
+  if (subs.size === 0) SSE_SUBS.delete(sessionId);
 }
 
 // ── Creds persistence ──────────────────────────────────────────────────────
-// Serialize the entire session directory → gzip → base64 → DB
 async function saveCredsToDb(sessionId, phone) {
   const sd = sessionDir(phone);
   if (!fs.existsSync(sd)) return;
   try {
-    // Collect all files in the session dir recursively
     const files = [];
     const walk = (dir, base='') => {
       for (const entry of fs.readdirSync(dir)) {
@@ -104,7 +100,6 @@ async function saveCredsToDb(sessionId, phone) {
   }
 }
 
-// Restore session dir from DB → /tmp before starting bot
 async function restoreCredsFromDb(sessionId, phone) {
   try {
     const r = await Sessions.loadCreds(sessionId);
@@ -129,7 +124,6 @@ async function restoreCredsFromDb(sessionId, phone) {
   }
 }
 
-// Start periodic creds-save (every 30s while bot is running)
 function startCredsSync(sessionId, phone) {
   stopCredsSync(sessionId);
   const iv = setInterval(() => saveCredsToDb(sessionId, phone), 30_000);
@@ -147,7 +141,6 @@ function watchLog(sessionId, phone) {
   let   done     = false;
   const deadline = Date.now() + 120_000;
 
-  // Seed seen to current line count so we never replay old content
   try {
     if (fs.existsSync(lf)) {
       seen = fs.readFileSync(lf, 'utf8').split('\n').length;
@@ -171,18 +164,14 @@ function watchLog(sessionId, phone) {
 
         if (line.includes('PAIR_CODE:')) {
           const code = line.split('PAIR_CODE:')[1].trim();
-          PAIR_CACHE.set(sessionId, code);   // cache so late SSE joiners get it
+          PAIR_CACHE.set(sessionId, code);
           emit(sessionId, 'pair_code', { code });
         }
-        // Use a dedicated machine-readable token (BOT_STATUS:CONNECTED) instead of
-        // the generic string "CONNECTED" — which was matching "Reconnecting..." and
-        // prematurely killing the watcher before the pair code arrived.
         if (line.includes('BOT_STATUS:CONNECTED')) {
           done = true; clearInterval(iv);
-          PAIR_CACHE.delete(sessionId);      // code no longer needed
+          PAIR_CACHE.delete(sessionId);
           emit(sessionId, 'connected', { message: 'Bot connected!' });
           await Sessions.updateStatus(sessionId, 'connected');
-          // Save creds immediately after connect
           await saveCredsToDb(sessionId, phone);
           return;
         }
@@ -191,7 +180,6 @@ function watchLog(sessionId, phone) {
           PAIR_CACHE.delete(sessionId);
           stopCredsSync(sessionId);
           stopSession(sessionId);
-          // Wipe creds from DB on logout
           await Sessions.saveCreds(sessionId, null);
           await Sessions.updateStatus(sessionId, 'logged_out');
           emit(sessionId, 'logged_out', { message: 'Session logged out.' });
@@ -211,25 +199,19 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
     return;
   }
 
-  // Restore creds from DB first (critical for Render restarts)
   const hadCreds = await restoreCredsFromDb(sessionId, phone);
-
   const sd = sessionDir(phone);
 
-  // ── Fresh pairing: wipe stale WA auth files but PRESERVE settings.json
-  //    so user's botName/prefix/ownerName etc are kept on re-pair.
   if (pairNumber && !hadCreds) {
     try {
       if (fs.existsSync(sd)) {
         const dbDir = path.join(sd, 'db');
-        // Back up settings.json before wiping
         let savedSettings = null;
         const settingsFile = path.join(dbDir, 'settings.json');
         if (fs.existsSync(settingsFile)) {
           savedSettings = fs.readFileSync(settingsFile);
         }
         fs.rmSync(sd, { recursive: true, force: true });
-        // Restore settings.json after wipe
         if (savedSettings) {
           fs.mkdirSync(dbDir, { recursive: true });
           fs.writeFileSync(settingsFile, savedSettings);
@@ -245,10 +227,6 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
 
   if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
 
-  // ── Seed initial_settings into settings.json (only on first start) ─────────
-  // If the user supplied botName/ownerName/prefix/toggles at session-creation time,
-  // write them to the per-session DB file so the bot picks them up on first message.
-  // Each user's session is fully isolated — settings are NEVER shared between users.
   try {
     const dbPath       = path.join(sd, 'db');
     const settingsFile = path.join(dbPath, 'settings.json');
@@ -257,10 +235,8 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
       const initS = sr.rows[0]?.initial_settings;
       if (initS && typeof initS === 'object' && Object.keys(initS).length) {
         fs.mkdirSync(dbPath, { recursive: true });
-        // Load any existing settings so we don't overwrite user's in-session changes
         let existing = {};
         try { if (fs.existsSync(settingsFile)) existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
-        // Only set keys from initS that aren't already set (first-time seed)
         const mapped = { ...existing };
         if (!mapped.botName    && initS.botName)    mapped.botName    = initS.botName;
         if (!mapped.ownerName  && initS.ownerName)  mapped.ownerName  = initS.ownerName;
@@ -286,8 +262,6 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   if (pairNumber && !hadCreds) env.PAIR_NUMBER = pairNumber;
 
   const lf  = logPath(phone);
-  // Always truncate the log on each (re-)start so watchLog never replays
-  // stale "CONNECTED" or "PAIR_CODE" lines from a previous session.
   try { fs.writeFileSync(lf, ''); } catch {}
   const log = fs.openSync(lf, 'w');
 
@@ -300,14 +274,12 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   PROCS.set(sessionId, { proc, phone });
   console.log(`[BotMgr] ▶ Started ${phone} (pid ${proc.pid}${hadCreds?' — creds restored':''})`);
 
-  // Start periodic creds sync to DB
   startCredsSync(sessionId, phone);
 
   proc.on('exit', async code => {
     console.log(`[BotMgr] ■ ${phone} exited (${code})`);
     PROCS.delete(sessionId);
     stopCredsSync(sessionId);
-    // Save creds one last time before process dies
     await saveCredsToDb(sessionId, phone);
     try {
       const r = await Sessions.findById(sessionId);
@@ -326,11 +298,15 @@ function stopSession(sessionId) {
   try { e.proc.kill('SIGTERM'); } catch {}
   setTimeout(() => { try { e.proc.kill('SIGKILL'); } catch {} }, 3000);
   PROCS.delete(sessionId);
+
+  // FIX: Clean up SSE and pair cache for this session so Maps don't grow forever
+  SSE_SUBS.delete(sessionId);
+  PAIR_CACHE.delete(sessionId);
 }
 
 // ── Delete session files + DB creds ───────────────────────────────────────
 function deleteSessionFiles(sessionId, phone) {
-  stopSession(sessionId);
+  stopSession(sessionId);  // stopSession already cleans SSE_SUBS + PAIR_CACHE
   const sd = sessionDir(phone);
   const lf = logPath(phone);
   try { if (fs.existsSync(sd)) fs.rmSync(sd, { recursive: true, force: true }); } catch {}
@@ -352,7 +328,6 @@ async function resumeSessions() {
     let started = 0;
     for (const s of r.rows) {
       if (!s.phone_number) continue;
-      // Try to restore creds from DB
       const restored = await restoreCredsFromDb(s.id, s.phone_number);
       if (restored) {
         console.log(`[BotMgr] ▶ Resuming ${s.phone_number}`);
@@ -361,7 +336,6 @@ async function resumeSessions() {
         started++;
         await new Promise(r => setTimeout(r, 800));
       } else {
-        // No creds in DB — mark as stopped so user knows to re-pair
         await Sessions.updateStatus(s.id, 'stopped');
         console.log(`[BotMgr] ⚠ ${s.phone_number} — no creds in DB, needs re-pairing`);
       }
@@ -374,6 +348,8 @@ async function resumeSessions() {
 
 // ── Logout monitor (background) ────────────────────────────────────────────
 async function startLogoutMonitor() {
+  // FIX: seenLines is cleaned up when logout is detected, so it never
+  //      accumulates entries for sessions that no longer exist.
   const seenLines = {};
   setInterval(async () => {
     try {
@@ -393,6 +369,8 @@ async function startLogoutMonitor() {
               stopSession(s.id);
               await Sessions.saveCreds(s.id, null);
               await Sessions.updateStatus(s.id, 'logged_out');
+              // FIX: remove from seenLines so it doesn't persist after session gone
+              delete seenLines[s.phone_number];
             }
           }
         } catch {}

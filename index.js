@@ -148,6 +148,8 @@ async function startBot() {
   // ──────────────────────────────────────────────────────────────────────────
   let pairCodeRequested = false;
   let pairAttempts      = 0;
+  // FIX: track broadcast poller so it can be cleared on reconnect (memory leak)
+  let bcPoller          = null;
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -199,6 +201,12 @@ async function startBot() {
       if (reconnect) setTimeout(startBot, 3000);
     }
 
+    // FIX: always clear the broadcast poller on any close/reconnect
+    if (connection === 'close' && bcPoller) {
+      clearInterval(bcPoller);
+      bcPoller = null;
+    }
+
     if (connection === 'open') {
       lastActivity = Date.now();
       const num      = sock.user.id.split(':')[0];
@@ -230,7 +238,10 @@ async function startBot() {
       // app.py writes  SESSION_DIR/broadcast.json  to trigger a broadcast.
       // We poll every 3 s, execute, then delete the file so it only fires once.
       const bcFile = path.join(sessionFolder, 'broadcast.json');
-      setInterval(async () => {
+      // FIX: clear any previous poller before creating a new one — prevents
+      //      duplicate pollers accumulating on each reconnect (memory + CPU leak)
+      if (bcPoller) clearInterval(bcPoller);
+      bcPoller = setInterval(async () => {
         if (!fs.existsSync(bcFile)) return;
         let bc;
         try {

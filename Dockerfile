@@ -1,7 +1,8 @@
 FROM node:20-alpine
 
 # Build tools for native modules + git (needed for GitHub-sourced npm packages)
-RUN apk add --no-cache python3 make g++ vips-dev git
+# ffmpeg added: required for audio conversion in .song / .play commands
+RUN apk add --no-cache python3 make g++ vips-dev git ffmpeg
 
 WORKDIR /app
 
