@@ -50,7 +50,7 @@ module.exports = {
       const ownerDisplay = database.getSetting('ownerDisplayName', null)
                         || database.getSetting('ownerDisplayNumber', null)
                         || process.env.SESSION_NUMBER
-                        || (Array.isArray(config.ownerName) ? config.ownerName.join(' & ') : config.ownerName);
+                        || database.getSetting('ownerDisplayName', 'Bot Owner');
       const botName = database.getSetting('botName', config.botName);
       const prefix  = database.getSetting('prefix',  config.prefix);
       const selfMode = database.getSetting('selfMode', config.selfMode);

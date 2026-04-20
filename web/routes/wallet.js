@@ -153,7 +153,8 @@ router.post('/verify', requireAuth, async (req, res) => {
 
 // ── POST /api/wallet/webhook ──────────────────────────────────────────────────
 // Paystack webhook (backup — in case inline popup callback doesn't fire)
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+// Exported separately as webhookHandler so server.js can mount it with express.raw()
+const webhookHandler = async (req, res) => {
   try {
     const secretKey = await Settings.get('paystack_secret_key');
     if (!secretKey) return res.sendStatus(400);
@@ -187,6 +188,10 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     console.error('[Wallet] Webhook error:', err.message);
     res.sendStatus(500);
   }
-});
+};
+
+// Also register on the router for any direct mounts (kept for compatibility)
+router.post('/webhook', express.raw({ type: 'application/json' }), webhookHandler);
 
 module.exports = router;
+module.exports.webhookHandler = webhookHandler;

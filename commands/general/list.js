@@ -71,7 +71,7 @@ module.exports = {
             name: 'cta_url',
             buttonParamsJson: JSON.stringify({
               display_text: 'Visit Bot Repo',
-              url: config.social?.github || 'https://github.com/remzytech001'
+              url: process.env.GITHUB_REPO_URL || ''
             })
           },
           {

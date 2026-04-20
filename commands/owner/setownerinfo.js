@@ -43,7 +43,7 @@ module.exports = {
     if (sub === 'number') {
       const clean = value.replace(/[^0-9]/g, '');
       if (!/^\d{10,15}$/.test(clean))
-        return extra.reply('❌ Invalid number. Use international format without + (e.g. 2348083086811).');
+        return extra.reply('❌ Invalid number. Use international format without + (e.g. 2348XXXXXXXXXX).');
       database.updateSettings({ ownerDisplayNumber: clean });
       return extra.reply(`✅ Owner number set to: *${clean}*\n\n> Boss said so 👑`);
     }

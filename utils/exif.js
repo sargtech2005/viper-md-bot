@@ -22,7 +22,7 @@ async function writeExifImg(img, metadata) {
   
   const json = {
     'sticker-pack-id': crypto.randomBytes(32).toString('hex'),
-    'sticker-pack-name': packname || 'VIPER BOT MD',
+    'sticker-pack-name': packname || require('../../config').botName || 'BOT MD',
     emojis: ['🤖'],
   };
   
@@ -96,7 +96,7 @@ async function writeExifVid(videoBuffer, metadata) {
     
     const json = {
       'sticker-pack-id': crypto.randomBytes(32).toString('hex'),
-      'sticker-pack-name': packname || 'VIPER BOT MD',
+      'sticker-pack-name': packname || require('../../config').botName || 'BOT MD',
       emojis: ['🤖'],
     };
     

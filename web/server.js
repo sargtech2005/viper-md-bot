@@ -1,7 +1,6 @@
 /**
  * ╔══════════════════════════════════════════════╗
  * ║   VIPER BOT MD — Web Platform                ║
- * ║   viper.name.ng                              ║
  * ╚══════════════════════════════════════════════╝
  */
 
@@ -38,7 +37,9 @@ if (!process.env.JWT_SECRET) {
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 // Webhook needs raw body — mount BEFORE express.json()
-app.use('/api/wallet/webhook', walletRoutes);
+// Must be mounted directly so express.raw() runs before json() middleware
+const { webhookHandler } = require('./routes/wallet');
+app.post('/api/wallet/webhook', express.raw({ type: 'application/json' }), webhookHandler);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -64,7 +65,6 @@ app.get('/health', (_, res) => res.json({ ok: true, service: 'VIPER BOT MD', t: 
 const pub = p => (_, res) => res.sendFile(path.join(__dirname, '..', 'public', p));
 app.get('/dashboard', pub('dashboard.html'));
 app.get('/sessions',  pub('sessions.html'));
-app.get('/pair/:id',  pub('pair.html'));
 app.get('/wallet',    pub('wallet.html'));
 app.get('/settings',  pub('settings.html'));
 app.get('/admin',     pub('admin.html'));

@@ -28,11 +28,11 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/sessions — create (costs coins)
-// Body: { label?, prefix?, selfMode? }
-// prefix and selfMode are optional initial settings saved to the session
+// Body: { label?, prefix?, selfMode?, initialSettings? }
+// initialSettings may include: botName, ownerName, prefix, selfMode, autoStatus, autoReact, autoRead, autoTyping
 router.post('/', async (req, res) => {
   try {
-    const { label, prefix, selfMode } = req.body;
+    const { label, prefix, selfMode, initialSettings: clientSettings } = req.body;
     const [costStr, maxStr] = await Promise.all([
       Settings.get('session_cost'), Settings.get('max_sessions_per_user'),
     ]);
@@ -51,11 +51,21 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: `Max ${max} sessions per user` });
     }
 
-    // Build optional initial settings (only include what user explicitly provided)
+    // Build per-session initial settings — fully isolated per user, never shared
     const initialSettings = {};
-    if (prefix && prefix.trim().length > 0 && prefix.trim().length <= 3)
+    // Merge client-provided settings (botName, ownerName, toggles, etc.)
+    if (clientSettings && typeof clientSettings === 'object') {
+      const allowed = ['botName','ownerName','prefix','selfMode','autoStatus','autoReact','autoRead','autoTyping'];
+      for (const key of allowed) {
+        if (clientSettings[key] !== undefined && clientSettings[key] !== null && clientSettings[key] !== '') {
+          initialSettings[key] = clientSettings[key];
+        }
+      }
+    }
+    // Fallback: top-level prefix / selfMode from older API callers
+    if (!initialSettings.prefix && prefix && prefix.trim().length > 0 && prefix.trim().length <= 3)
       initialSettings.prefix = prefix.trim();
-    if (selfMode === true || selfMode === 'true')
+    if (!initialSettings.selfMode && (selfMode === true || selfMode === 'true'))
       initialSettings.selfMode = true;
 
     await Users.updateCoins(req.user.id, -cost);
@@ -90,7 +100,7 @@ router.post('/:id/pair', async (req, res) => {
     const sessionId  = parseInt(req.params.id);
     const cleanPhone = (req.body.phone || '').replace(/[^0-9]/g, '');
     if (!cleanPhone || !/^\d{10,15}$/.test(cleanPhone))
-      return res.status(400).json({ error: 'Invalid number. Format: 2348083086811' });
+      return res.status(400).json({ error: 'Invalid number. Format: 2348XXXXXXXXXX' });
 
     const sr = await Sessions.findById(sessionId);
     const session = sr.rows[0];

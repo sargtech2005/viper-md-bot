@@ -40,7 +40,7 @@ module.exports = {
         return extra.reply(
           `📱 *${sc('pair a number')}*\n\n` +
           `Usage: *.pair <number>*\n` +
-          `Example: *.pair 2348083086811*\n\n` +
+          `Example: *.pair 2348XXXXXXXXXX*\n\n` +
           `_Use full international format — no + or spaces_`
         );
       }

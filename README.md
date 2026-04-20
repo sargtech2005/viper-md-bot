@@ -159,4 +159,4 @@ viper-bot-md/
 
 ---
 
-Built by **Sarg-Tech** 🐍
+Built by the platform developers 🐍

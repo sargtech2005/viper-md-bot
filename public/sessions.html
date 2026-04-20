@@ -4,6 +4,27 @@
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>My Sessions — VIPER MD BOT</title>
 <link rel="stylesheet" href="/css/app.css"/>
+<style>
+/* ── Toggle switch ─────────────────────────────────────────────── */
+.vtoggle-row{display:flex;align-items:center;justify-content:space-between;padding:.55rem 0;border-bottom:1px solid var(--border)}
+.vtoggle-row:last-child{border-bottom:none}
+.vtoggle-label{font-size:.85rem;font-weight:600;color:var(--text)}
+.vtoggle-hint{font-size:.74rem;color:var(--muted);margin-top:.1rem}
+.vtoggle{position:relative;display:inline-block;width:38px;height:22px;flex-shrink:0}
+.vtoggle input{opacity:0;width:0;height:0}
+.vtoggle-slider{position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:22px;transition:.2s}
+.vtoggle-slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.2s}
+.vtoggle input:checked+.vtoggle-slider{background:var(--green)}
+.vtoggle input:checked+.vtoggle-slider:before{transform:translateX(16px)}
+/* ── Pair popup specifics ──────────────────────────────────────── */
+.pair-code-box{background:var(--green-pale);border:2px solid var(--green-mid);border-radius:.75rem;padding:1.25rem;text-align:center;margin:.75rem 0}
+.pair-code{font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:800;letter-spacing:.15em;color:var(--green)}
+.pair-countdown{font-size:.78rem;color:var(--muted);margin-top:.4rem}
+.step-num{width:22px;height:22px;border-radius:50%;background:var(--green);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.sec-div{display:flex;align-items:center;gap:.6rem;margin:.25rem 0 .8rem}
+.sec-div div{flex:1;height:1px;background:var(--border)}
+.sec-div span{font-size:.7rem;color:var(--muted);letter-spacing:.05em;white-space:nowrap;text-transform:uppercase}
+</style>
 </head>
 <body>
 
@@ -11,9 +32,7 @@
   <div class="sidebar-logo">
     <div class="logo-icon">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <path d="M4 16c0-4 3-6 6-6s6-2 6-6"/>
-        <circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/>
-        <path d="M4 16c0 1.1.9 2 2 2"/>
+        <path d="M4 16c0-4 3-6 6-6s6-2 6-6"/><circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/><path d="M4 16c0 1.1.9 2 2 2"/>
       </svg>
     </div>
     <span class="logo-text">VIPER <span>MD</span></span>
@@ -50,45 +69,53 @@
     </div>
   </div>
 
-<!-- ── CREATE SESSION MODAL ── -->
+<!-- ===================================================================
+     CREATE SESSION MODAL
+=================================================================== -->
 <div class="v-modal-overlay" id="modal-create">
-  <div class="v-modal">
+  <div class="v-modal" style="max-width:500px">
     <div class="v-modal-header">
-      <div class="v-modal-title">New Session</div>
+      <div class="v-modal-title">Create New Session</div>
       <button class="v-modal-close" onclick="closeModal('modal-create')">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
       </button>
     </div>
+
     <div id="create-alert" class="v-alert v-alert-error hidden">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
       <span id="create-alert-text"></span>
     </div>
 
-    <!-- Session name -->
-    <div class="vfield">
-      <label>Session Name <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.7">(optional)</span></label>
-      <input type="text" id="new-label" placeholder="e.g. My Main Bot"/>
-      <div class="vfield-hint">Helps you identify this session in your dashboard</div>
-    </div>
+    <div class="sec-div"><div></div><span>Required</span><div></div></div>
 
-    <!-- Divider -->
-    <div style="display:flex;align-items:center;gap:.6rem;margin:.3rem 0 .9rem">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span style="font-size:.72rem;color:var(--muted);letter-spacing:.05em">INITIAL SETTINGS <span style="opacity:.6">(optional)</span></span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>
-
-    <!-- Command prefix -->
     <div class="vfield" style="margin-bottom:.75rem">
-      <label>Command Prefix <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.7">(default: .)</span></label>
-      <input type="text" id="new-prefix" placeholder="." maxlength="3" style="width:5rem"/>
-      <div class="vfield-hint">Character(s) before commands, e.g. <code>.</code> or <code>!</code> or <code>/</code></div>
+      <label>Bot Name <span style="color:var(--red);font-weight:700">*</span></label>
+      <input type="text" id="new-botname" placeholder="e.g. ALPHA BOT MD" maxlength="40"/>
+      <div class="vfield-hint">Your bot's unique name — replaces all references to the default name</div>
     </div>
 
-    <!-- Bot mode -->
-    <div class="vfield" style="margin-bottom:1rem">
-      <label>Bot Mode <span style="font-weight:400;text-transform:none;letter-spacing:0;opacity:.7">(default: Public)</span></label>
-      <div style="display:flex;gap:.5rem;margin-top:.35rem">
+    <div class="vfield" style="margin-bottom:.9rem">
+      <label>Owner Name / Number <span style="color:var(--red);font-weight:700">*</span></label>
+      <input type="text" id="new-ownername" placeholder="e.g. John or 2348012345678" maxlength="60"/>
+      <div class="vfield-hint">Shown as the bot owner — your name or WhatsApp number</div>
+    </div>
+
+    <div class="sec-div" style="margin-top:1rem"><div></div><span>Optional Settings</span><div></div></div>
+
+    <div class="vfield" style="margin-bottom:.7rem">
+      <label>Session Label <span style="font-weight:400;opacity:.7">(dashboard only)</span></label>
+      <input type="text" id="new-label" placeholder="e.g. My Main Bot"/>
+    </div>
+
+    <div class="vfield" style="margin-bottom:.85rem">
+      <label>Command Prefix <span style="font-weight:400;opacity:.7">(default: .)</span></label>
+      <input type="text" id="new-prefix" placeholder="." maxlength="3" style="width:5rem"/>
+      <div class="vfield-hint">e.g. <code>.</code> or <code>!</code> or <code>/</code></div>
+    </div>
+
+    <div class="vfield" style="margin-bottom:.9rem">
+      <label>Bot Mode <span style="font-weight:400;opacity:.7">(default: Public)</span></label>
+      <div style="display:flex;gap:.75rem;margin-top:.35rem">
         <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;font-size:.85rem">
           <input type="radio" name="new-mode" value="public" checked style="accent-color:var(--green)"/> Public
         </label>
@@ -99,14 +126,117 @@
       <div class="vfield-hint">Private = only you can use commands</div>
     </div>
 
-    <div style="background:var(--green-pale);border:1px solid var(--green-mid);border-radius:.45rem;padding:.65rem .85rem;font-size:.82rem;color:var(--green);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem">
-      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M8 8h3a2 2 0 010 4H8"/></svg>
-      Creating a session costs <strong style="margin:0 .25rem">10 coins</strong>. Balance: <strong id="modal-coins" style="margin-left:.25rem">—</strong>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:.55rem;padding:.5rem .85rem;margin-bottom:1rem">
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto Status</div><div class="vtoggle-hint">React/view WhatsApp statuses automatically</div></div>
+        <label class="vtoggle"><input type="checkbox" id="tog-autostatus"/><span class="vtoggle-slider"></span></label>
+      </div>
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto React</div><div class="vtoggle-hint">Auto-react to messages with an emoji</div></div>
+        <label class="vtoggle"><input type="checkbox" id="tog-autoreact"/><span class="vtoggle-slider"></span></label>
+      </div>
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto Read</div><div class="vtoggle-hint">Automatically mark messages as read</div></div>
+        <label class="vtoggle"><input type="checkbox" id="tog-autoread"/><span class="vtoggle-slider"></span></label>
+      </div>
+      <div class="vtoggle-row">
+        <div><div class="vtoggle-label">Auto Typing</div><div class="vtoggle-hint">Show typing indicator when processing</div></div>
+        <label class="vtoggle"><input type="checkbox" id="tog-autotyping"/><span class="vtoggle-slider"></span></label>
+      </div>
     </div>
+
+    <div style="background:var(--green-pale);border:1px solid var(--green-mid);border-radius:.45rem;padding:.65rem .85rem;font-size:.82rem;color:var(--green);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M10 6v8M7 9h4a1.5 1.5 0 010 3H7"/></svg>
+      Creating costs <strong style="margin:0 .25rem">10 coins</strong>. Your balance: <strong id="modal-coins" style="margin-left:.2rem">—</strong>
+    </div>
+
     <button class="vbtn vbtn-green vbtn-full" id="create-btn" onclick="createSession()">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
       Create Session
     </button>
+  </div>
+</div>
+
+<!-- ===================================================================
+     PAIR POPUP — replaces /pair page
+=================================================================== -->
+<div class="v-modal-overlay" id="modal-pair">
+  <div class="v-modal" style="max-width:480px">
+    <div class="v-modal-header">
+      <div class="v-modal-title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px;vertical-align:-2px;margin-right:.3rem"><rect x="5" y="2" width="10" height="16" rx="2"/><path d="M8 6h4M8 10h4M8 14h2"/></svg>
+        Pair WhatsApp Number
+      </div>
+      <button class="v-modal-close" id="pair-close-btn" onclick="closePairModal()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </div>
+
+    <!-- Step 1: phone entry -->
+    <div id="pair-step-phone">
+      <div id="pair-phone-alert" class="v-alert v-alert-error hidden">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
+        <span id="pair-phone-alert-text"></span>
+      </div>
+      <div class="vfield" style="margin-bottom:.85rem">
+        <label>WhatsApp Number</label>
+        <input type="tel" id="pair-phone-input" placeholder="2348XXXXXXXXXX" maxlength="15"/>
+        <div class="vfield-hint">International format, no + or spaces. Example: 2348XXXXXXXXXX</div>
+      </div>
+      <button class="vbtn vbtn-green vbtn-full" id="pair-start-btn" onclick="startPairing()">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M13 10H7M10 7l-3 3 3 3"/></svg>
+        Get Pair Code
+      </button>
+    </div>
+
+    <!-- Step 2: code display via SSE -->
+    <div id="pair-step-code" style="display:none">
+      <div id="pair-code-loading" style="text-align:center;padding:2rem 0;color:var(--muted)">
+        <div class="vspin vspin-dark" style="width:28px;height:28px;margin:0 auto .75rem"></div>
+        <div style="font-size:.84rem">Generating your pair code — please wait...</div>
+      </div>
+
+      <div id="pair-code-display" style="display:none">
+        <div class="pair-code-box">
+          <div class="pair-code" id="pair-code-value">——</div>
+          <div class="pair-countdown">Code expires in <span id="pair-timer">60</span>s</div>
+          <button class="vbtn vbtn-outline vbtn-sm" id="pair-copy-btn" onclick="copyPairCode()" style="margin-top:.75rem">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg>
+            Copy Code
+          </button>
+        </div>
+        <div style="margin:.75rem 0 1rem">
+          <div style="font-weight:700;font-size:.85rem;margin-bottom:.65rem">How to link:</div>
+          <div style="display:flex;flex-direction:column;gap:.5rem">
+            <div style="display:flex;align-items:center;gap:.6rem;font-size:.82rem;color:var(--muted)"><span class="step-num">1</span>Open <strong style="color:var(--text)">WhatsApp</strong> on your phone</div>
+            <div style="display:flex;align-items:center;gap:.6rem;font-size:.82rem;color:var(--muted)"><span class="step-num">2</span>Tap <strong style="color:var(--text)">Linked devices</strong> → <strong style="color:var(--text)">Link a device</strong></div>
+            <div style="display:flex;align-items:center;gap:.6rem;font-size:.82rem;color:var(--muted)"><span class="step-num">3</span>Tap <strong style="color:var(--text)">"Link with phone number instead"</strong></div>
+            <div style="display:flex;align-items:center;gap:.6rem;font-size:.82rem;color:var(--muted)"><span class="step-num">4</span>Enter the 8-character code above</div>
+          </div>
+        </div>
+        <button class="vbtn vbtn-outline vbtn-sm" onclick="resetPairToPhone()">Try a different number</button>
+      </div>
+
+      <!-- Connected state -->
+      <div id="pair-connected" style="display:none;text-align:center;padding:1.5rem 0">
+        <div style="width:52px;height:52px;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto .85rem">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:24px;height:24px;color:var(--green)"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg>
+        </div>
+        <div style="font-weight:700;font-size:1rem;margin-bottom:.3rem">Connected!</div>
+        <div style="font-size:.83rem;color:var(--muted);margin-bottom:1.25rem">Your WhatsApp bot is now live.</div>
+        <button class="vbtn vbtn-green" onclick="closePairModal()">Done</button>
+      </div>
+
+      <!-- Error state -->
+      <div id="pair-error" style="display:none;text-align:center;padding:1.5rem 0">
+        <div style="width:52px;height:52px;background:var(--red-pale);border:2px solid #fecaca;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto .85rem">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;color:var(--red)"><circle cx="10" cy="10" r="8"/><path d="M10 7v4M10 14h.01"/></svg>
+        </div>
+        <div style="font-weight:700;font-size:1rem;margin-bottom:.3rem">Pairing Failed</div>
+        <div id="pair-error-text" style="font-size:.83rem;color:var(--muted);margin-bottom:1.25rem"></div>
+        <button class="vbtn vbtn-outline" onclick="resetPairToPhone()">Try Again</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -122,6 +252,7 @@
     <pre id="logs-content" style="background:var(--bg);border:1px solid var(--border);border-radius:.45rem;padding:1rem;font-size:.72rem;overflow:auto;max-height:400px;white-space:pre-wrap;color:var(--muted);font-family:monospace;line-height:1.6">Loading...</pre>
   </div>
 </div>
+
 <footer class="app-footer">
   <div class="app-footer-inner">
     <a href="/dashboard.html" class="app-footer-logo">
@@ -141,14 +272,22 @@
 
 <script src="/js/common.js"></script>
 <script>
-let sessions = [], user = null;
+// ── State ────────────────────────────────────────────────────────────────────
+let sessions        = [];
+let user            = null;
+let pairSessionId   = null;
+let pairEventSource = null;
+let pairCountdown   = null;
 
+// ── Boot ─────────────────────────────────────────────────────────────────────
 (async () => {
   user = await requireLogin();
   if (!user) return;
   await loadSessions();
+  setInterval(silentRefresh, 10000);
 })();
 
+// ── Session loading ──────────────────────────────────────────────────────────
 async function loadSessions() {
   try {
     const d = await api('/api/sessions');
@@ -157,6 +296,11 @@ async function loadSessions() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+async function silentRefresh() {
+  try { const d = await api('/api/sessions'); sessions = d.sessions; render(); } catch {}
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
 function render() {
   const c = document.getElementById('sessions-container');
   if (!sessions.length) {
@@ -178,25 +322,47 @@ function render() {
 
 function sessionCard(s) {
   const hasPhone = !!s.phone_number;
-  const label    = s.phone_number || s.session_label || `Session #${s.id}`;
+  const label    = s.session_label || s.phone_number || `Session #${s.user_slot || s.id}`;
   const running  = s.is_running;
+  // Correct live status: reconcile DB status with process state
+  let status = s.status;
+  if (running && (status === 'stopped' || status === 'pending')) status = 'connecting';
+  if (!running && status === 'connected') status = 'stopped';
+
   return `<div class="card" style="position:relative">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.85rem">
       <div style="flex:1;min-width:0">
-        <div style="font-size:.875rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${label}</div>
-        ${s.session_label && s.phone_number ? `<div style="font-size:.75rem;color:var(--muted);margin-top:.1rem">${s.session_label}</div>` : ''}
+        <div style="font-size:.875rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${xh(label)}">${xh(label)}</div>
+        ${s.phone_number && s.session_label ? `<div style="font-size:.75rem;color:var(--muted);margin-top:.1rem">${xh(s.phone_number)}</div>` : ''}
         <div style="font-size:.72rem;color:var(--muted2);margin-top:.2rem">${fDate(s.created_at)}</div>
       </div>
-      <div style="margin-left:.5rem;flex-shrink:0">${statusBadge(s.status, running)}</div>
+      <div style="margin-left:.5rem;flex-shrink:0">${statusBadge(status, running)}</div>
     </div>
-    ${s.connected_at ? `<div style="font-size:.75rem;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:.3rem"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg>Connected ${fDate(s.connected_at)}</div>` : ''}
+    ${s.connected_at ? `<div style="font-size:.75rem;color:var(--green);margin-bottom:.75rem;display:flex;align-items:center;gap:.3rem">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg>
+      Connected ${fDate(s.connected_at)}</div>` : ''}
     <div style="display:flex;flex-wrap:wrap;gap:.4rem">
-      ${!hasPhone ? `<a href="/pair/${s.user_slot || s.id}" class="vbtn vbtn-green vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M10 8v4M10 14h.01"/></svg>Pair Number</a>` : ''}
-      ${hasPhone ? `<a href="/pair/${s.user_slot || s.id}" class="vbtn vbtn-outline vbtn-sm"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><path d="M4 12v4h4M16 8V4h-4M20 4l-6 6M0 16l6-6"/></svg>Re-pair</a>` : ''}
-      ${hasPhone && !running ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="restartSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polygon points="5,3 19,10 5,17" fill="currentColor" stroke="none"/></svg>Start</button>` : ''}
-      ${running ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="stopSession(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="4" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></svg>Stop</button>` : ''}
-      ${hasPhone ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="viewLogs(${s.id})"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="2" width="12" height="16" rx="1"/><path d="M7 7h6M7 10h6M7 13h3"/></svg>Logs</button>` : ''}
-      <button class="vbtn vbtn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid rgba(239,68,68,.2)" onclick="deleteSession(${s.id},'${label.replace(/'/g,"\\'")}')">
+      ${!hasPhone
+        ? `<button class="vbtn vbtn-green vbtn-sm" onclick="openPair(${s.id})">
+             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M10 8v4M10 14h.01"/></svg>Pair Number
+           </button>`
+        : `<button class="vbtn vbtn-outline vbtn-sm" onclick="openPair(${s.id})">
+             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><path d="M4 12v4h4M16 8V4h-4M20 4l-6 6M0 16l6-6"/></svg>Re-pair
+           </button>`}
+      ${hasPhone && !running
+        ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="restartSession(${s.id})">
+             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polygon points="5,3 19,10 5,17" fill="currentColor" stroke="none"/></svg>Start
+           </button>` : ''}
+      ${running
+        ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="stopSession(${s.id})">
+             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="4" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></svg>Stop
+           </button>` : ''}
+      ${hasPhone
+        ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="viewLogs(${s.id})">
+             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="2" width="12" height="16" rx="1"/><path d="M7 7h6M7 10h6M7 13h3"/></svg>Logs
+           </button>` : ''}
+      <button class="vbtn vbtn-sm" style="background:var(--red-pale);color:var(--red);border:1px solid rgba(239,68,68,.2)"
+        onclick="deleteSession(${s.id},'${xa(label)}')">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polyline points="3,6 17,6"/><path d="M8 6V4h4v2M19 6l-1 11a2 2 0 01-2 2H4a2 2 0 01-2-2L1 6"/></svg>
         Delete
       </button>
@@ -204,43 +370,63 @@ function sessionCard(s) {
   </div>`;
 }
 
+function xh(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function xa(s){ return String(s).replace(/'/g,"\\'"); }
+
+// ── Create session modal ─────────────────────────────────────────────────────
 function openCreate() {
-  document.getElementById('new-label').value  = '';
-  document.getElementById('new-prefix').value = '';
-  const pubRadio = document.querySelector('input[name="new-mode"][value="public"]');
-  if (pubRadio) pubRadio.checked = true;
+  ['new-botname','new-ownername','new-label','new-prefix'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.querySelector('input[name="new-mode"][value="public"]').checked = true;
+  ['tog-autostatus','tog-autoreact','tog-autoread','tog-autotyping'].forEach(id => {
+    document.getElementById(id).checked = false;
+  });
   setAlert('create-alert', '');
   api('/api/auth/me').then(d => {
     document.getElementById('modal-coins').textContent = fCoins(d.user.coins) + ' coins';
   }).catch(() => {});
   openModal('modal-create');
-}
-
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-
-function setAlert(id, msg, type='error') {
-  const el = document.getElementById(id);
-  const tx = document.getElementById(id + '-text');
-  if (!msg) { el.classList.add('hidden'); return; }
-  el.className = `v-alert v-alert-${type}`;
-  if (tx) tx.textContent = msg;
-  else el.textContent = msg;
+  setTimeout(() => document.getElementById('new-botname').focus(), 80);
 }
 
 async function createSession() {
-  const btn      = document.getElementById('create-btn');
-  const label    = document.getElementById('new-label').value.trim();
-  const prefix   = (document.getElementById('new-prefix')?.value || '').trim();
-  const selfMode = document.querySelector('input[name="new-mode"]:checked')?.value === 'private';
+  const botName   = document.getElementById('new-botname').value.trim();
+  const ownerName = document.getElementById('new-ownername').value.trim();
+  const label     = document.getElementById('new-label').value.trim();
+  const prefix    = document.getElementById('new-prefix').value.trim();
+  const selfMode  = document.querySelector('input[name="new-mode"]:checked')?.value === 'private';
+  const autoStatus = document.getElementById('tog-autostatus').checked;
+  const autoReact  = document.getElementById('tog-autoreact').checked;
+  const autoRead   = document.getElementById('tog-autoread').checked;
+  const autoTyping = document.getElementById('tog-autotyping').checked;
+
   setAlert('create-alert', '');
+  if (!botName)   return setAlert('create-alert', 'Bot Name is required.');
+  if (!ownerName) return setAlert('create-alert', 'Owner Name / Number is required.');
+
+  const btn = document.getElementById('create-btn');
   btn.disabled = true;
   btn.innerHTML = '<div class="vspin" style="width:14px;height:14px"></div> Creating...';
+
+  // Build per-session initial settings (all isolated per user)
+  const initialSettings = { botName, ownerName };
+  if (prefix)     initialSettings.prefix     = prefix;
+  if (selfMode)   initialSettings.selfMode   = true;
+  if (autoStatus) initialSettings.autoStatus = true;
+  if (autoReact)  initialSettings.autoReact  = true;
+  if (autoRead)   initialSettings.autoRead   = true;
+  if (autoTyping) initialSettings.autoTyping = true;
+
   try {
-    const d = await api('/api/sessions', { method:'POST', body:{ label, prefix: prefix||undefined, selfMode } });
+    const d = await api('/api/sessions', {
+      method: 'POST',
+      body:   { label, prefix: prefix || undefined, selfMode, initialSettings },
+    });
     closeModal('modal-create');
+    await loadSessions();
     toast('Session created! Pair your WhatsApp number now.', 'success');
-    window.location.href = `/pair/${d.session.user_slot || d.session.id}`;
+    openPair(d.session.id);
   } catch(e) {
     setAlert('create-alert', e.message);
     btn.disabled = false;
@@ -248,27 +434,165 @@ async function createSession() {
   }
 }
 
+// ── Pair popup ───────────────────────────────────────────────────────────────
+function openPair(sessionId) {
+  pairSessionId = sessionId;
+  resetPairToPhone();
+  openModal('modal-pair');
+  setTimeout(() => document.getElementById('pair-phone-input').focus(), 80);
+}
+
+function closePairModal() {
+  stopPairSSE();
+  closeModal('modal-pair');
+  pairSessionId = null;
+  silentRefresh();
+}
+
+async function startPairing() {
+  const raw  = document.getElementById('pair-phone-input').value.replace(/[^0-9]/g,'');
+  const aEl  = document.getElementById('pair-phone-alert');
+  const aTx  = document.getElementById('pair-phone-alert-text');
+  aEl.classList.add('hidden');
+
+  if (!raw || !/^\d{10,15}$/.test(raw)) {
+    aTx.textContent = 'Enter a valid number (10–15 digits, no + or spaces)';
+    aEl.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('pair-start-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="vspin" style="width:14px;height:14px"></div> Starting...';
+
+  try {
+    await api(`/api/sessions/${pairSessionId}/pair`, { method:'POST', body:{ phone: raw } });
+  } catch(e) {
+    aTx.textContent = e.message;
+    aEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M13 10H7M10 7l-3 3 3 3"/></svg> Get Pair Code';
+    return;
+  }
+
+  document.getElementById('pair-step-phone').style.display = 'none';
+  document.getElementById('pair-step-code').style.display  = 'block';
+  startPairSSE();
+}
+
+function startPairSSE() {
+  stopPairSSE();
+  pairEventSource = new EventSource(`/api/sessions/${pairSessionId}/stream`);
+
+  pairEventSource.addEventListener('pair_code', e => {
+    const { code } = JSON.parse(e.data);
+    document.getElementById('pair-code-loading').style.display = 'none';
+    document.getElementById('pair-code-display').style.display = 'block';
+    document.getElementById('pair-code-value').textContent     = code;
+    startPairCountdown(60);
+    silentRefresh();
+  });
+
+  pairEventSource.addEventListener('connected', () => {
+    stopPairSSE();
+    document.getElementById('pair-code-display').style.display = 'none';
+    document.getElementById('pair-code-loading').style.display = 'none';
+    document.getElementById('pair-connected').style.display    = 'block';
+    silentRefresh();
+  });
+
+  pairEventSource.addEventListener('error', e => {
+    stopPairSSE();
+    let msg = 'Connection failed. Please try again.';
+    try { msg = JSON.parse(e.data).message || msg; } catch {}
+    document.getElementById('pair-error-text').textContent     = msg;
+    document.getElementById('pair-code-display').style.display = 'none';
+    document.getElementById('pair-code-loading').style.display = 'none';
+    document.getElementById('pair-error').style.display        = 'block';
+    silentRefresh();
+  });
+
+  pairEventSource.addEventListener('logged_out', () => {
+    stopPairSSE();
+    document.getElementById('pair-error-text').textContent     = 'Session was logged out.';
+    document.getElementById('pair-code-display').style.display = 'none';
+    document.getElementById('pair-code-loading').style.display = 'none';
+    document.getElementById('pair-error').style.display        = 'block';
+    silentRefresh();
+  });
+}
+
+function startPairCountdown(secs) {
+  clearInterval(pairCountdown);
+  const el = () => document.getElementById('pair-timer');
+  if (el()) el().textContent = secs;
+  pairCountdown = setInterval(() => {
+    secs--;
+    if (el()) el().textContent = secs;
+    if (secs <= 0) {
+      clearInterval(pairCountdown);
+      const cd = document.querySelector('.pair-countdown');
+      if (cd) cd.textContent = 'Code expired — click Try Again to get a new code';
+    }
+  }, 1000);
+}
+
+function stopPairSSE() {
+  if (pairEventSource) { pairEventSource.close(); pairEventSource = null; }
+  clearInterval(pairCountdown);
+}
+
+function resetPairToPhone() {
+  stopPairSSE();
+  document.getElementById('pair-step-phone').style.display    = 'block';
+  document.getElementById('pair-step-code').style.display     = 'none';
+  document.getElementById('pair-code-loading').style.display  = 'block';
+  document.getElementById('pair-code-display').style.display  = 'none';
+  document.getElementById('pair-connected').style.display     = 'none';
+  document.getElementById('pair-error').style.display         = 'none';
+  document.getElementById('pair-phone-alert').classList.add('hidden');
+  document.getElementById('pair-phone-input').value           = '';
+  const btn = document.getElementById('pair-start-btn');
+  btn.disabled = false;
+  btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 2a8 8 0 100 16A8 8 0 0010 2z"/><path d="M13 10H7M10 7l-3 3 3 3"/></svg> Get Pair Code';
+}
+
+function copyPairCode() {
+  const code = document.getElementById('pair-code-value').textContent;
+  if (!code || code === '——') return;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('pair-copy-btn');
+    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg> Copied!';
+    setTimeout(() => {
+      btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg> Copy Code';
+    }, 2000);
+  }).catch(() => {
+    const el = document.getElementById('pair-code-value');
+    const s = window.getSelection(); const r = document.createRange();
+    r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r);
+  });
+}
+
+// ── Session controls ─────────────────────────────────────────────────────────
 async function restartSession(id) {
   try {
     await api(`/api/sessions/${id}/restart`, { method:'POST' });
     toast('Session restarting...', 'success');
-    setTimeout(loadSessions, 2000);
+    setTimeout(silentRefresh, 2000);
   } catch(e) { toast(e.message, 'error'); }
 }
 
 async function stopSession(id) {
-  const ok = await vConfirm('The bot will stop and disconnect.', 'Stop this session?');
-  if (!ok) return;
+  if (!await vConfirm('The bot will stop and disconnect.', 'Stop this session?')) return;
   try {
     await api(`/api/sessions/${id}/stop`, { method:'POST' });
     toast('Session stopped');
-    await loadSessions();
+    await silentRefresh();
   } catch(e) { toast(e.message, 'error'); }
 }
 
 async function deleteSession(id, label) {
-  const ok = await vConfirm(`"${label}" will be permanently deleted. This cannot be undone.`, 'Delete session?');
-  if (!ok) return;
+  if (!await vConfirm(`"${label}" will be permanently deleted.`, 'Delete session?')) return;
   try {
     await api(`/api/sessions/${id}`, { method:'DELETE' });
     toast('Session deleted');
@@ -283,23 +607,37 @@ async function viewLogs(id) {
     const d = await api(`/api/sessions/${id}/logs`);
     document.getElementById('logs-content').textContent = d.logs || 'No logs yet.';
   } catch(e) {
-    document.getElementById('logs-content').textContent = 'Failed to load logs: ' + e.message;
+    document.getElementById('logs-content').textContent = 'Failed: ' + e.message;
   }
 }
 
-// Close modals on overlay click
-document.querySelectorAll('.v-modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function setAlert(id, msg, type='error') {
+  const el = document.getElementById(id);
+  const tx = document.getElementById(id+'-text');
+  if (!msg) { el.classList.add('hidden'); return; }
+  el.className = `v-alert v-alert-${type}`;
+  if (tx) tx.textContent = msg; else el.textContent = msg;
+}
+
+// Overlay click closes modal (but not pair popup while SSE is active)
+document.querySelectorAll('.v-modal-overlay').forEach(ov => {
+  ov.addEventListener('click', e => {
+    if (e.target !== ov) return;
+    if (ov.id === 'modal-pair' && pairEventSource) return; // don't close while pairing
+    ov.classList.remove('open');
+    if (ov.id === 'modal-pair') { pairSessionId = null; silentRefresh(); }
+  });
 });
 
-// Auto-refresh every 15s without triggering auth redirects
-setInterval(async () => {
-  try {
-    const d = await api('/api/sessions');
-    sessions = d.sessions;
-    render();
-  } catch {}
-}, 15000);
+document.getElementById('pair-phone-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startPairing();
+});
+
+window.addEventListener('beforeunload', stopPairSSE);
 </script>
 </body>
 </html>

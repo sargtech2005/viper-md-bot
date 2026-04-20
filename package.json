@@ -9,7 +9,7 @@
     "dev": "nodemon web/server.js",
     "setup": "node web/setup.js"
   },
-  "author": "Sarg-Tech & Viper",
+  "author": "Bot Platform",
   "license": "MIT",
   "dependencies": {
     "@whiskeysockets/baileys": "^v7.0.0-rc.9",

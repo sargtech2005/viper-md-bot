@@ -1,7 +1,7 @@
 /**
  * ╔══════════════════════════════════════╗
  * ║      ᴠɪᴘᴇʀ ʙᴏᴛ ᴍᴅ — ᴇɴɢɪɴᴇ         ║
- * ║  Owner: Sarg-Tech & Viper            ║
+ * ║  WhatsApp Bot Platform                ║
  * ╚══════════════════════════════════════╝
  */
 process.env.PUPPETEER_SKIP_DOWNLOAD = 'true';
@@ -208,7 +208,7 @@ async function startBot() {
       const ownerRaw = database.getSetting('ownerDisplayName', null)
                     || database.getSetting('ownerDisplayNumber', null)
                     || process.env.SESSION_NUMBER
-                    || (Array.isArray(config.ownerName) ? config.ownerName.join(' & ') : config.ownerName);
+                    || database.getSetting('ownerName', database.getSetting('ownerDisplayName', 'Bot Owner'));
 
       console.log('\n╔══════════════════════════════════════╗');
       console.log(`║  ✅  ${botName.padEnd(32)} ║`);

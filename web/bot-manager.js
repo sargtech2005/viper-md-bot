@@ -230,18 +230,29 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
 
   // ── Seed initial_settings into settings.json (only on first start) ─────────
-  // If the user supplied prefix/selfMode at session-creation time, write them
-  // to the per-session DB file so the bot picks them up on first message.
+  // If the user supplied botName/ownerName/prefix/toggles at session-creation time,
+  // write them to the per-session DB file so the bot picks them up on first message.
+  // Each user's session is fully isolated — settings are NEVER shared between users.
   try {
-    const dbPath     = path.join(sd, 'db');
+    const dbPath       = path.join(sd, 'db');
     const settingsFile = path.join(dbPath, 'settings.json');
     if (!fs.existsSync(settingsFile)) {
-      const sr = await Sessions.findById(sessionId);
+      const sr    = await Sessions.findById(sessionId);
       const initS = sr.rows[0]?.initial_settings;
       if (initS && typeof initS === 'object' && Object.keys(initS).length) {
         fs.mkdirSync(dbPath, { recursive: true });
-        fs.writeFileSync(settingsFile, JSON.stringify(initS, null, 2));
-        console.log(`[BotMgr] ✅ Seeded initial settings for ${phone}:`, initS);
+        // Map camelCase keys to the exact keys database.js / config.js reads
+        const mapped = {};
+        if (initS.botName)    mapped.botName    = initS.botName;
+        if (initS.ownerName)  mapped.ownerName  = initS.ownerName;
+        if (initS.prefix)     mapped.prefix     = initS.prefix;
+        if (initS.selfMode !== undefined)   mapped.selfMode   = initS.selfMode;
+        if (initS.autoStatus !== undefined) mapped.autoStatus = initS.autoStatus;
+        if (initS.autoReact  !== undefined) mapped.autoReact  = initS.autoReact;
+        if (initS.autoRead   !== undefined) mapped.autoRead   = initS.autoRead;
+        if (initS.autoTyping !== undefined) mapped.autoTyping = initS.autoTyping;
+        fs.writeFileSync(settingsFile, JSON.stringify(mapped, null, 2));
+        console.log(`[BotMgr] ✅ Seeded initial settings for ${phone}:`, mapped);
       }
     }
   } catch (e) {

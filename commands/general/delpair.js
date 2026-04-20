@@ -70,7 +70,7 @@ module.exports = {
         return extra.reply(
           `🗑️ *${sc('delete session')}*\n\n` +
           `Usage: *.delpair <number>*\n` +
-          `Example: *.delpair 2348083086811*\n\n` +
+          `Example: *.delpair 2348XXXXXXXXXX*\n\n` +
           `_Completely wipes all session data — auth keys, DB, logs._`
         );
       }
