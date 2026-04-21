@@ -1,10 +1,21 @@
 // ── VIPER MD BOT — Shared JS ──────────────────────────────────────────────────
 window.viperUser = null;
 
+// ── CSRF helper ───────────────────────────────────────────────────────────────
+function getCsrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)xsrf-token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 // ── API helper ────────────────────────────────────────────────────────────────
 async function api(url, opts={}) {
+  const method = (opts.method || 'GET').toUpperCase();
+  const mutating = ['POST','PUT','DELETE','PATCH'].includes(method);
   const r = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(mutating ? { 'X-XSRF-Token': getCsrfToken() } : {}),
+    },
     credentials: 'same-origin',
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,

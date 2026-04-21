@@ -35,6 +35,7 @@
     "mumaker": "^2.0.0",
     "node-fetch": "^2.7.0",
     "node-webpmux": "^3.1.7",
+    "nodemailer": "^6.9.13",
     "pg": "^8.11.3",
     "pino": "^9.0.0",
     "qrcode": "^1.5.3",

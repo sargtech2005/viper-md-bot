@@ -48,6 +48,8 @@ async function initDB() {
     await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_data TEXT`);
     await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_updated TIMESTAMPTZ`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(64)`);
     // Per-user sequential slot (fills gaps when sessions deleted)
     await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS user_slot INTEGER`);
     // Optional initial bot settings supplied at session-creation time (JSON)
@@ -110,11 +112,23 @@ const Settings = {
 const Users = {
   findByEmail:    e  => query('SELECT * FROM users WHERE email=$1',[e.toLowerCase()]),
   findByUsername: u  => query('SELECT * FROM users WHERE username=$1',[u.toLowerCase()]),
-  findById:       id => query('SELECT id,email,username,coins,is_admin,is_banned,created_at,last_login FROM users WHERE id=$1',[id]),
-  create: async ({email,username,passwordHash,coins,isAdmin})=>{
-    const r=await query(`INSERT INTO users(email,username,password_hash,coins,is_admin) VALUES($1,$2,$3,$4,$5) RETURNING id,email,username,coins,is_admin,created_at`,[email.toLowerCase(),username.toLowerCase(),passwordHash,coins,isAdmin||false]);
+  findById:       id => query('SELECT id,email,username,coins,is_admin,is_banned,is_verified,created_at,last_login FROM users WHERE id=$1',[id]),
+  create: async ({email,username,passwordHash,coins,isAdmin,verificationToken})=>{
+    const r=await query(
+      `INSERT INTO users(email,username,password_hash,coins,is_admin,verification_token,is_verified)
+       VALUES($1,$2,$3,$4,$5,$6,$7)
+       RETURNING id,email,username,coins,is_admin,is_verified,created_at`,
+      [email.toLowerCase(),username.toLowerCase(),passwordHash,coins,isAdmin||false,
+       verificationToken||null, !verificationToken] // auto-verified when no SMTP
+    );
     return r.rows[0];
   },
+  verifyEmail: token => query(
+    `UPDATE users SET is_verified=TRUE, verification_token=NULL
+     WHERE verification_token=$1 AND is_verified=FALSE
+     RETURNING id,email,username`,
+    [token]
+  ),
   updateCoins:    (id,delta) => query('UPDATE users SET coins=coins+$2 WHERE id=$1 RETURNING coins',[id,delta]),
   updateLastLogin: id        => query('UPDATE users SET last_login=NOW() WHERE id=$1',[id]),
   setAdmin:       (id,v)    => query('UPDATE users SET is_admin=$2 WHERE id=$1',[id,v]),

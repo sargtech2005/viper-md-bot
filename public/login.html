@@ -11,7 +11,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
   --green:#16a34a;--green-pale:#f0fdf4;--green-mid:#bbf7d0;
-  --text:#0f172a;--muted:#64748b;--border:#e2e8f0;--bg:#f8fafc;--white:#ffffff;
+  --text:#0f172a;--muted:#64748b;--muted2:#94a3b8;--border:#e2e8f0;--bg:#f8fafc;--white:#ffffff;
   --red:#ef4444;--red-pale:#fef2f2;
 }
 html,body{height:100%}
@@ -148,6 +148,11 @@ const errBox  = document.getElementById('error-msg');
 const errText = document.getElementById('error-text');
 const btn     = document.getElementById('login-btn');
 
+function getCsrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)xsrf-token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
 document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 async function doLogin() {
@@ -161,7 +166,9 @@ async function doLogin() {
 
   try {
     const r    = await fetch('/api/auth/login', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'X-XSRF-Token': getCsrfToken() },
+      credentials: 'same-origin',
       body: JSON.stringify({ email, password }),
     });
     const data = await r.json();

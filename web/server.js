@@ -13,6 +13,7 @@ if (fs.existsSync(envPath)) require('dotenv').config({ path: envPath });
 const express      = require('express');
 const cookieParser = require('cookie-parser');
 const rateLimit    = require('express-rate-limit');
+const crypto       = require('crypto');
 
 const { initDB }    = require('./db');
 const BotMgr        = require('./bot-manager');
@@ -43,6 +44,38 @@ app.set('trust proxy', 1);
 
 app.use('/api/auth/', rateLimit({ windowMs:15*60*1000, max:20, message:{error:'Too many requests'} }));
 app.use('/api/',      rateLimit({ windowMs:60*1000,    max:150, message:{error:'Slow down'} }));
+
+// ── CSRF — Double-Submit Cookie ───────────────────────────────────────────────
+// Sets a readable (non-httpOnly) xsrf-token cookie every request.
+// State-changing API calls must echo it back in the X-XSRF-Token header.
+// Attackers on other origins cannot read cookies, so they cannot forge the header.
+app.use((req, res, next) => {
+  if (!req.cookies['xsrf-token']) {
+    const token = crypto.randomBytes(32).toString('hex');
+    res.cookie('xsrf-token', token, {
+      httpOnly: false, // must be JS-readable
+      secure:   process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge:   7 * 24 * 60 * 60 * 1000,
+    });
+    req.csrfToken = token;
+  } else {
+    req.csrfToken = req.cookies['xsrf-token'];
+  }
+  next();
+});
+
+function csrfProtect(req, res, next) {
+  const MUTATING = ['POST', 'PUT', 'DELETE', 'PATCH'];
+  if (!MUTATING.includes(req.method)) return next();
+  const header = req.headers['x-xsrf-token'];
+  const cookie = req.cookies['xsrf-token'];
+  if (!header || !cookie || header !== cookie) {
+    return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+  next();
+}
+app.use('/api/', csrfProtect);
 
 // ── Static files ──────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -120,30 +153,24 @@ boot().catch(e => {
   process.exit(1);
 });
 
-// ── Startup / Admin Promotion ─────────────────────────────────────────────────
-// Visit /startup to promote ADMIN_EMAIL to admin in the database.
-// Safe to run multiple times (idempotent). Remove or protect after first use.
-app.get('/startup', async (req, res) => {
-  const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
-  if (!adminEmail) {
-    return res.json({ ok: false, message: 'ADMIN_EMAIL env var not set.' });
+// ── 404 catch-all (must be after all routes) ──────────────────────────────────
+app.use((req, res) => {
+  if (req.originalUrl.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found' });
   }
-  try {
-    const { query } = require('./db');
-    const r = await query(
-      `UPDATE users SET is_admin = TRUE WHERE LOWER(email) = $1 RETURNING id, email, username`,
-      [adminEmail]
-    );
-    if (!r.rows.length) {
-      return res.json({
-        ok: false,
-        message: `No user found with email "${adminEmail}". Register first, then visit /startup.`
-      });
-    }
-    const u = r.rows[0];
-    console.log(`[Startup] Promoted ${u.email} (id=${u.id}) to admin.`);
-    res.json({ ok: true, message: `✅ ${u.username} (${u.email}) is now admin. You can log out and back in to see the Admin panel.` });
-  } catch(err) {
-    res.status(500).json({ ok: false, message: err.message });
-  }
+  res.status(404).sendFile(path.join(__dirname, '..', 'public', '404.html'));
 });
+
+// ── Global error handler ──────────────────────────────────────────────────────
+// Catches anything thrown inside async route handlers that wasn't caught locally.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('[Server] Unhandled error:', err?.message || err);
+  console.error(err?.stack || '');
+  if (req.originalUrl.startsWith('/api/')) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+  res.status(500).send('Internal server error');
+});
+
+

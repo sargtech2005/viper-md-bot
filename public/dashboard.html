@@ -49,6 +49,13 @@
   </header>
 
   <div class="page-body">
+    <div id="verify-banner" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:.6rem;padding:.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:#92400e">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px;flex-shrink:0"><rect x="3" y="5" width="14" height="11" rx="1.5"/><path d="M3 7l7 5 7-5"/></svg>
+        <strong>Verify your email</strong> — check your inbox for a verification link.
+      </div>
+      <button onclick="resendVerify(this)" class="vbtn vbtn-outline vbtn-sm" style="border-color:#f59e0b;color:#92400e">Resend email</button>
+    </div>
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-top">
@@ -157,6 +164,26 @@
 (async () => {
   const user = await requireLogin();
   if (!user) return;
+
+  // Show email verification banner if not yet verified
+  if (user.is_verified === false) {
+    document.getElementById('verify-banner').style.display = 'flex';
+  }
+
+  async function resendVerify(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    try {
+      await api('/api/auth/resend-verify', { method: 'POST' });
+      btn.textContent = 'Sent ✓';
+      toast('Verification email sent — check your inbox', 'success');
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Resend email';
+      toast(e.message, 'error');
+    }
+  }
+  window.resendVerify = resendVerify;
 
   // Try daily coins claim silently
   try {

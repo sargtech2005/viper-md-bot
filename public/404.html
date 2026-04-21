@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>404 — Page Not Found · VIPER MD BOT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --green:#16a34a;--green-light:#22c55e;--green-pale:#f0fdf4;--green-mid:#dcfce7;
+  --text:#0f172a;--muted:#64748b;--border:#e2e8f0;--bg:#f8fafc;--white:#ffffff;
+}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'DM Sans',sans-serif;
+  min-height:100vh;display:flex;flex-direction:column;
+}
+nav{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1.1rem 2rem;border-bottom:1px solid var(--border);background:var(--white);
+}
+.nav-logo{
+  display:flex;align-items:center;gap:.6rem;
+  font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;color:var(--text);
+  text-decoration:none;
+}
+.logo-icon{
+  width:30px;height:30px;border-radius:.4rem;background:var(--green);
+  display:flex;align-items:center;justify-content:center;
+}
+.logo-icon svg{color:white;width:16px;height:16px}
+.logo-text span{color:var(--green)}
+
+main{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:3rem 1.5rem;text-align:center;
+}
+.inner{max-width:420px}
+
+.code{
+  font-family:'Syne',sans-serif;font-size:5rem;font-weight:800;
+  color:var(--green);line-height:1;margin-bottom:.5rem;
+}
+h1{
+  font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:800;
+  color:var(--text);margin-bottom:.65rem;letter-spacing:-.02em;
+}
+p{font-size:.925rem;color:var(--muted);line-height:1.65;margin-bottom:2rem}
+
+.btn-home{
+  display:inline-flex;align-items:center;gap:.5rem;
+  padding:.75rem 1.75rem;background:var(--green);color:var(--white);
+  font-family:'DM Sans',sans-serif;font-weight:600;font-size:.95rem;
+  border-radius:.55rem;text-decoration:none;
+  transition:background .15s,transform .15s;
+}
+.btn-home:hover{background:#15803d;transform:translateY(-1px)}
+.btn-home svg{width:16px;height:16px}
+
+footer{
+  border-top:1px solid var(--border);padding:1rem 2rem;
+  background:var(--white);text-align:center;
+  font-size:.75rem;color:var(--muted);
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 16c0-4 3-6 6-6s6-2 6-6"/>
+        <circle cx="16" cy="4" r="1.5" fill="currentColor" stroke="none"/>
+        <path d="M4 16c0 1.1.9 2 2 2"/>
+      </svg>
+    </div>
+    <span class="logo-text">VIPER <span>MD</span></span>
+  </a>
+</nav>
+
+<main>
+  <div class="inner">
+    <div class="code">404</div>
+    <h1>Page not found</h1>
+    <p>The page you're looking for doesn't exist or has been moved.</p>
+    <a href="/" class="btn-home">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M3 10h14M3 10l4-4M3 10l4 4"/>
+      </svg>
+      Back to Home
+    </a>
+  </div>
+</main>
+
+<footer>&copy; 2026 VIPER MD Bot. All rights reserved.</footer>
+</body>
+</html>

@@ -1,10 +1,15 @@
 const express = require('express');
-const { Users, Sessions, Transactions, Settings } = require('../db');
+const { Users, Sessions, Transactions, Settings, pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const BotMgr = require('../bot-manager');
 
 const router = express.Router();
 router.use(requireAuth);
+
+// ── Per-user SSE connection cap ────────────────────────────────────────────────
+// Prevents a single user from holding unlimited open streams (fd exhaustion).
+const SSE_USER_CONNS = new Map(); // userId → count
+const MAX_SSE_PER_USER = 5;
 
 // GET /api/sessions/stats
 router.get('/stats', async (req, res) => {
@@ -16,7 +21,7 @@ router.get('/stats', async (req, res) => {
     ]);
     const sessions = sessR.rows.map(s => ({ ...s, is_running: BotMgr.isRunning(s.id) }));
     res.json({ ok: true, user: userR.rows[0], sessions, transactions: txR.rows });
-  } catch { res.status(500).json({ error: 'Failed to load stats' }); }
+  } catch (err) { console.error('[Sessions] stats:', err?.message || err); res.status(500).json({ error: 'Failed to load stats' }); }
 });
 
 // GET /api/sessions
@@ -24,7 +29,7 @@ router.get('/', async (req, res) => {
   try {
     const r = await Sessions.findByUser(req.user.id);
     res.json({ ok: true, sessions: r.rows.map(s => ({ ...s, is_running: BotMgr.isRunning(s.id) })) });
-  } catch { res.status(500).json({ error: 'Failed to load sessions' }); }
+  } catch (err) { console.error('[Sessions] list:', err?.message || err); res.status(500).json({ error: 'Failed to load sessions' }); }
 });
 
 // POST /api/sessions — create (costs coins)
@@ -68,16 +73,57 @@ router.post('/', async (req, res) => {
     if (!initialSettings.selfMode && (selfMode === true || selfMode === 'true'))
       initialSettings.selfMode = true;
 
-    await Users.updateCoins(req.user.id, -cost);
-    await Transactions.create({ userId: req.user.id, type: 'session_create', amount: -cost, description: `Created session${label?': '+label:''}` });
-    const session = await Sessions.create({
-      userId: req.user.id, phoneNumber: null, label,
-      initialSettings: Object.keys(initialSettings).length ? initialSettings : null,
-    });
+    // ── Atomic: debit coins + log transaction + create session ──────────────
+    // All three steps run inside a single PostgreSQL transaction.
+    // If any step fails the entire block rolls back — no coin loss, no ghost sessions.
+    const client = await pool.connect();
+    let session;
+    try {
+      await client.query('BEGIN');
+
+      // Deduct coins
+      const coinRes = await client.query(
+        'UPDATE users SET coins = coins - $1 WHERE id = $2 AND coins >= $1 RETURNING coins',
+        [cost, req.user.id]
+      );
+      if (!coinRes.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(402).json({ error: `Need ${cost} coins. Insufficient balance.` });
+      }
+
+      // Log the debit
+      await client.query(
+        `INSERT INTO coin_transactions(user_id, type, amount, description)
+         VALUES($1, 'session_create', $2, $3)`,
+        [req.user.id, -cost, `Created session${label ? ': ' + label : ''}`]
+      );
+
+      // Create the session row (re-uses Sessions.create logic inline to stay in the same client)
+      const slotRes = await client.query(
+        `SELECT COALESCE(MAX(user_slot), 0) + 1 AS next_slot
+         FROM bot_sessions WHERE user_id = $1`, [req.user.id]
+      );
+      const slot = slotRes.rows[0].next_slot;
+      const sessRes = await client.query(
+        `INSERT INTO bot_sessions(user_id, session_label, status, user_slot, initial_settings)
+         VALUES($1, $2, 'pending', $3, $4)
+         RETURNING *`,
+        [req.user.id, label || null, slot,
+         Object.keys(initialSettings).length ? JSON.stringify(initialSettings) : null]
+      );
+      session = sessRes.rows[0];
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw txErr; // re-throw so the outer catch handles the response
+    } finally {
+      client.release();
+    }
+
     res.json({ ok: true, session });
   } catch (err) {
     console.error('[Sessions] Create:', err.message);
-    try { const c = parseInt(await Settings.get('session_cost')||'10'); await Users.updateCoins(req.user.id, c); } catch {}
     res.status(500).json({ error: 'Failed to create session' });
   }
 });
@@ -91,7 +137,7 @@ router.get('/byslot/:slot', async (req, res) => {
     const s = r.rows[0];
     if (!s) return res.status(404).json({ error: 'Session not found' });
     res.json({ ok: true, session: { ...s, is_running: BotMgr.isRunning(s.id) } });
-  } catch { res.status(500).json({ error: 'Failed to resolve slot' }); }
+  } catch (err) { console.error('[Sessions] byslot:', err?.message || err); res.status(500).json({ error: 'Failed to resolve slot' }); }
 });
 
 // POST /api/sessions/:id/pair
@@ -132,11 +178,19 @@ router.post('/:id/pair', async (req, res) => {
 // GET /api/sessions/:id/stream — SSE
 router.get('/:id/stream', async (req, res) => {
   const sessionId = parseInt(req.params.id);
+  const userId    = req.user.id;
   try {
     const sr = await Sessions.findById(sessionId);
     const s  = sr.rows[0];
     if (!s) return res.status(404).end();
-    if (s.user_id !== req.user.id && !req.user.is_admin) return res.status(403).end();
+    if (s.user_id !== userId && !req.user.is_admin) return res.status(403).end();
+
+    // Enforce per-user connection cap
+    const current = SSE_USER_CONNS.get(userId) || 0;
+    if (current >= MAX_SSE_PER_USER) {
+      return res.status(429).json({ error: 'Too many open connections. Close other tabs and try again.' });
+    }
+    SSE_USER_CONNS.set(userId, current + 1);
 
     res.setHeader('Content-Type',  'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -148,8 +202,15 @@ router.get('/:id/stream', async (req, res) => {
     BotMgr.subscribe(sessionId, res);
 
     const hb = setInterval(() => { try { res.write(': hb\n\n'); } catch { clearInterval(hb); } }, 20000);
-    req.on('close', () => { clearInterval(hb); BotMgr.unsubscribe(sessionId, res); });
-  } catch { res.status(500).end(); }
+    req.on('close', () => {
+      clearInterval(hb);
+      BotMgr.unsubscribe(sessionId, res);
+      // Decrement cap counter when connection closes
+      const c = SSE_USER_CONNS.get(userId) || 1;
+      if (c <= 1) SSE_USER_CONNS.delete(userId);
+      else SSE_USER_CONNS.set(userId, c - 1);
+    });
+  } catch (err) { console.error('[Sessions] stream:', err?.message || err); res.status(500).end(); }
 });
 
 // POST /api/sessions/:id/restart
@@ -166,7 +227,7 @@ router.post('/:id/restart', async (req, res) => {
     BotMgr.startBot(id, s.phone_number);
     await Sessions.updateStatus(id, 'connecting');
     res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Restart failed' }); }
+  } catch (err) { console.error('[Sessions] restart:', err?.message || err); res.status(500).json({ error: 'Restart failed' }); }
 });
 
 // POST /api/sessions/:id/stop
@@ -180,7 +241,7 @@ router.post('/:id/stop', async (req, res) => {
     BotMgr.stopSession(id);
     await Sessions.updateStatus(id, 'stopped');
     res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Stop failed' }); }
+  } catch (err) { console.error('[Sessions] stop:', err?.message || err); res.status(500).json({ error: 'Stop failed' }); }
 });
 
 // DELETE /api/sessions/:id
@@ -197,7 +258,7 @@ router.delete('/:id', async (req, res) => {
     await Sessions.saveCreds(id, null);
     await Sessions.delete(id);
     res.json({ ok: true });
-  } catch { res.status(500).json({ error: 'Delete failed' }); }
+  } catch (err) { console.error('[Sessions] delete:', err?.message || err); res.status(500).json({ error: 'Delete failed' }); }
 });
 
 // GET /api/sessions/:id/logs
@@ -210,7 +271,7 @@ router.get('/:id/logs', async (req, res) => {
     if (s.user_id !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Not yours' });
     const logs = s.phone_number ? BotMgr.tailLog(s.phone_number, 80) : '';
     res.json({ ok: true, logs });
-  } catch { res.status(500).json({ error: 'Failed' }); }
+  } catch (err) { console.error('[Sessions] logs:', err?.message || err); res.status(500).json({ error: 'Failed to load logs' }); }
 });
 
 // GET /api/sessions/:id/settings — fetch current initial_settings + label
@@ -222,7 +283,7 @@ router.get('/:id/settings', async (req, res) => {
     if (!s) return res.status(404).json({ error: 'Not found' });
     if (s.user_id !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Not yours' });
     res.json({ ok: true, label: s.session_label || '', settings: s.initial_settings || {} });
-  } catch { res.status(500).json({ error: 'Failed to load settings' }); }
+  } catch (err) { console.error('[Sessions] get-settings:', err?.message || err); res.status(500).json({ error: 'Failed to load settings' }); }
 });
 
 // PUT /api/sessions/:id/settings — save updated settings to DB and live session dir
