@@ -779,6 +779,37 @@ const handleMessage = async (sock, msg) => {
     }
     
     
+    // ── Auto-Reply: DMs + @mentions → Gemini AI response ────────────────────
+    // Runs BEFORE the prefix check so non-command messages are handled too.
+    // Only fires when autoReply is ON and message is not from the bot itself.
+    if (!msg.key.fromMe && database.getSetting('autoReply', false)) {
+      try {
+        const botJid    = sock.user?.id || '';
+        const botNumber = botJid.split(':')[0].split('@')[0];
+
+        // Detect DM (not a group) OR a group @mention of the bot
+        const isDM = !isGroup;
+        const mentionedJids = content?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const isMentioned   = mentionedJids.some(j => j.includes(botNumber));
+
+        if ((isDM || isMentioned) && body && !body.startsWith(dbSetting('prefix'))) {
+          const { askGemini } = require('./commands/ai/gemini');
+          const config2   = require('./config');
+          const botName2  = database.getSetting('botName', config2.botName) || 'Viper Bot';
+
+          // Typing indicator
+          try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
+
+          const aiReply = await askGemini(from, body, botName2);
+          await sock.sendMessage(from, { text: aiReply }, { quoted: msg });
+          return; // handled — don't fall through to command parser
+        }
+      } catch (e) {
+        console.error('[AutoReply] Gemini error:', e.message);
+        // Don't crash — just skip auto-reply on error
+      }
+    }
+
     // Check if message starts with prefix
     if (!body.startsWith(dbSetting('prefix'))) return;
     

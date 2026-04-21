@@ -34,6 +34,11 @@ services:
       - key: ADMIN_EMAIL
         sync: false
 
+      # Google Gemini API key — used for .imagine (Nano Banana image generation)
+      # Get free key at: https://aistudio.google.com/apikey
+      - key: GEMINI_API_KEY
+        sync: false
+
 # Free PostgreSQL database (expires after 90 days on free plan —
 # upgrade to paid or dump+restore before expiry)
 databases:
