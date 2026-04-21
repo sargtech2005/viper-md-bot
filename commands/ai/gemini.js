@@ -123,6 +123,13 @@ module.exports = {
     } catch (e) {
       await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
       console.error('[Gemini] Error:', e.message);
+      // 429 = rate limit (free tier is 15 req/min)
+      if (e.response?.status === 429 || e.message?.includes('429')) {
+        return extra.reply('⏱️ *Gemini is rate-limited right now.*\n\nThe free API allows 15 requests/min. Please wait 60 seconds and try again.');
+      }
+      if (e.response?.status === 503 || e.message?.includes('503')) {
+        return extra.reply('🔧 Gemini is temporarily unavailable. Please try again in a moment.');
+      }
       await extra.reply(`❌ Gemini error: ${e.message}`);
     }
   },

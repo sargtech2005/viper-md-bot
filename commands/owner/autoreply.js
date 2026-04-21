@@ -43,10 +43,10 @@ module.exports = {
       database.updateSettings({ autoReply: true });
       return extra.reply(
         '✅ *Auto-Reply enabled!*\n\n' +
-        '🤖 Gemini AI will now:\n' +
-        '• Reply to all DMs automatically\n' +
-        '• Reply when @mentioned in groups\n\n' +
-        '_Make sure GEMINI_API_KEY is set._'
+        '🤖 The bot will now reply automatically to:\n' +
+        '• 💬 All direct messages (DMs)\n' +
+        '• 📢 @mentions in groups\n\n' +
+        '> Powered by Gemini AI 🤖'
       );
     }
 
