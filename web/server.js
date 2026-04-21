@@ -186,6 +186,41 @@ async function boot() {
   // Resume any previously connected bot sessions
   await BotMgr.resumeSessions();
   BotMgr.startLogoutMonitor();
+
+  // ── Self-ping keep-alive ───────────────────────────────────────────────────
+  // Render free plan sleeps after ~15 min of no external HTTP traffic.
+  // We ping our own /health endpoint every 14 min so the container stays awake.
+  // SITE_URL must be set in Render env vars (e.g. https://viper-bot-md.onrender.com)
+  // Without it we cannot reach ourselves externally, so we log a warning.
+  const SITE_URL = (process.env.SITE_URL || '').replace(/\/$/, '');
+  if (SITE_URL) {
+    const http  = SITE_URL.startsWith('https') ? require('https') : require('http');
+    const PING_INTERVAL = 14 * 60 * 1000; // 14 minutes
+
+    setInterval(() => {
+      const pingUrl = `${SITE_URL}/health`;
+      const req = http.get(pingUrl, (res) => {
+        // success — container stays awake
+        if (res.statusCode !== 200) {
+          console.warn(`[KeepAlive] Ping returned status ${res.statusCode}`);
+        }
+        // drain the response so the socket closes cleanly
+        res.resume();
+      });
+      req.on('error', (err) => {
+        console.warn('[KeepAlive] Self-ping failed:', err.message);
+      });
+      req.setTimeout(10000, () => {
+        req.destroy();
+        console.warn('[KeepAlive] Self-ping timed out');
+      });
+    }, PING_INTERVAL);
+
+    console.log(`✅ Keep-alive self-ping active → ${SITE_URL}/health every 14 min`);
+  } else {
+    console.warn('⚠️  SITE_URL not set — keep-alive self-ping is DISABLED.');
+    console.warn('   Add SITE_URL=https://your-app.onrender.com to Render environment vars.');
+  }
 }
 
 boot().catch(e => {
