@@ -7,6 +7,7 @@ module.exports = {
   name: 'owner',
   aliases: ['ownermenu'],
   category: 'general',
+  isNavShortcut: true,
   description: 'Show owner commands',
   usage: '.owner',
 

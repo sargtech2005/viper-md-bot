@@ -86,8 +86,49 @@ app.use('/api/sessions', sessionRoutes);
 app.use('/api/admin',    adminRoutes);
 app.use('/api/wallet',   walletRoutes);
 
-// ── Health check (must always respond — used by Render & UptimeRobot) ─────────
+// ── Health check (must always respond — used by Render & UptimeRobot) ---------
 app.get('/health', (_, res) => res.json({ ok: true, service: 'VIPER BOT MD', t: new Date().toISOString() }));
+
+// -- SEO: sitemap.xml ----------------------------------------------------------
+app.get('/sitemap.xml', (req, res) => {
+  const base = process.env.SITE_URL || `https://${req.hostname}`;
+  const now  = new Date().toISOString().split('T')[0];
+  const pages = [
+    { loc: '/',         changefreq: 'weekly',  priority: '1.0' },
+    { loc: '/login',    changefreq: 'monthly', priority: '0.6' },
+    { loc: '/register', changefreq: 'monthly', priority: '0.7' },
+    { loc: '/dashboard',changefreq: 'weekly',  priority: '0.8' },
+    { loc: '/sessions', changefreq: 'weekly',  priority: '0.8' },
+    { loc: '/wallet',   changefreq: 'weekly',  priority: '0.7' },
+    { loc: '/settings', changefreq: 'monthly', priority: '0.5' },
+  ];
+  const urls = pages.map(p =>
+    '  <url>\n' +
+    '    <loc>' + base + p.loc + '</loc>\n' +
+    '    <lastmod>' + now + '</lastmod>\n' +
+    '    <changefreq>' + p.changefreq + '</changefreq>\n' +
+    '    <priority>' + p.priority + '</priority>\n' +
+    '  </url>'
+  ).join('\n');
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    urls + '\n</urlset>';
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  res.send(xml);
+});
+
+// -- SEO: robots.txt -----------------------------------------------------------
+app.get('/robots.txt', (req, res) => {
+  const base = process.env.SITE_URL || 'https://' + req.hostname;
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(
+    'User-agent: *\n' +
+    'Allow: /\n' +
+    'Disallow: /admin\n' +
+    'Disallow: /api/\n' +
+    'Sitemap: ' + base + '/sitemap.xml\n'
+  );
+});
 
 // ── Page routes ───────────────────────────────────────────────────────────────
 const pub = p => (_, res) => res.sendFile(path.join(__dirname, '..', 'public', p));

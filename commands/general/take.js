@@ -13,7 +13,7 @@ module.exports = {
   aliases: ['steal'],
   description: 'Steal a sticker and change its packname',
   usage: '.take [packname] (reply to sticker)',
-  category: 'general',
+  category: 'media',
   
   async execute(sock, msg, args, extra) {
     let targetMessage = msg;

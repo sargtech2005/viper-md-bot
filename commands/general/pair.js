@@ -27,7 +27,7 @@ function loadSettings() {
 module.exports = {
   name: 'pair',
   aliases: ['addsession', 'newsession'],
-  category: 'general',
+  category: 'owner',
   description: 'Pair a new WhatsApp number (owner only)',
   usage: '.pair <number>',
   ownerOnly: true,

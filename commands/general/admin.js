@@ -3,6 +3,7 @@ module.exports = {
   name: 'admin',
   aliases: ['adminmenu'],
   category: 'general',
+  isNavShortcut: true,
   description: 'Show admin commands',
   usage: '.admin',
   async execute(sock, msg, args, extra) {

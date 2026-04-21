@@ -3,6 +3,7 @@ module.exports = {
   name: 'textmaker',
   aliases: ['textmakermenu'],
   category: 'general',
+  isNavShortcut: true,
   description: 'Show textmaker commands',
   usage: '.textmaker',
   async execute(sock, msg, args, extra) {

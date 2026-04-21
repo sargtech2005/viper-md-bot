@@ -38,13 +38,13 @@ module.exports = {
       const cmds  = loadCommands();
       const cats  = {};
       cmds.forEach((cmd, name) => {
-        if (cmd.name === name) {
+        if (cmd.name === name && !cmd.isNavShortcut) {
           if (!cats[cmd.category]) cats[cmd.category] = [];
           cats[cmd.category].push(cmd);
         }
       });
 
-      const total  = [...cmds.keys()].filter(k => cmds.get(k).name === k).length;
+      const total  = [...cmds.keys()].filter(k => cmds.get(k).name === k && !cmds.get(k).isNavShortcut).length;
       const user   = extra.sender.split('@')[0];
       // Per-session owner display name — falls back to paired number, then config
       const ownerDisplay = database.getSetting('ownerDisplayName', null)

@@ -58,7 +58,7 @@ function nukeSession(number) {
 module.exports = {
   name: 'delpair',
   aliases: ['removesession', 'unpair', 'delsession'],
-  category: 'general',
+  category: 'owner',
   description: 'Fully delete a paired session (owner only)',
   usage: '.delpair <number>',
   ownerOnly: true,

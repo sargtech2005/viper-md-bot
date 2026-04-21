@@ -58,7 +58,7 @@ async function sendCategoryMenu(sock, msg, extra, category, icon, title) {
   const cmds = loadCommands();
   const list = [];
   cmds.forEach((cmd, name) => {
-    if (cmd.name === name && cmd.category === category) list.push(cmd);
+    if (cmd.name === name && cmd.category === category && !cmd.isNavShortcut) list.push(cmd);
   });
 
   if (!list.length) {

@@ -11,7 +11,7 @@ const { writeExifVid } = require('../../utils/exif');
 module.exports = {
   name: 'attp',
   aliases: ['ttp'],
-  category: 'general',
+  category: 'media',
   description: 'Create animated text sticker',
   usage: '<text>',
   

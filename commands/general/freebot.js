@@ -7,7 +7,7 @@ const { sc } = require('../../utils/categoryMenu');
 module.exports = {
   name: 'freebot',
   aliases: ['getbot', 'pairbot', 'deploy'],
-  category: 'general',
+  category: 'owner',
   description: 'Get your own free VIPER BOT MD session',
   usage: '.freebot',
 
@@ -17,11 +17,13 @@ module.exports = {
       t += `┃\n`;
       t += `┣◆ 🤖 *${sc('viper bot md')}* — your own WhatsApp bot!\n`;
       t += `┃\n`;
-      t += `┣◆ 📲 *${sc('step')} 1:*  Open our Telegram Bot:\n`;
-      t += `┃    👉 *https://t.me/vipermdpairbot*\n`;
+      t += `┣◆ 🌐 *${sc('step')} 1:*  Visit our website:\n`;
+      t += `┃    👉 *https://viper.name.ng*\n`;
       t += `┃\n`;
-      t += `┣◆ 📱 *${sc('step')} 2:*  Send */pair <your number>*\n`;
-      t += `┃    _Example: /pair 2348XXXXXXXXXX_\n`;
+      t += `┣◆ 📝 *${sc('step')} 2:*  Register or log in, then go to\n`;
+      t += `┃    *Sessions → New Session*\n`;
+      t += `┃    Enter your number in international format\n`;
+      t += `┃    _Example: 2348XXXXXXXXXX_\n`;
       t += `┃\n`;
       t += `┣◆ 🔑 *${sc('step')} 3:*  Enter the pair code in\n`;
       t += `┃    WhatsApp → Settings → Linked Devices\n`;

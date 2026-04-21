@@ -7,6 +7,7 @@ module.exports = {
   name: 'general',
   aliases: ['generalmenu'],
   category: 'general',
+  isNavShortcut: true,
   description: 'Show general commands',
   usage: '.general',
 

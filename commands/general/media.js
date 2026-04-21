@@ -3,6 +3,7 @@ module.exports = {
   name: 'media',
   aliases: ['mediamenu'],
   category: 'general',
+  isNavShortcut: true,
   description: 'Show media commands',
   usage: '.media',
   async execute(sock, msg, args, extra) {

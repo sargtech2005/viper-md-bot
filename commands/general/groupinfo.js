@@ -5,7 +5,7 @@
 module.exports = {
     name: 'groupinfo',
     aliases: ['info', 'ginfo'],
-    category: 'general',
+    category: 'admin',
     description: 'Show group information',
     usage: '.groupinfo',
     groupOnly: true,
