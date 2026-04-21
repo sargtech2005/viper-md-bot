@@ -1,13 +1,16 @@
 /**
- * List Command
- * Show all commands with descriptions
+ * .list — Full commands list with descriptions  (VIPER BOT MD)
+ * Full command list grouped by category, bot-standard text style.
  */
-
-const fs = require('fs');
-const path = require('path');
 const config = require('../../config');
+const database = require('../../database');
 const { loadCommands } = require('../../utils/commandLoader');
-const { sendButtons } = require('gifted-btns');
+const { sc } = require('../../utils/categoryMenu');
+
+const CAT_ICONS = {
+  ai: '🤖', owner: '👑', general: '🌐', admin: '👥',
+  media: '🎬', fun: '🎭', utility: '🔧', textmaker: '🖋️', developer: '💻',
+};
 
 module.exports = {
   name: 'list',
@@ -15,79 +18,42 @@ module.exports = {
   description: 'List all commands with descriptions',
   usage: '.list',
   category: 'general',
-  
+
   async execute(sock, msg, args, extra) {
     try {
-      const prefix = config.prefix;
+      const prefix   = database.getSetting('prefix', config.prefix);
+      const botName  = database.getSetting('botName', config.botName);
       const commands = loadCommands();
-      const categories = {};
-      
-      // Group commands by category
+      const cats     = {};
+
       commands.forEach((cmd, name) => {
-        if (cmd.name === name) { // Only count main command names, not aliases
-          const category = (cmd.category || 'other').toLowerCase();
-          if (!categories[category]) {
-            categories[category] = [];
-          }
-          categories[category].push({
-            label: cmd.description || '',
-            names: [cmd.name].concat(cmd.aliases || []),
-          });
+        if (cmd.name === name && !cmd.isNavShortcut) {
+          const cat = (cmd.category || 'other').toLowerCase();
+          if (!cats[cat]) cats[cat] = [];
+          cats[cat].push(cmd);
         }
       });
-      
-      let menu = `*${config.botName} - Commands List*\n`;
-      menu += `Prefix: *${prefix}*\n\n`;
-      
-      const orderedCats = Object.keys(categories).sort();
-      
+
+      let t = '┏❐ 《 *📋 ' + sc('commands list') + '* 》 ❐\n┃\n';
+
+      const orderedCats = Object.keys(cats).sort();
       for (const cat of orderedCats) {
-        menu += `*📂 ${cat.toUpperCase()}*\n`;
-        for (const entry of categories[cat]) {
-          const cmdList = entry.names.map((n) => `${prefix}${n}`).join(', ');
-          const label = entry.label || '';
-          menu += label ? `• \`${cmdList}\` - ${label}\n` : `• ${cmdList}\n`;
+        const icon = CAT_ICONS[cat] || '📁';
+        const sorted = cats[cat].sort((a, b) => a.name.localeCompare(b.name));
+        t += '┣◆ ' + icon + ' *' + sc(cat) + '*\n';
+        for (const cmd of sorted) {
+          const desc = cmd.description ? ' — ' + cmd.description : '';
+          t += '┃  • `' + prefix + cmd.name + '`' + desc + '\n';
         }
-        menu += '\n';
+        t += '┃\n';
       }
-      
-      menu = menu.trimEnd();
-      
-      
-      // Send message with buttons using gifted-btns
-      await sendButtons(sock, extra.from, {
-        title: '',
-        text: menu,
-        footer: `> *Powered by ${config.botName}*`,
-        buttons: [
-          {
-            name: 'cta_url',
-            buttonParamsJson: JSON.stringify({
-              display_text: 'Youtube',
-              url: config.social?.youtube || 'http://youtube.com/@mr_unique_hacker'
-            })
-          },
-          {
-            name: 'cta_url',
-            buttonParamsJson: JSON.stringify({
-              display_text: 'Visit Bot Repo',
-              url: process.env.GITHUB_REPO_URL || ''
-            })
-          },
-          {
-            name: 'cta_url',
-            buttonParamsJson: JSON.stringify({
-              display_text: 'Join Channel',
-              url: 'https://whatsapp.com/channel/0029Va90zAnIHphOuO8Msp3A'
-            })
-          }
-        ]
-      }, { quoted: msg });
-      
+
+      t += '┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ' + botName + '* 🐍';
+
+      await sock.sendMessage(extra.from, { text: t }, { quoted: msg });
     } catch (err) {
       console.error('list.js error:', err);
       await extra.reply('❌ Failed to load commands list.');
     }
-  }
+  },
 };
-

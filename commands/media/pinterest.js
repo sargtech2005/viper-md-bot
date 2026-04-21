@@ -99,24 +99,12 @@ module.exports = {
       
       const pinData = response.data.result;
       
-      // Log full response for debugging videos
-      console.log('Pinterest API Response:', JSON.stringify(pinData, null, 2));
-      
-      // Check for both image and video fields (videos might have different field name)
-      // If video field exists, it's definitely a video
+      // Check for both image and video fields
       const isVideo = !!pinData.video;
       const imageUrl = pinData.video || pinData.image || pinData.url;
       const thumbnail = pinData.thumbnail;
       const title = pinData.title || 'Pinterest Pin';
       const author = pinData.author || 'Unknown';
-      
-      console.log('Media URL found:', imageUrl);
-      console.log('Is video check:', {
-        hasVideoField: !!pinData.video,
-        hasImageField: !!pinData.image,
-        isVideo: isVideo,
-        url: imageUrl
-      });
       
       // Debug: log the response structure if no media URL found
       if (!imageUrl) {
@@ -157,7 +145,6 @@ module.exports = {
             throw new Error('Video buffer too small, likely corrupted');
           }
           
-          console.log(`Video downloaded successfully: ${(videoBuffer.length / 1024 / 1024).toFixed(2)}MB`);
           
           // Send video buffer - let WhatsApp auto-detect mimetype
           await sock.sendMessage(extra.from, {

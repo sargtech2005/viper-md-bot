@@ -458,11 +458,7 @@ async function igsCommand(sock, msg, args, extra, crop = false) {
 
     const rawItems = mediaData.filter(m => m && pickMediaUrl(m));
 
-    // #region agent log
-    const extractedUrls = rawItems.slice(0, 3).map((m, i) => pickMediaUrl(m));
-    console.log(`[DEBUG] Extracted ${rawItems.length} items. First 3 URLs after extraction:`, extractedUrls.map((u, i) => `Item${i + 1}=${u?.substring(0, 80)}`));
-    fetch('http://127.0.0.1:7242/ingest/44c87b60-b6ab-47d5-9224-5cb012ce57ee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'igsc.js:430', message: 'Items extracted', data: { totalItems: mediaData.length, filteredItems: rawItems.length, firstFewUrls: extractedUrls.map(u => u?.substring(0, 80)) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'E' }) }).catch(() => { });
-    // #endregion
+
 
     // Limit to maximum 10 items for stickers
     const mediaToDownload = rawItems.slice(0, 10);
@@ -499,10 +495,7 @@ async function igsCommand(sock, msg, args, extra, crop = false) {
         // Check if we've already sent this exact content (by hash)
         const contentHash = crypto.createHash('md5').update(buffer).digest('hex');
 
-        // #region agent log
-        console.log(`[DEBUG] Item ${i + 1}: Hash=${contentHash.substring(0, 8)}, size=${buffer.length}, isDuplicate=${seenHashes.has(contentHash)}`);
-        fetch('http://127.0.0.1:7242/ingest/44c87b60-b6ab-47d5-9224-5cb012ce57ee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'igsc.js:465', message: 'Hash check', data: { item: i + 1, hash: contentHash.substring(0, 8), bufferSize: buffer.length, seenHashesCount: seenHashes.size, isDuplicate: seenHashes.has(contentHash) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'F' }) }).catch(() => { });
-        // #endregion
+
 
         if (seenHashes.has(contentHash)) {
           // Skip sending duplicate content, but continue processing other items
