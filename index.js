@@ -234,28 +234,6 @@ async function startBot() {
 
       handler.initializeAntiCall(sock);
 
-      // ── WhatsApp socket keep-alive ─────────────────────────────────────────
-      // Sends a presence update every 10 min so the Baileys WebSocket stays
-      // active and doesn't miss incoming messages when the bot is idle.
-      // The interval is cleared automatically on connection close/reconnect.
-      let presenceInterval = null;
-      const clearPresence  = () => { if (presenceInterval) { clearInterval(presenceInterval); presenceInterval = null; } };
-
-      // Clear any previous interval first (defensive — reconnect path)
-      clearPresence();
-      presenceInterval = setInterval(async () => {
-        try {
-          if (sock.ws?.readyState === 1) {
-            await sock.sendPresenceUpdate('available');
-          }
-        } catch (_) {}
-      }, 10 * 60 * 1000); // every 10 minutes
-
-      // Clean up on disconnect
-      sock.ev.on('connection.update', (u) => {
-        if (u.connection === 'close') clearPresence();
-      });
-
       // ── Broadcast control file poller ─────────────────────────────────────
       // app.py writes  SESSION_DIR/broadcast.json  to trigger a broadcast.
       // We poll every 3 s, execute, then delete the file so it only fires once.

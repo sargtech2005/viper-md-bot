@@ -52,9 +52,8 @@ module.exports = {
       let t = `┏❐ 《 *🌐 ${sc('dns')} — ${domain}* 》 ❐\n`;
       t += `┃  ${sc('type')}: *${type}*  |  ${sc('records')}: ${records.length}\n`;
       t += `┃\n`;
-      records.forEach((r, i) => {
-        t += `┣◆ [${i + 1}] ${format(r)}\n`;
-      });
+      const recordLines = records.map((r, i) => `[${i + 1}] ${format(r)}`).join('\n');
+      t += `\`\`\`\n${recordLines}\n\`\`\`\n`;
       t += `┗❐\n\n`;
       t += `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
       await extra.reply(t);

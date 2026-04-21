@@ -40,7 +40,8 @@ module.exports = {
 
       let t = `┏❐ 《 *🕷️ ${sc('scrape')} — ${url.slice(0, 40)}* 》 ❐\n`;
       t += `┃  📦 ${text.length} chars extracted\n┃\n`;
-      t += `┣◆ 📄 *Text content:*\n${display}\n`;
+      t += `┣◆ 📄 *Text content:*\n`;
+      t += `\`\`\`\n${display}\n\`\`\`\n`;
       t += `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
       await extra.reply(t);
     } catch (e) {

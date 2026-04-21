@@ -1,6 +1,6 @@
 /**
  * ᴅᴇᴠᴇʟᴏᴘᴇʀ ᴛᴏᴏʟꜱ ᴍᴇɴᴜ — VIPER BOT MD
- * Commands are listed below. Full implementations = coming soon.
+ * 35 tools — all live. Type .devhelp <cmd> for usage.
  */
 
 const config   = require('../../config');
