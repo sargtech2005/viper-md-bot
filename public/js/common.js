@@ -133,6 +133,12 @@ function fCoins(n) { return Number(n).toLocaleString(); }
 function fNgn(kobo) { return '₦' + (kobo/100).toLocaleString('en-NG', { minimumFractionDigits:0 }); }
 
 function statusBadge(status, isRunning) {
+  // If the process is actually running, always show Connected regardless of
+  // what the DB status says — resumed sessions stay on "connecting" in DB
+  // until the next reconnect cycle, but the process is alive and serving.
+  if (isRunning && status !== 'logged_out') {
+    return `<span class="badge badge-green"><svg viewBox="0 0 8 8" width="8" height="8"><circle cx="4" cy="4" r="3" fill="#16a34a"/></svg>Connected</span>`;
+  }
   const map = {
     connected:  ['badge-green','Connected'],
     connecting: ['badge-yellow','Connecting'],

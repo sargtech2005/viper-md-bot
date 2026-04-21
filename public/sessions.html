@@ -194,6 +194,11 @@
       <div id="pair-code-loading" style="text-align:center;padding:2rem 0;color:var(--muted)">
         <div class="vspin vspin-dark" style="width:28px;height:28px;margin:0 auto .75rem"></div>
         <div style="font-size:.84rem">Generating your pair code — please wait...</div>
+        <div style="font-size:.75rem;margin-top:.5rem;color:var(--muted)" id="pair-wait-hint" style="display:none">Taking long? Try refreshing below.</div>
+        <button class="vbtn vbtn-outline vbtn-sm" id="pair-retry-btn" onclick="retryPairFetch()" style="margin-top:1rem;display:none">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:13px;height:13px"><path d="M17 10A7 7 0 113 10"/><path d="M17 10V5h-5"/></svg>
+          Refresh / Retry
+        </button>
       </div>
 
       <div id="pair-code-display" style="display:none">
@@ -342,19 +347,6 @@
       </button>
     </div>
 
-    <!-- Pair code banner: hidden until PAIR_CODE found in logs -->
-    <div id="log-code-banner" style="display:none;background:var(--green-pale);border:2px solid var(--green-mid);border-radius:.75rem;padding:1rem 1.25rem;margin-bottom:1rem">
-      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--green);margin-bottom:.4rem">✅ Pair Code Found</div>
-      <div style="display:flex;align-items:center;gap:.85rem;flex-wrap:wrap">
-        <div id="log-banner-code" style="font-family:'Syne',monospace;font-size:1.9rem;font-weight:800;letter-spacing:.18em;color:var(--green)">—</div>
-        <button id="log-banner-copy" onclick="copyLogBannerCode()" style="display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .95rem;background:var(--green);color:#fff;border:none;border-radius:.45rem;font-size:.8rem;font-weight:700;cursor:pointer">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:14px;height:14px"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg>
-          Copy Code
-        </button>
-      </div>
-      <div style="font-size:.7rem;color:var(--muted);margin-top:.4rem">Enter this in WhatsApp → Linked Devices → Link with phone number instead</div>
-    </div>
-
     <!-- Log output -->
     <pre id="logs-content" style="background:#0d1117;color:#94a3b8;font-size:.72rem;line-height:1.65;border-radius:.6rem;padding:1rem;overflow-y:auto;height:280px;white-space:pre-wrap;word-break:break-all;font-family:'Courier New',monospace;border:1px solid var(--border)"></pre>
 
@@ -394,9 +386,10 @@
 let sessions        = [];
 let user            = null;
 let pairSessionId   = null;
-let pairEventSource = null;
+let pairEventSource  = null;
+let pairLogPollTimer = null;  // background log poll — feeds code into pair modal
 let pairCountdown   = null;
-let logPollTimer    = null;   // for live log polling
+
 let logSessionId    = null;   // which session's logs are open
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -567,9 +560,8 @@ function openPair(sessionId) {
 
 function closePairModal() {
   stopPairSSE();
-  stopLogPolling();
+  stopPairLogPoll();
   closeModal('modal-pair');
-  closeModal('modal-logs');
   pairSessionId = null;
   silentRefresh();
 }
@@ -602,10 +594,12 @@ async function startPairing() {
 
   document.getElementById('pair-step-phone').style.display = 'none';
   document.getElementById('pair-step-code').style.display  = 'block';
-  startPairSSE();
 
-  // Open logs modal immediately so user sees the pair code appear there
-  openLiveLogs(pairSessionId, true);
+  // Two parallel code delivery paths — whichever fires first wins:
+  //  1. SSE  — low latency when the stream works
+  //  2. Log poll — reliable fallback that scans the log file every 2s
+  startPairSSE();
+  startPairLogPoll();
 }
 
 function startPairSSE() {
@@ -620,17 +614,15 @@ function startPairSSE() {
     try {
       const { code } = JSON.parse(e.data);
       gotCode = true;
-      document.getElementById('pair-code-loading').style.display = 'none';
-      document.getElementById('pair-code-display').style.display = 'block';
-      document.getElementById('pair-code-value').textContent     = code;
-      startPairCountdown(60);
-      silentRefresh();
+      stopPairLogPoll(); // SSE won — stop the log poll
+      showCodeInPairModal(code);
     } catch(err) { console.warn('[SSE] pair_code parse error', err); }
   });
 
   pairEventSource.addEventListener('connected', () => {
     connected = true;
     stopPairSSE();
+    stopPairLogPoll();
     document.getElementById('pair-code-display').style.display = 'none';
     document.getElementById('pair-code-loading').style.display = 'none';
     document.getElementById('pair-connected').style.display    = 'block';
@@ -692,8 +684,80 @@ function stopPairSSE() {
   clearInterval(pairCountdown);
 }
 
+// ── Background log poll — reads the bot log every 2s and extracts the
+//    PAIR_CODE line, then calls the same display logic as the SSE handler.
+//    This is the reliable fallback for when SSE doesn't deliver the code.
+function startPairLogPoll() {
+  stopPairLogPoll();
+  let codeShown = false;
+
+  // Show retry button after 12s if code hasn't arrived
+  const retryRevealTimer = setTimeout(() => {
+    const btn  = document.getElementById('pair-retry-btn');
+    const hint = document.getElementById('pair-wait-hint');
+    if (btn)  btn.style.display  = 'inline-flex';
+    if (hint) hint.style.display = 'block';
+  }, 12000);
+
+  async function poll() {
+    if (codeShown || !pairSessionId) return;
+    try {
+      const d = await api(`/api/sessions/${pairSessionId}/logs`);
+      const lines = (d.logs || '').split('\n');
+      for (const line of lines) {
+        if (line.includes('PAIR_CODE:')) {
+          const code = line.split('PAIR_CODE:')[1]?.trim();
+          if (code) {
+            codeShown = true;
+            clearTimeout(retryRevealTimer);
+            stopPairLogPoll();
+            showCodeInPairModal(code);
+          }
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+
+  poll(); // run immediately
+  pairLogPollTimer = setInterval(poll, 2000);
+}
+
+// ── Retry button handler — restarts both SSE and log poll ───────────────────
+function retryPairFetch() {
+  // Hide the retry button again while we try
+  const btn  = document.getElementById('pair-retry-btn');
+  const hint = document.getElementById('pair-wait-hint');
+  if (btn)  btn.style.display  = 'none';
+  if (hint) hint.style.display = 'none';
+  stopPairSSE();
+  stopPairLogPoll();
+  startPairSSE();
+  startPairLogPoll();
+}
+
+function stopPairLogPoll() {
+  if (pairLogPollTimer) { clearInterval(pairLogPollTimer); pairLogPollTimer = null; }
+}
+
+// ── Single function that shows the code in the pair modal ──────────────────
+// Called by BOTH the SSE handler and the log poll so there's no duplication.
+function showCodeInPairModal(code) {
+  const loading = document.getElementById('pair-code-loading');
+  const display = document.getElementById('pair-code-display');
+  const val     = document.getElementById('pair-code-value');
+  if (!loading || !display || !val) return;
+  if (display.style.display === 'block') return; // already showing — don't flicker
+  loading.style.display = 'none';
+  display.style.display = 'block';
+  val.textContent = code;
+  startPairCountdown(60);
+  silentRefresh();
+}
+
 function resetPairToPhone() {
   stopPairSSE();
+  stopPairLogPoll();
   document.getElementById('pair-step-phone').style.display    = 'block';
   document.getElementById('pair-step-code').style.display     = 'none';
   document.getElementById('pair-code-loading').style.display  = 'block';
@@ -756,12 +820,8 @@ async function viewLogs(id) {
 
 // ── Live log polling (used by both manual "Logs" button and auto-open on pair)
 function openLiveLogs(id, isPairing) {
-  stopLogPolling();
   logSessionId = id;
 
-  // Reset banner
-  document.getElementById('log-code-banner').style.display = 'none';
-  document.getElementById('log-banner-code').textContent = '—';
   document.getElementById('logs-content').innerHTML = '<span style="color:#4b5563;font-style:italic">Connecting…</span>';
   setLogStatus('connecting');
 
@@ -773,7 +833,6 @@ function openLiveLogs(id, isPairing) {
 }
 
 function closeLogs() {
-  stopLogPolling();
   closeModal('modal-logs');
 }
 
@@ -841,40 +900,13 @@ function renderLogContent(raw, isPairing) {
   out.innerHTML = html;
   out.scrollTop = out.scrollHeight;
 
-  // Show the pair code banner if found
-  if (foundCode) {
-    document.getElementById('log-banner-code').textContent = foundCode;
-    document.getElementById('log-code-banner').style.display = 'block';
-
-    // If pairing is in progress, also update the pair modal code display
-    if (isPairing && pairSessionId === logSessionId) {
-      const disp = document.getElementById('pair-code-display');
-      if (disp.style.display === 'none') {
-        document.getElementById('pair-code-loading').style.display = 'none';
-        document.getElementById('pair-code-display').style.display = 'block';
-        document.getElementById('pair-code-value').textContent = foundCode;
-        startPairCountdown(60);
-        silentRefresh();
-      }
-    }
+  // Update pair modal directly if this poll is for the active pairing session
+  if (foundCode && isPairing && pairSessionId === logSessionId) {
+    showCodeInPairModal(foundCode);
   }
 }
 
-function copyLogBannerCode() {
-  const code = document.getElementById('log-banner-code').textContent;
-  if (!code || code === '—') return;
-  navigator.clipboard.writeText(code).then(() => {
-    const btn = document.getElementById('log-banner-copy');
-    const orig = btn.innerHTML;
-    btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:14px;height:14px"><circle cx="10" cy="10" r="8"/><path d="M7 10l2 2 4-4"/></svg> Copied!';
-    btn.style.background = '#16a34a';
-    setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 2000);
-  }).catch(() => {
-    const el = document.getElementById('log-banner-code');
-    const s = window.getSelection(), r = document.createRange();
-    r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r);
-  });
-}
+
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function openModal(id)  { document.getElementById(id).classList.add('open'); }
