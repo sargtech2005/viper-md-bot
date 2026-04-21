@@ -19,7 +19,7 @@ const sc = s => {
 
 // ── Category meta — shared by both styles ─────────────────────────────────────
 const CAT = {
-  ai:        { icon: '🤖', hint: '.ai',        label: 'ᴀɪ'         },
+  ai:        { icon: '🤖', hint: '.aimenu',        label: 'ᴀɪ'         },
   owner:     { icon: '👑', hint: '.owner',      label: 'ᴏᴡɴᴇʀ'      },
   general:   { icon: '🌐', hint: '.general',    label: 'ᴍᴀɪɴ'       },
   admin:     { icon: '👥', hint: '.admin',      label: 'ɢʀᴏᴜᴘ'      },
@@ -142,7 +142,10 @@ async function renderStyle2(sock, msg, extra, cmds, cats, total) {
   const version = config.botVersion || '2.7';
 
   let t = '';
+  t += '┏❐ 《 *' + sc(botName) + ' v' + version + '* 》 ❐\n';
+  t += '┃\n';
   t += '*╭┈───〔 ┈───⊷*\n';
+  t += '*├▢ 🐍 ' + sc('bot') + ':* ' + botName + '\n';
   t += '*├▢ 🤖 ' + sc('owner') + ':* ' + ownerDisplay + '\n';
   t += '*├▢ 📜 ' + sc('commands') + ':* ' + total + '\n';
   t += '*├▢ ⏱️ ' + sc('runtime') + ':* ' + runtime + '\n';

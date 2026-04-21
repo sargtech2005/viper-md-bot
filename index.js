@@ -201,7 +201,11 @@ async function startBot() {
       if (reconnect) setTimeout(startBot, 3000);
     }
 
-    // FIX: always clear the broadcast poller on any close/reconnect
+    // Clear keep-alive heartbeat + broadcast poller on close
+    if (connection === 'close' && sock._keepAliveTimer) {
+      clearInterval(sock._keepAliveTimer);
+      sock._keepAliveTimer = null;
+    }
     if (connection === 'close' && bcPoller) {
       clearInterval(bcPoller);
       bcPoller = null;
@@ -233,6 +237,18 @@ async function startBot() {
       }
 
       handler.initializeAntiCall(sock);
+
+      // ── Keep-alive heartbeat: prevents WhatsApp dropping the WebSocket
+      // Sends a silent presence ping every 4 minutes. Cleared on close.
+      if (sock._keepAliveTimer) clearInterval(sock._keepAliveTimer);
+      sock._keepAliveTimer = setInterval(async () => {
+        try {
+          if (sock.ws?.readyState === 1) {
+            await sock.sendPresenceUpdate("available");
+            lastActivity = Date.now();
+          }
+        } catch (_) {}
+      }, 4 * 60 * 1000);
 
       // ── Broadcast control file poller ─────────────────────────────────────
       // app.py writes  SESSION_DIR/broadcast.json  to trigger a broadcast.
