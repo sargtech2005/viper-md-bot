@@ -18,7 +18,7 @@
 .vtoggle input:checked+.vtoggle-slider:before{transform:translateX(16px)}
 /* ── Pair popup specifics ──────────────────────────────────────── */
 .pair-code-box{background:var(--green-pale);border:2px solid var(--green-mid);border-radius:.75rem;padding:1.25rem;text-align:center;margin:.75rem 0}
-.pair-code{font-family:'Syne',sans-serif;font-size:2.2rem;font-weight:800;letter-spacing:.15em;color:var(--green)}
+.pair-code{font-family:monospace;font-size:1.35rem;font-weight:600;letter-spacing:.22em;color:var(--green)}
 .pair-countdown{font-size:.78rem;color:var(--muted);margin-top:.4rem}
 .step-num{width:22px;height:22px;border-radius:50%;background:var(--green);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
 .sec-div{display:flex;align-items:center;gap:.6rem;margin:.25rem 0 .8rem}
@@ -621,11 +621,15 @@ function startPairSSE() {
 
   pairEventSource.addEventListener('connected', () => {
     connected = true;
-    stopPairSSE();
+    // Stop log poll immediately so it doesn't race after success
     stopPairLogPoll();
+    // Show success UI BEFORE closing SSE so onerror sees connected=true
     document.getElementById('pair-code-display').style.display = 'none';
     document.getElementById('pair-code-loading').style.display = 'none';
     document.getElementById('pair-connected').style.display    = 'block';
+    // Now close SSE — server may already be closing it which triggers onerror,
+    // but onerror checks `connected` so it will be ignored correctly
+    stopPairSSE();
     silentRefresh();
   });
 
@@ -656,11 +660,13 @@ function startPairSSE() {
   // The browser auto-reconnects; we just keep showing spinner unless we
   // already have a code displayed.
   pairEventSource.onerror = () => {
+    // If we already connected or got a code, ignore — server just closed stream
     if (connected) return;
-    // If we already showed a code, keep showing it — don't reset
     if (gotCode) return;
+    // Check if success UI is already visible (race-condition guard)
+    const successEl = document.getElementById('pair-connected');
+    if (successEl && successEl.style.display === 'block') return;
     // Still loading — let browser retry, don't show error state
-    console.warn('[SSE] Network hiccup, browser will auto-reconnect...');
   };
 }
 
@@ -701,6 +707,9 @@ function startPairLogPoll() {
 
   async function poll() {
     if (codeShown || !pairSessionId) return;
+    // Don't poll if already connected
+    const successEl = document.getElementById('pair-connected');
+    if (successEl && successEl.style.display === 'block') { stopPairLogPoll(); return; }
     try {
       const d = await api(`/api/sessions/${pairSessionId}/logs`);
       const lines = (d.logs || '').split('\n');
