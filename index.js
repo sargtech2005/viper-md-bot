@@ -359,9 +359,9 @@ async function startBot() {
       const keys = item.keys || (item.ids ? item.ids.map(id => ({ id, remoteJid: item.jid })) : []);
       for (const key of keys) {
         const jid = key.remoteJid;
-        if (!jid || !jid.endsWith('@g.us')) continue; // only groups
-        const groupSettings = database.getGroupSettings(jid);
-        if (!groupSettings.antidelete) continue;
+        // Skip newsletters/status; allow groups AND DMs
+        if (!jid || jid.endsWith('@newsletter') || jid === 'status@broadcast') continue;
+        if (!database.getSetting('antidelete')) continue;
 
         // Retrieve cached message
         const cached = store.messages.get(jid)?.get(key.id);
@@ -375,13 +375,17 @@ async function startBot() {
         const senderJid = cached.key.participant || cached.key.remoteJid;
         const senderNum = senderJid ? senderJid.split('@')[0] : 'Unknown';
 
-        let groupName = jid;
-        try {
-          const gm = await handler.getGroupMetadata(sock, jid);
-          if (gm) groupName = gm.subject || jid;
-        } catch (_) {}
+        const isGroupChat = jid.endsWith('@g.us');
+        let chatLabel = isGroupChat ? 'Group' : 'DM';
+        let chatName = isGroupChat ? jid : `@${senderNum}`;
+        if (isGroupChat) {
+          try {
+            const gm = await handler.getGroupMetadata(sock, jid);
+            if (gm) chatName = gm.subject || jid;
+          } catch (_) {}
+        }
 
-        const header = `🗑️ *Anti-Delete Alert*\n\n👤 *Sender:* @${senderNum}\n👥 *Group:* ${groupName}`;
+        const header = `🗑️ *Anti-Delete Alert*\n\n👤 *Sender:* @${senderNum}\n${isGroupChat ? '👥' : '💬'} *${chatLabel}:* ${chatName}`;
 
         const m = cached.message;
         const inner = m.ephemeralMessage?.message || m.viewOnceMessageV2?.message || m.viewOnceMessage?.message || m;
@@ -435,9 +439,9 @@ async function startBot() {
       for (const msg of msgs) {
         if (!msg.message || msg.key?.fromMe) continue;
         const jid = msg.key.remoteJid;
-        if (!jid || !jid.endsWith('@g.us')) continue;
-        const groupSettings = database.getGroupSettings(jid);
-        if (!groupSettings.antiviewonce) continue;
+        // Skip newsletters/status; allow groups AND DMs
+        if (!jid || jid.endsWith('@newsletter') || jid === 'status@broadcast') continue;
+        if (!database.getSetting('antiviewonce')) continue;
 
         const m = msg.message;
         const inner = m.viewOnceMessageV2?.message || m.viewOnceMessageV2Extension?.message || m.viewOnceMessage?.message;
@@ -458,13 +462,17 @@ async function startBot() {
         const senderJid = msg.key.participant || msg.key.remoteJid;
         const senderNum = senderJid ? senderJid.split('@')[0] : 'Unknown';
 
-        let groupName = jid;
-        try {
-          const gm = await handler.getGroupMetadata(sock, jid);
-          if (gm) groupName = gm.subject || jid;
-        } catch (_) {}
+        const isGroupChat = jid.endsWith('@g.us');
+        let chatLabel = isGroupChat ? 'Group' : 'DM';
+        let chatName = isGroupChat ? jid : `@${senderNum}`;
+        if (isGroupChat) {
+          try {
+            const gm = await handler.getGroupMetadata(sock, jid);
+            if (gm) chatName = gm.subject || jid;
+          } catch (_) {}
+        }
 
-        const header = `👁️ *Anti-ViewOnce Alert*\n\n👤 *Sender:* @${senderNum}\n👥 *Group:* ${groupName}`;
+        const header = `👁️ *Anti-ViewOnce Alert*\n\n👤 *Sender:* @${senderNum}\n${isGroupChat ? '👥' : '💬'} *${chatLabel}:* ${chatName}`;
 
         try {
           const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
