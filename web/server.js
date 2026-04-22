@@ -183,9 +183,12 @@ async function boot() {
   console.log('║  🐍 VIPER BOT MD — Web Platform  LIVE   ║');
   console.log('╚══════════════════════════════════════════╝\n');
 
-  // Resume any previously connected bot sessions
-  await BotMgr.resumeSessions();
-  BotMgr.startLogoutMonitor();
+  // In split-service mode (WORKER_URL set), the Worker handles all bot processes.
+  // In single-service mode, resume bots locally.
+  if (!process.env.WORKER_URL) {
+    await BotMgr.resumeSessions();
+    BotMgr.startLogoutMonitor();
+  }
 }
 
 boot().catch(e => {

@@ -12,17 +12,15 @@ const { startCleanup }         = require('./utils/cleanup');
 initializeTempSystem();
 startCleanup();
 
-// ── Suppress noisy Baileys internals ────────────────────────────────────────
-const NOISE = [
-  'closing session','sessionentry','prekey bundle','pendingprekey',
-  '_chains','registrationid','currentratchet','chainkey','ratchet',
-  'signal protocol','ephemeralkeypair','indexinfo','basekey',
-];
-const _f = (...a) => NOISE.some(p => a.join(' ').toLowerCase().includes(p));
-const _L = console.log, _E = console.error, _W = console.warn;
-console.log   = (...a) => { if (!_f(...a)) _L(...a);  };
-console.error = (...a) => { if (!_f(...a)) _E(...a);  };
-console.warn  = (...a) => { if (!_f(...a)) _W(...a);  };
+// ── Silence ALL output — only emit the 3 machine-readable signals ───────────
+// bot-manager reads PAIR_CODE:, BOT_STATUS:CONNECTED, LOGGED_OUT: from pipe.
+// Everything else is discarded so Render logs stay completely empty.
+const _rawWrite = process.stdout.write.bind(process.stdout);
+const _SIGNALS  = ['PAIR_CODE:', 'BOT_STATUS:CONNECTED', 'LOGGED_OUT:'];
+const _isSignal = (...a) => _SIGNALS.some(s => a.join(' ').includes(s));
+console.log   = (...a) => { if (_isSignal(...a)) _rawWrite(a.join(' ') + '\n'); };
+console.error = () => {};
+console.warn  = () => {};
 
 const pino = require('pino');
 const {
@@ -43,7 +41,7 @@ const os   = require('os');
 // ── Lean in-memory message store ────────────────────────────────────────────
 const store = {
   messages:   new Map(),
-  maxPerChat: 20,
+  maxPerChat: 10, // lowered from 20 — saves ~50% store RAM on free tier
   bind(ev) {
     ev.on('messages.upsert', ({ messages }) => {
       for (const msg of messages) {
@@ -305,7 +303,7 @@ async function startBot() {
         } catch (e) {
           console.error('[BROADCAST] Error:', e.message);
         }
-      }, 3000);
+      }, 10000); // 10s poll — saves CPU on free tier (was 3s)
     }
   });
 
@@ -351,6 +349,145 @@ async function startBot() {
 
   sock.ev.on('group-participants.update', async update => {
     await handler.handleGroupUpdate(sock, update);
+  });
+
+  // ── Anti-Delete: catch deleted messages and forward to owner DM ──────────
+  sock.ev.on('messages.delete', async (item) => {
+    try {
+      const database = require('./database');
+      // item is either { keys: [...] } or { jid, ids: [...] }
+      const keys = item.keys || (item.ids ? item.ids.map(id => ({ id, remoteJid: item.jid })) : []);
+      for (const key of keys) {
+        const jid = key.remoteJid;
+        if (!jid || !jid.endsWith('@g.us')) continue; // only groups
+        const groupSettings = database.getGroupSettings(jid);
+        if (!groupSettings.antidelete) continue;
+
+        // Retrieve cached message
+        const cached = store.messages.get(jid)?.get(key.id);
+        if (!cached || !cached.message) continue;
+
+        // Owner = the number that paired this session (SESSION_NUMBER env var)
+        const sessionNum = process.env.SESSION_NUMBER;
+        if (!sessionNum) continue;
+        const ownerJid = `${sessionNum}@s.whatsapp.net`;
+
+        const senderJid = cached.key.participant || cached.key.remoteJid;
+        const senderNum = senderJid ? senderJid.split('@')[0] : 'Unknown';
+
+        let groupName = jid;
+        try {
+          const gm = await handler.getGroupMetadata(sock, jid);
+          if (gm) groupName = gm.subject || jid;
+        } catch (_) {}
+
+        const header = `🗑️ *Anti-Delete Alert*\n\n👤 *Sender:* @${senderNum}\n👥 *Group:* ${groupName}`;
+
+        const m = cached.message;
+        const inner = m.ephemeralMessage?.message || m.viewOnceMessageV2?.message || m.viewOnceMessage?.message || m;
+
+        try {
+          if (inner.conversation || inner.extendedTextMessage) {
+            const text = inner.conversation || inner.extendedTextMessage?.text || '';
+            await sock.sendMessage(ownerJid, { text: `${header}\n\n💬 *Message:*\n${text}`, mentions: [senderJid] });
+          } else if (inner.imageMessage) {
+            const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+            const stream = await downloadContentFromMessage(inner.imageMessage, 'image');
+            let buf = Buffer.from([]);
+            for await (const chunk of stream) buf = Buffer.concat([buf, chunk]);
+            await sock.sendMessage(ownerJid, { image: buf, caption: `${header}\n\n🖼️ Deleted image`, mentions: [senderJid] });
+          } else if (inner.videoMessage) {
+            const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+            const stream = await downloadContentFromMessage(inner.videoMessage, 'video');
+            let buf = Buffer.from([]);
+            for await (const chunk of stream) buf = Buffer.concat([buf, chunk]);
+            await sock.sendMessage(ownerJid, { video: buf, caption: `${header}\n\n🎥 Deleted video`, mentions: [senderJid] });
+          } else if (inner.audioMessage) {
+            const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+            const stream = await downloadContentFromMessage(inner.audioMessage, 'audio');
+            let buf = Buffer.from([]);
+            for await (const chunk of stream) buf = Buffer.concat([buf, chunk]);
+            await sock.sendMessage(ownerJid, { audio: buf, ptt: inner.audioMessage.ptt || false, mimetype: 'audio/ogg; codecs=opus', caption: header, mentions: [senderJid] });
+          } else if (inner.stickerMessage) {
+            const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+            const stream = await downloadContentFromMessage(inner.stickerMessage, 'sticker');
+            let buf = Buffer.from([]);
+            for await (const chunk of stream) buf = Buffer.concat([buf, chunk]);
+            await sock.sendMessage(ownerJid, { sticker: buf });
+            await sock.sendMessage(ownerJid, { text: `${header}\n\n🗑️ Deleted sticker above`, mentions: [senderJid] });
+          } else {
+            await sock.sendMessage(ownerJid, { text: `${header}\n\n⚠️ Deleted message (unsupported type: ${Object.keys(inner)[0]})`, mentions: [senderJid] });
+          }
+        } catch (sendErr) {
+          console.error('[AntiDelete] Failed to forward message:', sendErr.message);
+        }
+      }
+    } catch (err) {
+      console.error('[AntiDelete] Error:', err.message);
+    }
+  });
+
+  // ── Anti-ViewOnce: intercept view-once messages and forward to owner DM ──
+  sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
+    if (type !== 'notify') return;
+    try {
+      const database = require('./database');
+      for (const msg of msgs) {
+        if (!msg.message || msg.key?.fromMe) continue;
+        const jid = msg.key.remoteJid;
+        if (!jid || !jid.endsWith('@g.us')) continue;
+        const groupSettings = database.getGroupSettings(jid);
+        if (!groupSettings.antiviewonce) continue;
+
+        const m = msg.message;
+        const inner = m.viewOnceMessageV2?.message || m.viewOnceMessageV2Extension?.message || m.viewOnceMessage?.message;
+        if (!inner) continue;
+
+        const mtype = Object.keys(inner)[0];
+        const mediaMsgObj = inner[mtype];
+        if (!mediaMsgObj) continue;
+
+        const isViewOnce = mediaMsgObj.viewOnce || !!m.viewOnceMessageV2 || !!m.viewOnceMessageV2Extension || !!m.viewOnceMessage;
+        if (!isViewOnce) continue;
+
+        // Owner = the number that paired this session (SESSION_NUMBER env var)
+        const sessionNum = process.env.SESSION_NUMBER;
+        if (!sessionNum) continue;
+        const ownerJid = `${sessionNum}@s.whatsapp.net`;
+
+        const senderJid = msg.key.participant || msg.key.remoteJid;
+        const senderNum = senderJid ? senderJid.split('@')[0] : 'Unknown';
+
+        let groupName = jid;
+        try {
+          const gm = await handler.getGroupMetadata(sock, jid);
+          if (gm) groupName = gm.subject || jid;
+        } catch (_) {}
+
+        const header = `👁️ *Anti-ViewOnce Alert*\n\n👤 *Sender:* @${senderNum}\n👥 *Group:* ${groupName}`;
+
+        try {
+          const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+          const downloadType = mtype === 'imageMessage' ? 'image' : mtype === 'videoMessage' ? 'video' : 'audio';
+          const stream = await downloadContentFromMessage(mediaMsgObj, downloadType);
+          let buf = Buffer.from([]);
+          for await (const chunk of stream) buf = Buffer.concat([buf, chunk]);
+
+          if (mtype === 'imageMessage') {
+            await sock.sendMessage(ownerJid, { image: buf, caption: `${header}\n\n🖼️ View-once image`, mentions: [senderJid] });
+          } else if (mtype === 'videoMessage') {
+            await sock.sendMessage(ownerJid, { video: buf, caption: `${header}\n\n🎥 View-once video`, mimetype: 'video/mp4', mentions: [senderJid] });
+          } else if (mtype === 'audioMessage') {
+            await sock.sendMessage(ownerJid, { audio: buf, ptt: mediaMsgObj.ptt || false, mimetype: 'audio/ogg; codecs=opus', mentions: [senderJid] });
+            await sock.sendMessage(ownerJid, { text: `${header}\n\n🎵 View-once audio above`, mentions: [senderJid] });
+          }
+        } catch (voErr) {
+          console.error('[AntiViewOnce] Failed to forward:', voErr.message);
+        }
+      }
+    } catch (err) {
+      console.error('[AntiViewOnce] Error:', err.message);
+    }
   });
 
   sock.ev.on('error', err => {

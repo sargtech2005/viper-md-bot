@@ -1,13 +1,37 @@
-# ══════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════
 #  VIPER BOT MD — Render Deploy Config
-#  Push to GitHub, then connect repo in Render
-# ══════════════════════════════════════════════
+#
+#  TWO SERVICES, ONE CODEBASE:
+#
+#  Service 1 (viper-web):    node web/server.js
+#    → Dashboard, login, sessions UI, wallet, API routes
+#    → No bots run here. Sends commands to viper-worker.
+#
+#  Service 2 (viper-worker): node worker.js
+#    → Spawns and manages all WhatsApp bot processes
+#    → No web UI. Only accepts internal requests from viper-web.
+#
+#  SETUP STEPS after deploying:
+#  1. Deploy both services from the same GitHub repo.
+#  2. Note the viper-worker URL (e.g. https://viper-worker.onrender.com)
+#  3. In viper-web Environment settings, set:
+#       WORKER_URL    = https://viper-worker.onrender.com
+#       WORKER_SECRET = (any long random string — same in both services)
+#  4. In viper-worker Environment settings, set the same WORKER_SECRET.
+#  5. Redeploy viper-web. Done.
+#
+#  SINGLE SERVICE (original mode):
+#  If you only want one service, just don't set WORKER_URL in viper-web.
+#  Everything runs in-process like before.
+# ══════════════════════════════════════════════════════════════
 
 services:
+
+  # ── Web Service (Dashboard + API) ──────────────────────────
   - type: web
-    name: viper-bot-md
+    name: viper-web
     env: node
-    region: oregon          # or frankfurt if you prefer EU
+    region: oregon
     plan: free
     buildCommand: npm install --production
     startCommand: node web/server.js
@@ -19,28 +43,59 @@ services:
       - key: PORT
         value: 3000
 
-      # Auto-linked from the Render Postgres below
       - key: DATABASE_URL
         fromDatabase:
           name: viper-db
           property: connectionString
 
-      # Render generates a random JWT secret automatically
       - key: JWT_SECRET
         generateValue: true
 
-      # Set this manually in Render dashboard after first deploy
-      # (Settings → Environment → Add env var)
+      # URL of the viper-worker service — set this after first deploy
+      # Leave empty to run bots in-process (single-service mode)
+      - key: WORKER_URL
+        sync: false
+
+      # Must match WORKER_SECRET in viper-worker
+      - key: WORKER_SECRET
+        sync: false
+
       - key: ADMIN_EMAIL
         sync: false
 
-      # Google Gemini API key — used for .imagine (Nano Banana image generation)
-      # Get free key at: https://aistudio.google.com/apikey
       - key: GEMINI_API_KEY
         sync: false
 
-# Free PostgreSQL database (expires after 90 days on free plan —
-# upgrade to paid or dump+restore before expiry)
+  # ── Worker Service (Bot Engine) ────────────────────────────
+  - type: worker
+    name: viper-worker
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install --production
+    startCommand: node worker.js
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Port the worker's internal HTTP server listens on
+      - key: WORKER_PORT
+        value: 10000
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: viper-db
+          property: connectionString
+
+      # Must match WORKER_SECRET in viper-web
+      - key: WORKER_SECRET
+        sync: false
+
+      - key: GEMINI_API_KEY
+        sync: false
+
+# ── Shared PostgreSQL database ─────────────────────────────────
 databases:
   - name: viper-db
     databaseName: viperbot

@@ -471,21 +471,6 @@ const handleMessage = async (sock, msg) => {
     // Fetch group metadata immediately if it's a group
     const groupMetadata = isGroup ? await getGroupMetadata(sock, from) : null;
     
-    // Anti-group mention protection (check BEFORE prefix check, as these are non-command messages)
-    if (isGroup) {
-      // Debug logging to confirm we're trying to call the handler
-      const groupSettings = database.getGroupSettings(from);
-      // Debug log removed
-      if (groupSettings.antigroupmention) {
-        // Debug log removed
-      }
-      try {
-        await handleAntigroupmention(sock, msg, groupMetadata);
-      } catch (error) {
-        console.error('Error in antigroupmention handler:', error);
-      }
-    }
-    
     // Track group message statistics
     if (isGroup) {
       addMessage(from, sender);
@@ -987,22 +972,7 @@ const handleGroupUpdate = async (sock, update) => {
                 }
               }
               
-              // Method 2: Try to fetch contact using onWhatsApp and then check store
-              if (displayName === participantNumber) {
-                try {
-                  await sock.onWhatsApp(phoneJid);
-                  
-                  // After onWhatsApp, check store again (might populate after check)
-                  if (sock.store && sock.store.contacts && sock.store.contacts[phoneJid]) {
-                    const contact = sock.store.contacts[phoneJid];
-                    if (contact.notify && contact.notify.trim() && !contact.notify.match(/^\d+$/)) {
-                      displayName = contact.notify.trim();
-                    }
-                  }
-                } catch (fetchError) {
-                  // Silently handle fetch errors
-                }
-              }
+              // (contact name lookup limited to local store for performance)
             } catch (contactError) {
               // Silently handle contact errors
             }
@@ -1113,22 +1083,7 @@ const handleGroupUpdate = async (sock, update) => {
                 }
               }
               
-              // Method 2: Try to fetch contact using onWhatsApp and then check store
-              if (displayName === participantNumber) {
-                try {
-                  await sock.onWhatsApp(phoneJid);
-                  
-                  // After onWhatsApp, check store again
-                  if (sock.store && sock.store.contacts && sock.store.contacts[phoneJid]) {
-                    const contact = sock.store.contacts[phoneJid];
-                    if (contact.notify && contact.notify.trim() && !contact.notify.match(/^\d+$/)) {
-                      displayName = contact.notify.trim();
-                    }
-                  }
-                } catch (fetchError) {
-                  // Silently handle fetch errors
-                }
-              }
+              // (contact lookup: local store only, no live API calls)
             } catch (contactError) {
               // Silently handle contact errors
             }

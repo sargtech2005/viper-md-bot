@@ -4,45 +4,58 @@
  * ║   Render-compatible: creds persisted in Postgres ║
  * ╚══════════════════════════════════════════════════╝
  *
- * MEMORY LEAK FIXES:
- * 1. stopSession() now cleans up SSE_SUBS and PAIR_CACHE entries for the
- *    stopped session — previously these Maps grew forever, one entry per
- *    session, never removed.
- * 2. startLogoutMonitor() now deletes seenLines[phone] when a logout is
- *    detected — previously the object grew with every session ever seen.
+ * LOGGING: Zero log files on disk. stdout/stderr from child processes
+ * is captured in-memory (ring buffer, 200 lines max per session).
+ * Only 3 signal lines are ever emitted by the child: PAIR_CODE:,
+ * BOT_STATUS:CONNECTED, LOGGED_OUT:. Everything else is discarded.
+ * Ring buffers are deleted when a session stops.
  */
 
-const { spawn }  = require('child_process');
-const path       = require('path');
-const fs         = require('fs');
-const zlib       = require('zlib');
+const { spawn }    = require('child_process');
+const path         = require('path');
+const fs           = require('fs');
+const zlib         = require('zlib');
 const { Sessions } = require('./db');
 
-// ── Paths — always use /tmp so they survive process crashes
-//           but are correctly re-seeded from DB on restart
+// ── Paths ──────────────────────────────────────────────────────────────────
 const TMP_ROOT   = '/tmp/viper-sessions';
-const TMP_LOGS   = '/tmp/viper-logs';
 const ROOT_DIR   = path.join(__dirname, '..');
 const NODE_ENTRY = path.join(ROOT_DIR, 'index.js');
 
-[TMP_ROOT, TMP_LOGS].forEach(d => {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-});
+if (!fs.existsSync(TMP_ROOT)) fs.mkdirSync(TMP_ROOT, { recursive: true });
 
 // ── In-memory state ────────────────────────────────────────────────────────
-const PROCS          = new Map(); // sessionId → { proc, phone }
-const SSE_SUBS       = new Map(); // sessionId → Set<res>
-const CREDS_TIMERS   = new Map(); // sessionId → intervalId
-const PAIR_CACHE     = new Map(); // sessionId → last pair code (cleared on connect)
+const PROCS        = new Map(); // sessionId → { proc, phone }
+const SSE_SUBS     = new Map(); // sessionId → Set<res>
+const CREDS_TIMERS = new Map(); // sessionId → intervalId
+const PAIR_CACHE   = new Map(); // sessionId → pair code string
+const LOG_BUFFERS  = new Map(); // sessionId → string[] (ring, max 200 lines)
+
+const LOG_MAX = 200; // max lines kept in memory per session
 
 function sessionDir(phone) { return path.join(TMP_ROOT, phone); }
-function logPath(phone)    { return path.join(TMP_LOGS, `${phone}.log`); }
 
 function isRunning(sessionId) {
   const e = PROCS.get(sessionId);
   if (!e) return false;
   try { process.kill(e.proc.pid, 0); return e.proc.exitCode === null; }
   catch { return false; }
+}
+
+// ── In-memory log buffer ───────────────────────────────────────────────────
+function appendLog(sessionId, text) {
+  if (!text) return;
+  const lines = text.split('\n').filter(l => l.trim());
+  if (!lines.length) return;
+  if (!LOG_BUFFERS.has(sessionId)) LOG_BUFFERS.set(sessionId, []);
+  const buf = LOG_BUFFERS.get(sessionId);
+  for (const l of lines) buf.push(l);
+  // Keep ring buffer bounded
+  if (buf.length > LOG_MAX) buf.splice(0, buf.length - LOG_MAX);
+}
+
+function clearLog(sessionId) {
+  LOG_BUFFERS.delete(sessionId);
 }
 
 // ── SSE helpers ────────────────────────────────────────────────────────────
@@ -52,23 +65,21 @@ function emit(sessionId, event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of subs) { try { res.write(payload); } catch {} }
 }
+
 function subscribe(sessionId, res) {
   if (!SSE_SUBS.has(sessionId)) SSE_SUBS.set(sessionId, new Set());
   SSE_SUBS.get(sessionId).add(res);
-
-  // Replay cached pair code to late-joining SSE clients (race-condition fix)
+  // Replay cached pair code to late-joining SSE clients
   const cached = PAIR_CACHE.get(sessionId);
   if (cached) {
-    try {
-      res.write(`event: pair_code\ndata: ${JSON.stringify({ code: cached })}\n\n`);
-    } catch (_) {}
+    try { res.write(`event: pair_code\ndata: ${JSON.stringify({ code: cached })}\n\n`); } catch {}
   }
 }
+
 function unsubscribe(sessionId, res) {
   const subs = SSE_SUBS.get(sessionId);
   if (!subs) return;
   subs.delete(res);
-  // FIX: remove the empty Set itself so the Map doesn't grow forever
   if (subs.size === 0) SSE_SUBS.delete(sessionId);
 }
 
@@ -78,48 +89,37 @@ async function saveCredsToDb(sessionId, phone) {
   if (!fs.existsSync(sd)) return;
   try {
     const files = [];
-    const walk = (dir, base='') => {
+    const walk = (dir, base = '') => {
       for (const entry of fs.readdirSync(dir)) {
         const full = path.join(dir, entry);
         const rel  = base ? `${base}/${entry}` : entry;
-        if (fs.statSync(full).isDirectory()) {
-          walk(full, rel);
-        } else {
-          files.push({ rel, data: fs.readFileSync(full).toString('base64') });
-        }
+        if (fs.statSync(full).isDirectory()) walk(full, rel);
+        else files.push({ rel, data: fs.readFileSync(full).toString('base64') });
       }
     };
     walk(sd);
     if (!files.length) return;
-    const json  = JSON.stringify(files);
-    const gz    = zlib.gzipSync(Buffer.from(json));
-    const b64   = gz.toString('base64');
+    const b64 = zlib.gzipSync(Buffer.from(JSON.stringify(files))).toString('base64');
     await Sessions.saveCreds(sessionId, b64);
   } catch (e) {
-    console.error(`[BotMgr] saveCreds error (${phone}):`, e.message);
+    // silent — creds save failure shouldn't crash anything
   }
 }
 
 async function restoreCredsFromDb(sessionId, phone) {
   try {
-    const r = await Sessions.loadCreds(sessionId);
+    const r   = await Sessions.loadCreds(sessionId);
     const b64 = r.rows[0]?.creds_data;
     if (!b64) return false;
-
-    const gz    = Buffer.from(b64, 'base64');
-    const json  = zlib.gunzipSync(gz).toString();
-    const files = JSON.parse(json);
+    const files = JSON.parse(zlib.gunzipSync(Buffer.from(b64, 'base64')).toString());
     const sd    = sessionDir(phone);
-
     for (const { rel, data } of files) {
       const fullPath = path.join(sd, rel);
       fs.mkdirSync(path.dirname(fullPath), { recursive: true });
       fs.writeFileSync(fullPath, Buffer.from(data, 'base64'));
     }
-    console.log(`[BotMgr] ✅ Restored creds for ${phone} from DB (${files.length} files)`);
     return true;
-  } catch (e) {
-    console.error(`[BotMgr] restoreCreds error (${phone}):`, e.message);
+  } catch {
     return false;
   }
 }
@@ -129,23 +129,19 @@ function startCredsSync(sessionId, phone) {
   const iv = setInterval(() => saveCredsToDb(sessionId, phone), 30_000);
   CREDS_TIMERS.set(sessionId, iv);
 }
+
 function stopCredsSync(sessionId) {
   const iv = CREDS_TIMERS.get(sessionId);
   if (iv) { clearInterval(iv); CREDS_TIMERS.delete(sessionId); }
 }
 
-// ── Log watcher (SSE feed) ─────────────────────────────────────────────────
+// ── Signal watcher — reads from in-memory log buffer ──────────────────────
+// Called immediately after startBot(). Polls LOG_BUFFERS (filled by pipe)
+// for the 3 machine-readable signals the child emits. No disk I/O.
 function watchLog(sessionId, phone) {
-  const lf       = logPath(phone);
   let   seen     = 0;
   let   done     = false;
   const deadline = Date.now() + 120_000;
-
-  try {
-    if (fs.existsSync(lf)) {
-      seen = fs.readFileSync(lf, 'utf8').split('\n').length;
-    }
-  } catch {}
 
   const iv = setInterval(async () => {
     if (done || Date.now() > deadline) {
@@ -154,10 +150,9 @@ function watchLog(sessionId, phone) {
       return;
     }
     try {
-      if (!fs.existsSync(lf)) return;
-      const lines = fs.readFileSync(lf, 'utf8').split('\n');
-      const fresh = lines.slice(seen);
-      seen = lines.length;
+      const buf   = LOG_BUFFERS.get(sessionId) || [];
+      const fresh = buf.slice(seen);
+      seen = buf.length;
 
       for (const line of fresh) {
         if (!line.trim()) continue;
@@ -173,6 +168,8 @@ function watchLog(sessionId, phone) {
           emit(sessionId, 'connected', { message: 'Bot connected!' });
           await Sessions.updateStatus(sessionId, 'connected');
           await saveCredsToDb(sessionId, phone);
+          // Clear log buffer — pairing done, no need to keep it
+          clearLog(sessionId);
           return;
         }
         if (line.includes(`LOGGED_OUT:${phone}`) || line.includes('loggedOut')) {
@@ -183,6 +180,7 @@ function watchLog(sessionId, phone) {
           await Sessions.saveCreds(sessionId, null);
           await Sessions.updateStatus(sessionId, 'logged_out');
           emit(sessionId, 'logged_out', { message: 'Session logged out.' });
+          clearLog(sessionId);
           return;
         }
       }
@@ -194,10 +192,7 @@ function watchLog(sessionId, phone) {
 
 // ── Start bot process ──────────────────────────────────────────────────────
 async function startBot(sessionId, phone, { pairNumber = null } = {}) {
-  if (isRunning(sessionId)) {
-    console.log(`[BotMgr] ${phone} already running`);
-    return;
-  }
+  if (isRunning(sessionId)) return;
 
   const hadCreds = await restoreCredsFromDb(sessionId, phone);
   const sd = sessionDir(phone);
@@ -205,54 +200,42 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   if (pairNumber && !hadCreds) {
     try {
       if (fs.existsSync(sd)) {
-        const dbDir = path.join(sd, 'db');
-        let savedSettings = null;
+        const dbDir        = path.join(sd, 'db');
         const settingsFile = path.join(dbDir, 'settings.json');
-        if (fs.existsSync(settingsFile)) {
-          savedSettings = fs.readFileSync(settingsFile);
-        }
+        const savedSettings = fs.existsSync(settingsFile) ? fs.readFileSync(settingsFile) : null;
         fs.rmSync(sd, { recursive: true, force: true });
         if (savedSettings) {
           fs.mkdirSync(dbDir, { recursive: true });
           fs.writeFileSync(settingsFile, savedSettings);
-          console.log(`[BotMgr] 🧹 Cleared stale creds for ${phone} (settings preserved)`);
-        } else {
-          console.log(`[BotMgr] 🧹 Cleared stale session files for ${phone}`);
         }
       }
-    } catch (e) {
-      console.warn(`[BotMgr] Could not clear stale session for ${phone}:`, e.message);
-    }
+    } catch {}
   }
 
   if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
 
+  // Seed initial settings from DB if present
   try {
     const dbPath       = path.join(sd, 'db');
     const settingsFile = path.join(dbPath, 'settings.json');
-    {
-      const sr    = await Sessions.findById(sessionId);
-      const initS = sr.rows[0]?.initial_settings;
-      if (initS && typeof initS === 'object' && Object.keys(initS).length) {
-        fs.mkdirSync(dbPath, { recursive: true });
-        let existing = {};
-        try { if (fs.existsSync(settingsFile)) existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
-        const mapped = { ...existing };
-        if (!mapped.botName    && initS.botName)    mapped.botName    = initS.botName;
-        if (!mapped.ownerName  && initS.ownerName)  mapped.ownerName  = initS.ownerName;
-        if (!mapped.prefix     && initS.prefix)     mapped.prefix     = initS.prefix;
-        if (mapped.selfMode   === undefined && initS.selfMode   !== undefined) mapped.selfMode   = initS.selfMode;
-        if (mapped.autoStatus === undefined && initS.autoStatus !== undefined) mapped.autoStatus = initS.autoStatus;
-        if (mapped.autoReact  === undefined && initS.autoReact  !== undefined) mapped.autoReact  = initS.autoReact;
-        if (mapped.autoRead   === undefined && initS.autoRead   !== undefined) mapped.autoRead   = initS.autoRead;
-        if (mapped.autoTyping === undefined && initS.autoTyping !== undefined) mapped.autoTyping = initS.autoTyping;
-        fs.writeFileSync(settingsFile, JSON.stringify(mapped, null, 2));
-        console.log(`[BotMgr] ✅ Seeded/merged initial settings for ${phone}:`, mapped);
-      }
+    const sr    = await Sessions.findById(sessionId);
+    const initS = sr.rows[0]?.initial_settings;
+    if (initS && typeof initS === 'object' && Object.keys(initS).length) {
+      fs.mkdirSync(dbPath, { recursive: true });
+      let existing = {};
+      try { if (fs.existsSync(settingsFile)) existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
+      const mapped = { ...existing };
+      if (!mapped.botName    && initS.botName)    mapped.botName    = initS.botName;
+      if (!mapped.ownerName  && initS.ownerName)  mapped.ownerName  = initS.ownerName;
+      if (!mapped.prefix     && initS.prefix)     mapped.prefix     = initS.prefix;
+      if (mapped.selfMode   === undefined && initS.selfMode   !== undefined) mapped.selfMode   = initS.selfMode;
+      if (mapped.autoStatus === undefined && initS.autoStatus !== undefined) mapped.autoStatus = initS.autoStatus;
+      if (mapped.autoReact  === undefined && initS.autoReact  !== undefined) mapped.autoReact  = initS.autoReact;
+      if (mapped.autoRead   === undefined && initS.autoRead   !== undefined) mapped.autoRead   = initS.autoRead;
+      if (mapped.autoTyping === undefined && initS.autoTyping !== undefined) mapped.autoTyping = initS.autoTyping;
+      fs.writeFileSync(settingsFile, JSON.stringify(mapped, null, 2));
     }
-  } catch (e) {
-    console.warn(`[BotMgr] Could not seed initial settings for ${phone}:`, e.message);
-  }
+  } catch {}
 
   const env = {
     ...process.env,
@@ -261,26 +244,29 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   };
   if (pairNumber && !hadCreds) env.PAIR_NUMBER = pairNumber;
 
-  const lf  = logPath(phone);
-  try { fs.writeFileSync(lf, ''); } catch {}
-  const log = fs.openSync(lf, 'w');
-
+  // ── Spawn with pipe stdio — NO log files written to disk ──────────────────
+  clearLog(sessionId);
   const proc = spawn('node', [NODE_ENTRY], {
     cwd:   ROOT_DIR,
     env,
-    stdio: ['ignore', log, log],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  // Pipe stdout/stderr into in-memory ring buffer
+  // Only the 3 signal lines matter; everything else is discarded at LOG_MAX
+  proc.stdout.on('data', chunk => appendLog(sessionId, chunk.toString()));
+  proc.stderr.on('data', chunk => appendLog(sessionId, chunk.toString()));
+
   PROCS.set(sessionId, { proc, phone });
-  console.log(`[BotMgr] ▶ Started ${phone} (pid ${proc.pid}${hadCreds?' — creds restored':''})`);
 
   startCredsSync(sessionId, phone);
 
   proc.on('exit', async code => {
-    console.log(`[BotMgr] ■ ${phone} exited (${code})`);
     PROCS.delete(sessionId);
     stopCredsSync(sessionId);
     await saveCredsToDb(sessionId, phone);
+    // Wipe log buffer — session is dead, no reason to keep output in RAM
+    clearLog(sessionId);
     try {
       const r = await Sessions.findById(sessionId);
       if (r.rows[0]?.status === 'connected') await Sessions.updateStatus(sessionId, 'stopped');
@@ -298,27 +284,28 @@ function stopSession(sessionId) {
   try { e.proc.kill('SIGTERM'); } catch {}
   setTimeout(() => { try { e.proc.kill('SIGKILL'); } catch {} }, 3000);
   PROCS.delete(sessionId);
-
-  // FIX: Clean up SSE and pair cache for this session so Maps don't grow forever
   SSE_SUBS.delete(sessionId);
   PAIR_CACHE.delete(sessionId);
+  clearLog(sessionId);
 }
 
 // ── Delete session files + DB creds ───────────────────────────────────────
 function deleteSessionFiles(sessionId, phone) {
-  stopSession(sessionId);  // stopSession already cleans SSE_SUBS + PAIR_CACHE
+  stopSession(sessionId);
   const sd = sessionDir(phone);
-  const lf = logPath(phone);
   try { if (fs.existsSync(sd)) fs.rmSync(sd, { recursive: true, force: true }); } catch {}
-  try { if (fs.existsSync(lf)) fs.unlinkSync(lf); } catch {}
 }
 
-// ── Tail log ───────────────────────────────────────────────────────────────
+// ── tailLog — returns last N lines from in-memory buffer ──────────────────
 function tailLog(phone, n = 60) {
-  const lf = logPath(phone);
-  if (!fs.existsSync(lf)) return '(no logs yet)';
-  const lines = fs.readFileSync(lf, 'utf8').split('\n');
-  return lines.slice(-n).join('\n');
+  // Find sessionId by phone
+  for (const [sid, entry] of PROCS) {
+    if (entry.phone === phone) {
+      const buf = LOG_BUFFERS.get(sid) || [];
+      return buf.slice(-n).join('\n') || '(no output captured)';
+    }
+  }
+  return '(session not running)';
 }
 
 // ── Resume sessions on server boot ─────────────────────────────────────────
@@ -330,50 +317,37 @@ async function resumeSessions() {
       if (!s.phone_number) continue;
       const restored = await restoreCredsFromDb(s.id, s.phone_number);
       if (restored) {
-        console.log(`[BotMgr] ▶ Resuming ${s.phone_number}`);
         await startBot(s.id, s.phone_number);
         await Sessions.updateStatus(s.id, 'connecting');
         started++;
         await new Promise(r => setTimeout(r, 800));
       } else {
         await Sessions.updateStatus(s.id, 'stopped');
-        console.log(`[BotMgr] ⚠ ${s.phone_number} — no creds in DB, needs re-pairing`);
       }
     }
-    if (started) console.log(`[BotMgr] ✅ Resumed ${started} session(s)`);
-  } catch (e) {
-    console.error('[BotMgr] Resume error:', e.message);
-  }
+  } catch {}
 }
 
 // ── Logout monitor (background) ────────────────────────────────────────────
+// Reads from in-memory log buffers — no disk access
 async function startLogoutMonitor() {
-  // FIX: seenLines is cleaned up when logout is detected, so it never
-  //      accumulates entries for sessions that no longer exist.
-  const seenLines = {};
   setInterval(async () => {
     try {
       const r = await Sessions.listAll(200, 0);
       for (const s of r.rows) {
         if (!s.phone_number) continue;
-        const lf = logPath(s.phone_number);
-        if (!fs.existsSync(lf)) continue;
-        try {
-          const lines = fs.readFileSync(lf, 'utf8').split('\n');
-          const start = seenLines[s.phone_number] || Math.max(0, lines.length - 50);
-          const fresh = lines.slice(start);
-          seenLines[s.phone_number] = lines.length;
-          for (const line of fresh) {
-            if (line.includes(`LOGGED_OUT:${s.phone_number}`)) {
-              console.log(`[BotMgr] Auto-nuking logged-out: ${s.phone_number}`);
-              stopSession(s.id);
-              await Sessions.saveCreds(s.id, null);
-              await Sessions.updateStatus(s.id, 'logged_out');
-              // FIX: remove from seenLines so it doesn't persist after session gone
-              delete seenLines[s.phone_number];
-            }
+        const buf = LOG_BUFFERS.get(s.id);
+        if (!buf || !buf.length) continue;
+        // Only check the last 50 lines
+        const recent = buf.slice(-50);
+        for (const line of recent) {
+          if (line.includes(`LOGGED_OUT:${s.phone_number}`)) {
+            stopSession(s.id);
+            await Sessions.saveCreds(s.id, null);
+            await Sessions.updateStatus(s.id, 'logged_out');
+            break;
           }
-        } catch {}
+        }
       }
     } catch {}
   }, 10_000);
