@@ -43,23 +43,35 @@ const database = require('./database');
 
 // ── Max media size for anti-delete / anti-viewonce (bytes) ──────────────────
 // Files larger than this are skipped to prevent OOM on 512 MB Render instances.
-// 12 MB covers most images and voice notes. Raise if needed.
 const MAX_MEDIA_BYTES = 12 * 1024 * 1024;
 
+// ── Owner JID resolver ────────────────────────────────────────────────────────
+// SESSION_NUMBER may not be set on Render — always fall back to ownerNumber.
+function resolveOwnerJid() {
+  const raw = process.env.SESSION_NUMBER
+    || (Array.isArray(config.ownerNumber) ? config.ownerNumber[0] : config.ownerNumber)
+    || database.getSetting('ownerDisplayNumber', null);
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, '');
+  return digits ? `${digits}@s.whatsapp.net` : null;
+}
+
 // ── Lean in-memory message store ─────────────────────────────────────────────
-// Keeps only the last 5 messages per chat (enough for anti-delete).
+// Keeps last 50 messages per chat. Anti-delete needs a larger window because
+// messages can be deleted long after they were sent.
 const store = {
   messages:   new Map(),
-  maxPerChat: 5,
+  maxPerChat: 50, // large enough to survive most delete delays
   bind(ev) {
     ev.on('messages.upsert', ({ messages }) => {
       for (const msg of messages) {
-        if (!msg.key?.id) continue;
+        if (!msg.key?.id || !msg.key?.remoteJid) continue;
         const jid = msg.key.remoteJid;
+        // Skip system/broadcast JIDs
+        if (jid === 'status@broadcast' || jid.endsWith('@newsletter')) continue;
         if (!store.messages.has(jid)) store.messages.set(jid, new Map());
         const c = store.messages.get(jid);
         c.set(msg.key.id, msg);
-        // Evict oldest entry when limit is reached
         if (c.size > store.maxPerChat) c.delete(c.keys().next().value);
       }
     });
@@ -375,51 +387,82 @@ async function startBot() {
       }
 
       // ── Anti-ViewOnce ────────────────────────────────────────────────────
+      // Runs for ALL message types (notify + append), not just commands.
+      // Must be outside the type === 'notify' block so it catches every message.
       if (msg.key?.fromMe) continue;
       if (!database.getSetting('antiviewonce')) continue;
 
-      const m     = msg.message;
-      const inner = m.viewOnceMessageV2?.message
-                 || m.viewOnceMessageV2Extension?.message
-                 || m.viewOnceMessage?.message;
-      if (!inner) continue;
+      const _m = msg.message;
+      if (!_m) continue;
 
-      const mtype      = Object.keys(inner)[0];
-      const mediaMsgObj = inner[mtype];
-      if (!mediaMsgObj) continue;
+      // ── Detect view-once across all WhatsApp wrapping formats ────────────
+      // Format A: viewOnceMessageV2 / viewOnceMessageV2Extension / viewOnceMessage (wrapped)
+      // Format B: imageMessage.viewOnce = true / videoMessage.viewOnce = true (direct flag)
+      let _inner = null;
 
-      const isViewOnce = mediaMsgObj.viewOnce
-        || !!m.viewOnceMessageV2
-        || !!m.viewOnceMessageV2Extension
-        || !!m.viewOnceMessage;
-      if (!isViewOnce) continue;
-
-      const sessionNum = process.env.SESSION_NUMBER;
-      if (!sessionNum) continue;
-      const ownerJid  = `${sessionNum}@s.whatsapp.net`;
-      const senderJid = msg.key.participant || msg.key.remoteJid;
-      const senderNum = senderJid ? senderJid.split('@')[0] : 'Unknown';
-      const isGroup   = from.endsWith('@g.us');
-      let chatName    = isGroup ? from : `@${senderNum}`;
-      if (isGroup) {
-        const gm = await cachedGroupMeta(sock, from).catch(() => null);
-        if (gm) chatName = gm.subject || from;
+      const _wrapped = _m.viewOnceMessageV2?.message
+                    || _m.viewOnceMessageV2Extension?.message
+                    || _m.viewOnceMessage?.message;
+      if (_wrapped) {
+        _inner = _wrapped;
+      } else {
+        // Format B — direct viewOnce flag on the media message itself
+        for (const k of ['imageMessage', 'videoMessage', 'audioMessage']) {
+          if (_m[k]?.viewOnce) { _inner = { [k]: _m[k] }; break; }
+        }
       }
-      const header = `👁️ *Anti-ViewOnce Alert*\n\n👤 *Sender:* @${senderNum}\n${isGroup ? '👥 *Group*' : '💬 *DM*'}: ${chatName}`;
+
+      if (!_inner) continue; // not a view-once message
+
+      const _mtype     = Object.keys(_inner)[0];
+      const _mediaObj  = _inner[_mtype];
+      if (!_mediaObj) continue;
+
+      // ── Resolve owner JID (fix: don't require SESSION_NUMBER env var) ────
+      const _ownerJid = resolveOwnerJid();
+      if (!_ownerJid) continue;
+
+      const _senderJid = msg.key.participant || msg.key.remoteJid;
+      const _senderNum = _senderJid ? _senderJid.split('@')[0] : 'Unknown';
+      const _isGroup   = from.endsWith('@g.us');
+      let _chatName    = _isGroup ? from : `@${_senderNum}`;
+      if (_isGroup) {
+        const _gm = await cachedGroupMeta(sock, from).catch(() => null);
+        if (_gm) _chatName = _gm.subject || from;
+      }
+      const _header = `👁️ *Anti-ViewOnce Alert*\n\n👤 *Sender:* @${_senderNum}\n${_isGroup ? '👥 *Group*' : '💬 *DM*'}: ${_chatName}`;
 
       try {
-        const dlType = mtype === 'imageMessage' ? 'image' : mtype === 'videoMessage' ? 'video' : 'audio';
-        const buf    = await downloadCapped(mediaMsgObj, dlType);
-        if (!buf) continue; // file too large — skip silently
-
-        if      (mtype === 'imageMessage') await sock.sendMessage(ownerJid, { image: buf, caption: `${header}\n\n🖼️ View-once image`, mentions: [senderJid] });
-        else if (mtype === 'videoMessage') await sock.sendMessage(ownerJid, { video: buf, caption: `${header}\n\n🎥 View-once video`, mimetype: 'video/mp4', mentions: [senderJid] });
-        else if (mtype === 'audioMessage') {
-          await sock.sendMessage(ownerJid, { audio: buf, ptt: mediaMsgObj.ptt || false, mimetype: 'audio/ogg; codecs=opus', mentions: [senderJid] });
-          await sock.sendMessage(ownerJid, { text: `${header}\n\n🎵 View-once audio above`, mentions: [senderJid] });
+        const _dlType = _mtype === 'imageMessage' ? 'image'
+                      : _mtype === 'videoMessage' ? 'video' : 'audio';
+        const _buf = await downloadCapped(_mediaObj, _dlType);
+        if (!_buf) {
+          // File too large — send a text notice instead of silently failing
+          await sock.sendMessage(_ownerJid, {
+            text: `${_header}\n\n⚠️ View-once ${_dlType} (too large to forward >12MB)`,
+            mentions: [_senderJid],
+          });
+          continue;
         }
-      } catch (e) {
-        console.error('[AntiViewOnce] Failed to forward:', e.message);
+
+        if (_mtype === 'imageMessage') {
+          await sock.sendMessage(_ownerJid, {
+            image: _buf, caption: `${_header}\n\n🖼️ View-once image`, mentions: [_senderJid],
+          });
+        } else if (_mtype === 'videoMessage') {
+          await sock.sendMessage(_ownerJid, {
+            video: _buf, caption: `${_header}\n\n🎥 View-once video`, mimetype: 'video/mp4', mentions: [_senderJid],
+          });
+        } else {
+          await sock.sendMessage(_ownerJid, {
+            audio: _buf, ptt: _mediaObj.ptt || false, mimetype: 'audio/ogg; codecs=opus',
+          });
+          await sock.sendMessage(_ownerJid, {
+            text: `${_header}\n\n🎵 View-once audio above`, mentions: [_senderJid],
+          });
+        }
+      } catch (_e) {
+        console.error('[AntiViewOnce]', _e.message);
       }
     }
   });
@@ -434,20 +477,32 @@ async function startBot() {
     try {
       if (!database.getSetting('antidelete')) return;
 
-      const keys = item.keys || (item.ids
-        ? item.ids.map(id => ({ id, remoteJid: item.jid }))
-        : []);
+      // Baileys fires this event in two formats:
+      // Format A: { keys: [{ id, remoteJid, fromMe, participant }] }
+      // Format B: { jid: string, ids: string[] }
+      // Handle both.
+      let keys = [];
+      if (Array.isArray(item.keys) && item.keys.length) {
+        keys = item.keys;
+      } else if (item.jid && Array.isArray(item.ids)) {
+        keys = item.ids.map(id => ({ id, remoteJid: item.jid }));
+      } else if (item.id && item.remoteJid) {
+        keys = [item]; // single key object
+      }
+
+      if (!keys.length) return;
+
+      const ownerJid = resolveOwnerJid();
+      if (!ownerJid) return; // no owner number configured
 
       for (const key of keys) {
         const jid = key.remoteJid;
-        if (!jid || jid.endsWith('@newsletter') || jid === 'status@broadcast') continue;
+        if (!jid) continue;
+        if (jid === 'status@broadcast' || jid.endsWith('@newsletter')) continue;
 
         const cached = store.messages.get(jid)?.get(key.id);
-        if (!cached?.message) continue;
+        if (!cached?.message) continue; // not in cache — can't recover
 
-        const sessionNum = process.env.SESSION_NUMBER;
-        if (!sessionNum) continue;
-        const ownerJid  = `${sessionNum}@s.whatsapp.net`;
         const senderJid = cached.key.participant || cached.key.remoteJid;
         const senderNum = senderJid ? senderJid.split('@')[0] : 'Unknown';
         const isGroup   = jid.endsWith('@g.us');
@@ -458,43 +513,85 @@ async function startBot() {
         }
         const header = `🗑️ *Anti-Delete Alert*\n\n👤 *Sender:* @${senderNum}\n${isGroup ? '👥 *Group*' : '💬 *DM*'}: ${chatName}`;
 
-        const m     = cached.message;
-        const inner = m.ephemeralMessage?.message
-                   || m.viewOnceMessageV2?.message
-                   || m.viewOnceMessage?.message
-                   || m;
+        // Unwrap ephemeral/viewonce wrappers to get the real message
+        const raw   = cached.message;
+        const inner = raw.ephemeralMessage?.message
+                   || raw.viewOnceMessageV2?.message
+                   || raw.viewOnceMessageV2Extension?.message
+                   || raw.viewOnceMessage?.message
+                   || raw.documentWithCaptionMessage?.message
+                   || raw;
 
         try {
           if (inner.conversation || inner.extendedTextMessage) {
             const text = inner.conversation || inner.extendedTextMessage?.text || '';
-            await sock.sendMessage(ownerJid, { text: `${header}\n\n💬 *Message:*\n${text}`, mentions: [senderJid] });
+            await sock.sendMessage(ownerJid, {
+              text: `${header}\n\n💬 *Message:*\n${text}`, mentions: [senderJid],
+            });
 
           } else if (inner.imageMessage) {
             const buf = await downloadCapped(inner.imageMessage, 'image');
-            if (buf) await sock.sendMessage(ownerJid, { image: buf, caption: `${header}\n\n🖼️ Deleted image`, mentions: [senderJid] });
-            else     await sock.sendMessage(ownerJid, { text: `${header}\n\n🖼️ Deleted image (too large to forward)`, mentions: [senderJid] });
+            if (buf) {
+              await sock.sendMessage(ownerJid, {
+                image: buf, caption: `${header}\n\n🖼️ Deleted image`, mentions: [senderJid],
+              });
+            } else {
+              await sock.sendMessage(ownerJid, {
+                text: `${header}\n\n🖼️ Deleted image (too large to forward)`, mentions: [senderJid],
+              });
+            }
 
           } else if (inner.videoMessage) {
             const buf = await downloadCapped(inner.videoMessage, 'video');
-            if (buf) await sock.sendMessage(ownerJid, { video: buf, caption: `${header}\n\n🎥 Deleted video`, mentions: [senderJid] });
-            else     await sock.sendMessage(ownerJid, { text: `${header}\n\n🎥 Deleted video (too large to forward)`, mentions: [senderJid] });
+            if (buf) {
+              await sock.sendMessage(ownerJid, {
+                video: buf, caption: `${header}\n\n🎥 Deleted video`, mentions: [senderJid],
+              });
+            } else {
+              await sock.sendMessage(ownerJid, {
+                text: `${header}\n\n🎥 Deleted video (too large to forward)`, mentions: [senderJid],
+              });
+            }
 
           } else if (inner.audioMessage) {
             const buf = await downloadCapped(inner.audioMessage, 'audio');
-            if (buf) await sock.sendMessage(ownerJid, { audio: buf, ptt: inner.audioMessage.ptt || false, mimetype: 'audio/ogg; codecs=opus', mentions: [senderJid] });
-            else     await sock.sendMessage(ownerJid, { text: `${header}\n\n🎵 Deleted audio (too large to forward)`, mentions: [senderJid] });
+            if (buf) {
+              await sock.sendMessage(ownerJid, {
+                audio: buf, ptt: inner.audioMessage.ptt || false, mimetype: 'audio/ogg; codecs=opus',
+              });
+              await sock.sendMessage(ownerJid, {
+                text: `${header}\n\n🎵 Deleted audio above`, mentions: [senderJid],
+              });
+            } else {
+              await sock.sendMessage(ownerJid, {
+                text: `${header}\n\n🎵 Deleted audio (too large to forward)`, mentions: [senderJid],
+              });
+            }
 
           } else if (inner.stickerMessage) {
             const buf = await downloadCapped(inner.stickerMessage, 'sticker');
             if (buf) {
               await sock.sendMessage(ownerJid, { sticker: buf });
-              await sock.sendMessage(ownerJid, { text: `${header}\n\n🗑️ Deleted sticker above`, mentions: [senderJid] });
+              await sock.sendMessage(ownerJid, {
+                text: `${header}\n\n🗑️ Deleted sticker above`, mentions: [senderJid],
+              });
             }
+
+          } else if (inner.documentMessage) {
+            await sock.sendMessage(ownerJid, {
+              text: `${header}\n\n📄 Deleted document: _${inner.documentMessage.fileName || 'unknown'}_`,
+              mentions: [senderJid],
+            });
+
           } else {
-            await sock.sendMessage(ownerJid, { text: `${header}\n\n⚠️ Deleted message (type: ${Object.keys(inner)[0]})`, mentions: [senderJid] });
+            // Unknown type — at least notify owner
+            const type = Object.keys(inner)[0] || 'unknown';
+            await sock.sendMessage(ownerJid, {
+              text: `${header}\n\n⚠️ Deleted message (type: ${type})`, mentions: [senderJid],
+            });
           }
         } catch (e) {
-          console.error('[AntiDelete] Failed to forward:', e.message);
+          console.error('[AntiDelete] Forward failed:', e.message);
         }
       }
     } catch (err) {
