@@ -1,5 +1,6 @@
 const { sc } = require('../../utils/categoryMenu');
 const config  = require('../../config');
+const { bulkDelay } = require('../../handler');
 module.exports = {
   name: 'broadcast', aliases: ['bc'],
   category: 'owner', description: 'Broadcast message to all groups', usage: '.broadcast <message>',
@@ -17,7 +18,7 @@ module.exports = {
           let t = `📡 *${sc('broadcast message')}*\n\n${message}\n\n> *${config.botName}* 🐍`;
           await sock.sendMessage(id, { text: t });
           sent++;
-          await new Promise(r => setTimeout(r, 500));
+          await bulkDelay(1500, 2500); // human-paced, reduces ban risk
         } catch (_) { failed++; }
       }
       await extra.reply(`📡 *${sc('broadcast done')}!*\n\n✅ Sent: ${sent} groups\n❌ Failed: ${failed} groups`);

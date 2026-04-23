@@ -493,42 +493,88 @@ const APIs = {
   
   // Text to Speech API
   textToSpeech: async (text) => {
-    try {
-      const apiUrl = `https://www.laurine.site/api/tts/tts-nova?text=${encodeURIComponent(text)}`;
-      const response = await axios.get(apiUrl, {
-        timeout: 30000,
-        headers: {
-          'accept': '*/*',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-      
-      if (response.data) {
-        // Check if response.data is a string (direct URL)
-        if (typeof response.data === 'string' && (response.data.startsWith('http://') || response.data.startsWith('https://'))) {
-          return response.data;
-        }
-        
-        // Check nested data structure
-        if (response.data.data) {
-          const data = response.data.data;
-          if (data.URL) return data.URL;
-          if (data.url) return data.url;
-          if (data.MP3) return `https://ttsmp3.com/created_mp3_ai/${data.MP3}`;
-          if (data.mp3) return `https://ttsmp3.com/created_mp3_ai/${data.mp3}`;
-        }
-        
-        // Check top-level URL fields
-        if (response.data.URL) return response.data.URL;
-        if (response.data.url) return response.data.url;
-        if (response.data.MP3) return `https://ttsmp3.com/created_mp3_ai/${response.data.MP3}`;
-        if (response.data.mp3) return `https://ttsmp3.com/created_mp3_ai/${response.data.mp3}`;
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const enc = encodeURIComponent(text);
+
+    // ── Provider 1: VoiceRSS (free, no key needed for short texts) ──────────
+    const tryVoiceRSS = async () => {
+      const { data } = await axios.get(
+        `https://api.voicerss.org/?key=&hl=en-us&src=${enc}&c=MP3&f=48khz_16bit_stereo`,
+        { timeout: 20000, responseType: 'arraybuffer', headers: { 'User-Agent': UA } }
+      );
+      const buf = Buffer.from(data);
+      // VoiceRSS returns error as text when key is missing — check for audio magic bytes
+      if (buf[0] === 0xFF || buf[0] === 0x49) return buf; // MP3 magic bytes
+      throw new Error('VoiceRSS: no audio');
+    };
+
+    // ── Provider 2: StreamElements TTS (free, no key) ────────────────────────
+    const tryStreamElements = async () => {
+      const { data } = await axios.get(
+        `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${enc}`,
+        { timeout: 20000, responseType: 'arraybuffer', headers: { 'User-Agent': UA } }
+      );
+      const buf = Buffer.from(data);
+      if (buf.length < 1000) throw new Error('StreamElements: response too small');
+      return buf;
+    };
+
+    // ── Provider 3: Google Translate TTS (free, works for short texts ≤200 chars) ─
+    const tryGoogleTTS = async () => {
+      const chunk = text.slice(0, 200);
+      const { data } = await axios.get(
+        `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=en&client=tw-ob`,
+        { timeout: 20000, responseType: 'arraybuffer',
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)', Referer: 'https://translate.google.com/' } }
+      );
+      const buf = Buffer.from(data);
+      if (buf.length < 500) throw new Error('Google TTS: response too small');
+      return buf;
+    };
+
+    // ── Provider 4: ttstool.com ──────────────────────────────────────────────
+    const tryTTSTool = async () => {
+      const res = await axios.post('https://ttstool.com/api/tts',
+        { text, voice: 'en-US-Neural2-F', speed: 1 },
+        { timeout: 20000, headers: { 'User-Agent': UA, 'Content-Type': 'application/json' } }
+      );
+      const url = res.data?.url || res.data?.audio_url || res.data?.data?.url;
+      if (!url) throw new Error('ttstool: no URL');
+      const audio = await axios.get(url, { timeout: 15000, responseType: 'arraybuffer' });
+      return Buffer.from(audio.data);
+    };
+
+    // ── Provider 5: laurine.site (original — kept as final fallback) ─────────
+    const tryLaurine = async () => {
+      const response = await axios.get(
+        `https://www.laurine.site/api/tts/tts-nova?text=${enc}`,
+        { timeout: 25000, headers: { accept: '*/*', 'User-Agent': UA } }
+      );
+      const d = response.data;
+      if (typeof d === 'string' && d.startsWith('http')) return d;
+      const url = d?.data?.URL || d?.data?.url || d?.data?.MP3
+        ? (d.data.MP3 ? `https://ttsmp3.com/created_mp3_ai/${d.data.MP3}` : (d.data.URL || d.data.url))
+        : (d?.URL || d?.url || (d?.MP3 ? `https://ttsmp3.com/created_mp3_ai/${d.MP3}` : null));
+      if (!url) throw new Error('laurine: no URL');
+      // url might be a link — download it
+      if (typeof url === 'string' && url.startsWith('http')) {
+        const audio = await axios.get(url, { timeout: 15000, responseType: 'arraybuffer' });
+        return Buffer.from(audio.data);
       }
-      
-      throw new Error('Invalid API response structure');
-    } catch (error) {
-      throw new Error(`Failed to generate speech: ${error.message}`);
+      return url;
+    };
+
+    const providers = [tryStreamElements, tryGoogleTTS, tryTTSTool, tryLaurine];
+    let lastErr = '';
+    for (const fn of providers) {
+      try {
+        const result = await fn();
+        if (result) return result; // Buffer or URL string — tts.js handles both
+      } catch (e) {
+        lastErr = e.message;
+      }
     }
+    throw new Error(`All TTS providers failed. Last error: ${lastErr}`);
   }
 };
 

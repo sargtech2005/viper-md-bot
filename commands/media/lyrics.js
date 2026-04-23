@@ -8,7 +8,7 @@ const config = require('../../config');
 module.exports = {
   name: 'lyrics',
   aliases: ['lyric', 'lirik'],
-  category: 'media',
+  category: 'download',
   description: 'Get lyrics of a song',
   usage: '<song name>',
   

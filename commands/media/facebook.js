@@ -12,7 +12,7 @@ const processedMessages = new Set();
 module.exports = {
   name: 'facebook',
   aliases: ['fb', 'fbdl', 'facebookdl'],
-  category: 'media',
+  category: 'download',
   description: 'Download Facebook videos',
   usage: '.facebook <Facebook URL>',
   

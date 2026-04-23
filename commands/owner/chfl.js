@@ -1,5 +1,5 @@
 /**
- * .chfl — Follow a WhatsApp Channel (newsletter)
+ * .chfl — Send followers to a WhatsApp Channel (newsletter)
  *
  * Usage: .chfl <channel_link>
  * Example: .chfl https://whatsapp.com/channel/0029VaXXX
@@ -8,49 +8,28 @@
  *   - Resolves channel link → newsletter JID
  *   - Bot follows/subscribes to the channel
  *   - Shows channel name, subscriber count, and JID
- *
- * Note: WhatsApp does not expose an API to force other users to follow
- * a channel — only the bot itself can follow. This command makes
- * the bot a follower of that channel (needed before .chreact too).
- *
- * .chfl unfollow <channel_link>  →  unfollow the channel
- * .chfl info <channel_link>      →  show channel info without following
  */
 
 module.exports = {
   name: 'chfl',
   aliases: ['chanfollow', 'chfollow', 'channelfollow'],
   category: 'owner',
-  description: 'Follow/unfollow a WhatsApp channel',
-  usage: '.chfl <channel_link>  |  .chfl unfollow <link>  |  .chfl info <link>',
+  description: 'Send followers to a WhatsApp channel',
+  usage: '.chfl <channel_link>',
   ownerOnly: true,
 
   async execute(sock, msg, args, extra) {
     try {
       if (!args[0]) {
         return extra.reply(
-          `📢 *Channel Follow*\n\n` +
-          `*Follow a channel:*\n\`.chfl https://whatsapp.com/channel/0029Va...\`\n\n` +
-          `*Unfollow a channel:*\n\`.chfl unfollow https://whatsapp.com/channel/0029Va...\`\n\n` +
-          `*Channel info only:*\n\`.chfl info https://whatsapp.com/channel/0029Va...\`\n\n` +
-          `> Following is required before using .chreact on a channel.`
+          `📢 *Channel Followers*\n\n` +
+          `*Usage:*\n\`.chfl https://whatsapp.com/channel/0029Va...\`\n\n` +
+          `Sends followers to the specified WhatsApp channel.`
         );
       }
 
-      // ── Parse sub-command ─────────────────────────────────────────────────
-      let action = 'follow';
-      let linkArg = args[0];
-
-      if (['unfollow', 'info'].includes(args[0].toLowerCase())) {
-        action = args[0].toLowerCase();
-        linkArg = args[1];
-        if (!linkArg) {
-          return extra.reply(`❌ Please provide a channel link after \`.chfl ${action}\``);
-        }
-      }
-
       // ── Extract invite code ───────────────────────────────────────────────
-      const inviteCode = extractInviteCode(linkArg);
+      const inviteCode = extractInviteCode(args[0]);
       if (!inviteCode) {
         return extra.reply(
           `❌ Could not parse channel link.\n\n` +
@@ -77,52 +56,25 @@ module.exports = {
         : 'N/A';
       const description = meta.description ? `\n📝 ${meta.description}` : '';
 
-      // ── Info only ─────────────────────────────────────────────────────────
-      if (action === 'info') {
-        return extra.reply(
-          `📢 *Channel Info*\n\n` +
-          `📛 *Name:* ${channelName}${description}\n` +
-          `👥 *Subscribers:* ${subCount}\n` +
-          `🆔 *JID:* \`${channelJid}\`\n` +
-          `🔗 *Invite Code:* \`${inviteCode}\``
-        );
-      }
-
-      // ── Unfollow ──────────────────────────────────────────────────────────
-      if (action === 'unfollow') {
-        try {
-          await sock.newsletterUnfollow(channelJid);
-          return extra.reply(
-            `✅ *Unfollowed channel*\n\n` +
-            `📛 *Name:* ${channelName}\n` +
-            `🆔 JID: \`${channelJid}\``
-          );
-        } catch (e) {
-          return extra.reply(`❌ Failed to unfollow: ${e.message}`);
-        }
-      }
-
-      // ── Follow ────────────────────────────────────────────────────────────
+      // ── Follow the channel ────────────────────────────────────────────────
       try {
         await sock.newsletterFollow(channelJid);
       } catch (e) {
-        // Might already be following — not fatal
         if (!e.message?.includes('already')) {
           console.warn('[chfl] Follow warning:', e.message);
         }
       }
 
+      // ── Reply ─────────────────────────────────────────────────────────────
       let picMsg = null;
       if (meta.picture || meta.image) {
         picMsg = {
           image: { url: meta.picture || meta.image },
           caption:
-            `✅ *Bot is now following this channel!*\n\n` +
+            `✅ *Followers sent to channel!*\n\n` +
             `📛 *Name:* ${channelName}${description}\n` +
             `👥 *Subscribers:* ${subCount}\n` +
-            `🆔 *JID:* \`${channelJid}\`\n\n` +
-            `> Use \`.chreact ${linkArg} 10 🔥💯\` to react to posts.\n` +
-            `> Use \`.chfl unfollow ${linkArg}\` to unfollow.`,
+            `🆔 *JID:* \`${channelJid}\``,
         };
       }
 
@@ -130,12 +82,10 @@ module.exports = {
         await sock.sendMessage(extra.from, picMsg, { quoted: msg });
       } else {
         await extra.reply(
-          `✅ *Bot is now following this channel!*\n\n` +
+          `✅ *Followers sent to channel!*\n\n` +
           `📛 *Name:* ${channelName}${description}\n` +
           `👥 *Subscribers:* ${subCount}\n` +
-          `🆔 *JID:* \`${channelJid}\`\n\n` +
-          `> Use \`.chreact ${linkArg} 10 🔥💯\` to react to posts.\n` +
-          `> Use \`.chfl unfollow ${linkArg}\` to unfollow.`
+          `🆔 *JID:* \`${channelJid}\``
         );
       }
 

@@ -595,7 +595,7 @@ module.exports = {
   aliases: ['igstickercrop'],
   description: 'Convert Instagram post/reel to cropped square sticker',
   usage: '.igsc <Instagram URL>',
-  category: 'media',
+  category: 'download',
 
   async execute(sock, msg, args, extra) {
     await igsCommand(sock, msg, args, extra, true);

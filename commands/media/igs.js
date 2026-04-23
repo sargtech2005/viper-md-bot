@@ -583,7 +583,7 @@ module.exports = {
   aliases: ['igsticker'],
   description: 'Convert Instagram post/reel to sticker (maintains aspect ratio with padding)',
   usage: '.igs <Instagram URL>',
-  category: 'media',
+  category: 'download',
   
   async execute(sock, msg, args, extra) {
     await igsCommand(sock, msg, args, extra, false);

@@ -23,7 +23,7 @@ const CAT = {
   owner:     { icon: '👑', hint: '.owner',      label: 'ᴏᴡɴᴇʀ'      },
   general:   { icon: '🌐', hint: '.general',    label: 'ᴍᴀɪɴ'       },
   admin:     { icon: '👥', hint: '.admin',      label: 'ɢʀᴏᴜᴘ'      },
-  media:     { icon: '🎬', hint: '.media',      label: 'ᴍᴇᴅɪᴀ'      },
+  download:  { icon: '🎬', hint: '.download',      label: 'ᴅᴏᴡɴʟᴏᴀᴅ'      },
   fun:       { icon: '🎭', hint: '.fun',        label: 'ꜰᴜɴ'        },
   utility:   { icon: '🔧', hint: '.utility',    label: 'ᴜᴛɪʟɪᴛʏ'    },
   textmaker: { icon: '🖋️', hint: '.textmaker',  label: 'ᴛᴇxᴛᴍᴀᴋᴇʀ' },

@@ -163,7 +163,7 @@ async function searchSpotify(query) {
 module.exports = {
   name: 'spotify',
   aliases: ['sp', 'spdl', 'spoti'],
-  category: 'media',
+  category: 'download',
   description: 'Download songs from Spotify',
   usage: '.spotify <song name or Spotify link>',
 

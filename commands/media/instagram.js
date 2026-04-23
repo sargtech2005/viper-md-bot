@@ -39,7 +39,7 @@ function isValidMediaUrl(url) {
 module.exports = {
   name: 'instagram',
   aliases: ['ig', 'insta', 'igdl', 'reels'],
-  category: 'media',
+  category: 'download',
   description: 'Download Instagram photos/videos/reels',
   usage: '<Instagram URL>',
   

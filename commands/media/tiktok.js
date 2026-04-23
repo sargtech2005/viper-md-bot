@@ -13,7 +13,7 @@ const processedMessages = new Set();
 module.exports = {
   name: 'tiktok',
   aliases: ['tt', 'ttdl', 'tiktokdl'],
-  category: 'media',
+  category: 'download',
   description: 'Download TikTok videos',
   usage: '.tiktok <TikTok URL>',
   

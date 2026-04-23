@@ -1,21 +1,21 @@
 /**
- * .chreact — React to recent channel posts with emoji(s)
+ * .chreact — React to a specific channel post with emoji(s)
  *
- * Usage: .chreact <channel_link> <amount> <emojis>
- * Example: .chreact https://whatsapp.com/channel/0029VaXXX 10 🙃🥳🥵🤤
+ * Usage: .chreact <post_link> <amount> <emojis>
+ * Example: .chreact https://whatsapp.com/channel/0029VbCbMBtAe5VuprvXah23/137 100 🥰😍
  *
- * - Bot auto-follows/joins the channel first
+ * - Post link must include the message ID (e.g. /137 at the end)
  * - amount: 1–100
- * - Emojis cycle round-robin across the messages
- * - 700ms delay between reacts to avoid rate-limit
+ * - Emojis cycle round-robin across the reactions
+ * - 500ms delay between reacts to avoid rate-limit
  */
 
 module.exports = {
   name: 'chreact',
   aliases: ['channelreact', 'creact'],
   category: 'owner',
-  description: 'React to channel posts with emoji(s)',
-  usage: '.chreact <channel_link> <amount> <emojis>',
+  description: 'React to a specific channel post with emoji(s)',
+  usage: '.chreact <post_link> <amount> <emojis>',
   ownerOnly: true,
 
   async execute(sock, msg, args, extra) {
@@ -23,24 +23,26 @@ module.exports = {
       if (args.length < 3) {
         return extra.reply(
           `⚡ *Channel React*\n\n` +
-          `*Usage:* \`.chreact <channel_link> <amount> <emojis>\`\n\n` +
-          `*Example:*\n\`.chreact https://whatsapp.com/channel/0029VaXXX 10 🙃🥳🥵🤤\`\n\n` +
-          `• Channel link: full WhatsApp channel URL\n` +
-          `• Amount: 1–100 messages to react on\n` +
+          `*Usage:* \`.chreact <post_link> <amount> <emojis>\`\n\n` +
+          `*Example:*\n\`.chreact https://whatsapp.com/channel/0029VbCbMBtAe5VuprvXah23/137 100 🥰😍\`\n\n` +
+          `• Post link: full WhatsApp channel post URL (must include post ID)\n` +
+          `• Amount: 1–100 reactions to send\n` +
           `• Emojis: any sequence (cycles round-robin)`
         );
       }
 
-      // ── 1. Parse invite code ──────────────────────────────────────────────
+      // ── 1. Parse post link ────────────────────────────────────────────────
       const rawLink = args[0];
-      const inviteCode = extractInviteCode(rawLink);
-      if (!inviteCode) {
+      const parsed = extractChannelAndPost(rawLink);
+      if (!parsed) {
         return extra.reply(
-          `❌ Could not parse channel link.\n\n` +
-          `Make sure it's a valid WhatsApp channel URL:\n` +
-          `\`https://whatsapp.com/channel/0029Va...\``
+          `❌ Could not parse post link.\n\n` +
+          `Make sure it includes the post ID:\n` +
+          `\`https://whatsapp.com/channel/0029Va.../137\``
         );
       }
+
+      const { inviteCode, messageId } = parsed;
 
       // ── 2. Parse amount ───────────────────────────────────────────────────
       const amount = Math.min(100, Math.max(1, parseInt(args[1], 10) || 1));
@@ -60,71 +62,46 @@ module.exports = {
         return extra.reply(`❌ Could not find channel: ${e.message}\n\nCheck the link is valid and public.`);
       }
 
-      const channelJid = meta.id;
+      const channelJid  = meta.id;
       const channelName = meta.name || channelJid;
 
       // ── 5. Auto-follow the channel ────────────────────────────────────────
       try {
         await sock.newsletterFollow(channelJid);
       } catch (e) {
-        // Not a fatal error — bot might already follow it
+        // Not fatal — bot might already follow it
         console.warn('[chreact] Follow warning:', e.message);
       }
 
-      await extra.reply(`✅ Joined *${channelName}*\n⏳ Fetching last ${amount} message(s)...`);
+      await extra.reply(`✅ Joined *${channelName}*\n⏳ Sending ${amount} reaction(s) to post #${messageId}...`);
 
-      // ── 6. Fetch recent messages ──────────────────────────────────────────
-      let messages = [];
-      try {
-        // Baileys: loadMessages(jid, count, cursor)
-        const result = await sock.loadMessages(channelJid, amount, undefined);
-        messages = result?.messages || result || [];
-      } catch (e) {
-        // Fallback: try fetchMessageHistory (some Baileys builds)
-        try {
-          const result = await sock.fetchMessageHistory(50, { remoteJid: channelJid }, new Date());
-          messages = result?.messages || [];
-        } catch (_) {
-          return extra.reply(
-            `❌ Could not fetch channel messages: ${e.message}\n\n` +
-            `The bot may need a moment after following — try again in 10 seconds.`
-          );
-        }
-      }
+      // ── 6. Build the message key for the target post ──────────────────────
+      const targetKey = {
+        remoteJid: channelJid,
+        id: String(messageId),
+        fromMe: false,
+      };
 
-      if (!messages.length) {
-        return extra.reply(
-          `❌ No messages found in *${channelName}*.\n\n` +
-          `The channel may have no posts yet, or try again in a few seconds after the bot just followed it.`
-        );
-      }
-
-      const targets = messages.slice(0, amount);
+      // ── 7. Send reactions ─────────────────────────────────────────────────
       let sent = 0;
       let failed = 0;
 
-      await extra.reply(`💬 Reacting to *${targets.length}* post(s) in *${channelName}*...\n_This may take a moment._`);
-
-      // ── 7. React to each message ──────────────────────────────────────────
-      for (let i = 0; i < targets.length; i++) {
-        const m = targets[i];
-        if (!m?.key) { failed++; continue; }
-
+      for (let i = 0; i < amount; i++) {
         const emoji = emojis[i % emojis.length];
 
         try {
           await sock.sendMessage(channelJid, {
-            react: { text: emoji, key: m.key },
+            react: { text: emoji, key: targetKey },
           });
           sent++;
         } catch (e) {
-          console.error(`[chreact] React #${i} failed:`, e.message);
+          console.error(`[chreact] React #${i + 1} failed:`, e.message);
           failed++;
         }
 
-        // 700ms gap to avoid rate-limit
-        if (i < targets.length - 1) {
-          await delay(700);
+        // 500ms gap to avoid rate-limit
+        if (i < amount - 1) {
+          await delay(500);
         }
       }
 
@@ -132,9 +109,9 @@ module.exports = {
       return extra.reply(
         `✅ *Done!*\n\n` +
         `📢 Channel: *${channelName}*\n` +
-        `✔️ Reacted: *${sent}* message(s)\n` +
-        `❌ Failed: *${failed}*\n` +
-        `${emojiPreview} Emojis used: ${emojis.join(' ')}`
+        `🔢 Post: *#${messageId}*\n` +
+        `${emojiPreview} *${sent}* reaction(s) sent to channel` +
+        (failed > 0 ? `\n❌ Failed: *${failed}*` : '')
       );
 
     } catch (error) {
@@ -146,19 +123,22 @@ module.exports = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function extractInviteCode(link) {
+/**
+ * Extracts the channel invite code and message ID from a channel post URL.
+ * Supports: https://whatsapp.com/channel/CODE/MSG_ID
+ * Returns { inviteCode, messageId } or null.
+ */
+function extractChannelAndPost(link) {
   try {
     link = link.trim().split('?')[0].split('#')[0];
-    const patterns = [
-      /(?:whatsapp\.com|wa\.me)\/channel\/([A-Za-z0-9_-]+)/i,
-      /\/channel\/([A-Za-z0-9_-]+)/i,
-    ];
-    for (const p of patterns) {
-      const m = link.match(p);
-      if (m?.[1]) return m[1];
+
+    // Full channel post URL: /channel/CODE/MSG_ID
+    const postPattern = /(?:whatsapp\.com|wa\.me)\/channel\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/i;
+    const m = link.match(postPattern);
+    if (m?.[1] && m?.[2]) {
+      return { inviteCode: m[1], messageId: m[2] };
     }
-    // Raw code passed directly
-    if (/^[A-Za-z0-9_-]{10,}$/.test(link)) return link;
+
     return null;
   } catch (_) {
     return null;

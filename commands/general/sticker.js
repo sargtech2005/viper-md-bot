@@ -21,7 +21,7 @@ module.exports = {
   aliases: ['s', 'stiker', 'stc'],
   description: 'Convert image or video to sticker (auto compression)',
   usage: '.sticker (reply to media)',
-  category: 'media',
+  category: 'download',
   
   async execute(sock, msg, args, extra) {
     const chatId = extra.from;

@@ -25,6 +25,71 @@ const CACHE_TTL = 60000; // 1 minute cache
 // Load all commands
 const commands = loadCommands();
 
+// ══════════════════════════════════════════════════════════════════
+//  ANTI-BAN ENGINE
+//  Every measure here mimics natural human WhatsApp usage to avoid
+//  triggering Meta's automated ban systems.
+// ══════════════════════════════════════════════════════════════════
+
+// 1. Per-chat cooldown — min gap between bot replies to the same chat
+//    Prevents the "machine-gun response" pattern that trips spam filters.
+const _chatCooldown = new Map();
+const CHAT_COOLDOWN_MS = 1500; // 1.5s minimum between replies per chat
+
+function _isChatCooledDown(jid) {
+  const last = _chatCooldown.get(jid) || 0;
+  return Date.now() - last >= CHAT_COOLDOWN_MS;
+}
+function _markChatUsed(jid) {
+  _chatCooldown.set(jid, Date.now());
+}
+// Prune stale entries every 10 min
+setInterval(() => {
+  const cutoff = Date.now() - 60000;
+  for (const [k, v] of _chatCooldown) if (v < cutoff) _chatCooldown.delete(k);
+}, 10 * 60 * 1000);
+
+// 2. Global rate limiter — max commands per minute across all chats
+//    Prevents volume-based ban triggers.
+const _cmdTimestamps = [];
+const MAX_CMDS_PER_MIN = 25;
+
+function _isGlobalRateLimited() {
+  const now = Date.now();
+  // Keep only timestamps within the last 60s
+  while (_cmdTimestamps.length && _cmdTimestamps[0] < now - 60000) _cmdTimestamps.shift();
+  return _cmdTimestamps.length >= MAX_CMDS_PER_MIN;
+}
+function _recordCmd() {
+  _cmdTimestamps.push(Date.now());
+}
+
+// 3. Human-like typing delay — random pause before every reply
+//    Natural humans don't respond in <100ms. This prevents the
+//    instant-response signature of bots.
+function _humanDelay(min = 300, max = 900) {
+  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// 4. Jitter for bulk operations (tagall, broadcast, etc.)
+//    Exported so bulk commands can import and use it.
+const bulkDelay = (min = 700, max = 1800) => _humanDelay(min, max);
+
+// 5. AutoReact rate limiter — prevent reacting to every single message
+const _reactCooldown = new Map();
+const REACT_COOLDOWN_MS = 3000;
+function _canReact(jid) {
+  const last = _reactCooldown.get(jid) || 0;
+  if (Date.now() - last < REACT_COOLDOWN_MS) return false;
+  _reactCooldown.set(jid, Date.now());
+  return true;
+}
+setInterval(() => {
+  const cutoff = Date.now() - 30000;
+  for (const [k, v] of _reactCooldown) if (v < cutoff) _reactCooldown.delete(k);
+}, 5 * 60 * 1000);
+
 // Unwrap WhatsApp containers (ephemeral, view once, etc.)
 const getMessageContent = (msg) => {
   if (!msg || !msg.message) return null;
@@ -411,10 +476,13 @@ const handleMessage = async (sock, msg) => {
     if (isSystemJid(from)) {
       return;
     }
-    
-    // Auto-React System
+
+    // ── ANTI-BAN: global rate limiter ────────────────────────────────────────
+    if (_isGlobalRateLimited()) return;
+
+    // Auto-React System (rate-limited per chat)
     try {
-      if (dbSetting('autoReact') && msg.message && !msg.key.fromMe) {
+      if (dbSetting('autoReact') && msg.message && !msg.key.fromMe && _canReact(from)) {
         const content = msg.message.ephemeralMessage?.message || msg.message;
         const text =
           content.conversation ||
@@ -843,7 +911,13 @@ const handleMessage = async (sock, msg) => {
     if (dbSetting('autoTyping')) {
       await sock.sendPresenceUpdate('composing', from);
     }
-    
+
+    // ── ANTI-BAN: per-chat cooldown + human-like delay ───────────────────────
+    if (!_isChatCooledDown(from)) return; // too soon — skip silently
+    _markChatUsed(from);
+    _recordCmd();
+    await _humanDelay(250, 700); // natural pause before every response
+
     // Execute command
     console.log(`Executing command: ${commandName} from ${sender}`);
     
@@ -859,6 +933,11 @@ const handleMessage = async (sock, msg) => {
       reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
       react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } })
     });
+
+    // ── ANTI-BAN: stop typing indicator after command completes ─────────────
+    if (dbSetting('autoTyping')) {
+      try { await sock.sendPresenceUpdate('paused', from); } catch (_) {}
+    }
     
   } catch (error) {
     console.error('Error in message handler:', error);
@@ -1413,5 +1492,6 @@ module.exports = {
   isBotAdmin,
   isMod,
   getGroupMetadata,
-  findParticipant
+  findParticipant,
+  bulkDelay,
 };

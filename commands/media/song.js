@@ -232,7 +232,7 @@ async function apiInvidious(url) {
 module.exports = {
   name: 'song',
   aliases: ['play', 'music', 'yta'],
-  category: 'media',
+  category: 'download',
   description: 'Download audio from YouTube',
   usage: '.song <song name or YouTube URL>',
 
