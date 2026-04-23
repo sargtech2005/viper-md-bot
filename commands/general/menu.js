@@ -20,14 +20,16 @@ const sc = s => {
 // ── Category meta — shared by both styles ─────────────────────────────────────
 const CAT = {
   ai:        { icon: '🤖', hint: '.aimenu',        label: 'ᴀɪ'         },
-  owner:     { icon: '👑', hint: '.owner',      label: 'ᴏᴡɴᴇʀ'      },
-  general:   { icon: '🌐', hint: '.general',    label: 'ᴍᴀɪɴ'       },
-  admin:     { icon: '👥', hint: '.admin',      label: 'ɢʀᴏᴜᴘ'      },
-  download:  { icon: '🎬', hint: '.download',      label: 'ᴅᴏᴡɴʟᴏᴀᴅ'      },
-  fun:       { icon: '🎭', hint: '.fun',        label: 'ꜰᴜɴ'        },
-  utility:   { icon: '🔧', hint: '.utility',    label: 'ᴜᴛɪʟɪᴛʏ'    },
-  textmaker: { icon: '🖋️', hint: '.textmaker',  label: 'ᴛᴇxᴛᴍᴀᴋᴇʀ' },
-  developer: { icon: '💻', hint: '.developer',  label: 'ᴅᴇᴠᴇʟᴏᴘᴇʀ'  },
+  owner:     { icon: '👑', hint: '.owner',         label: 'ᴏᴡɴᴇʀ'      },
+  general:   { icon: '🌐', hint: '.general',       label: 'ᴍᴀɪɴ'       },
+  admin:     { icon: '👥', hint: '.admin',         label: 'ɢʀᴏᴜᴘ'      },
+  download:  { icon: '🎬', hint: '.download',      label: 'ᴅᴏᴡɴʟᴏᴀᴅ'   },
+  search:    { icon: '🔍', hint: '.searchmenu',    label: 'ꜱᴇᴀʀᴄʜ'     },
+  sports:    { icon: '⚽', hint: '.sports',        label: 'ꜱᴘᴏʀᴛꜱ'     },
+  fun:       { icon: '🎭', hint: '.fun',           label: 'ꜰᴜɴ'        },
+  utility:   { icon: '🔧', hint: '.utility',       label: 'ᴜᴛɪʟɪᴛʏ'    },
+  textmaker: { icon: '🖋️', hint: '.textmaker',     label: 'ᴛᴇxᴛᴍᴀᴋᴇʀ' },
+  developer: { icon: '💻', hint: '.developer',     label: 'ᴅᴇᴠᴇʟᴏᴘᴇʀ'  },
 };
 
 // ── Runtime formatter ─────────────────────────────────────────────────────────
