@@ -235,7 +235,7 @@ router.delete('/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Delete failed' }); }
 });
 
-// GET /api/sessions/:id/logs — always empty in split mode (logs are in worker RAM)
+// GET /api/sessions/:id/logs
 router.get('/:id/logs', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -243,7 +243,18 @@ router.get('/:id/logs', async (req, res) => {
     const s  = sr.rows[0];
     if (!s) return res.status(404).json({ error: 'Not found' });
     if (s.user_id !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Not yours' });
-    res.json({ ok: true, logs: '(logs disabled)' });
+
+    let logs = '(no logs — session not running)';
+    if (!Worker.isRemote()) {
+      // Local mode — read from in-memory log buffer via BotMgr
+      const BotMgr = require('../bot-manager');
+      if (s.phone_number) logs = BotMgr.tailLog(s.phone_number, 100);
+    } else {
+      // Worker mode — logs live in the worker process RAM; not accessible here
+      logs = '(logs are on the worker service)';
+    }
+
+    res.json({ ok: true, logs });
   } catch (err) { res.status(500).json({ error: 'Failed to load logs' }); }
 });
 

@@ -182,6 +182,8 @@ async function startBot() {
     downloadHistory:     false,
     markOnlineOnConnect: false,
     getMessage:          async () => undefined,
+    keepAliveIntervalMs: 10_000,   // ping WhatsApp every 10s — prevents Fly.io NAT from dropping idle WS
+    connectTimeoutMs:    60_000,   // generous connect timeout for cloud environments
     ...(pairNumber ? { qrTimeout: 0 } : {}),
   });
 
