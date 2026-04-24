@@ -12,13 +12,14 @@ const { startCleanup }         = require('./utils/cleanup');
 initializeTempSystem();
 startCleanup();
 
-// ── Silence ALL output — only emit the 3 machine-readable signals ───────────
+// ── Signal filter — only let machine-readable lines reach bot-manager ────────
 const _rawWrite = process.stdout.write.bind(process.stdout);
-const _SIGNALS  = ['PAIR_CODE:', 'BOT_STATUS:CONNECTED', 'LOGGED_OUT:'];
+const _SIGNALS  = ['PAIR_CODE:', 'BOT_STATUS:CONNECTED', 'LOGGED_OUT:', 'PAIR_ERROR:', 'BOT_WARN:'];
 const _isSignal = (...a) => _SIGNALS.some(s => a.join(' ').includes(s));
 console.log   = (...a) => { if (_isSignal(...a)) _rawWrite(a.join(' ') + '\n'); };
-console.error = () => {};
-console.warn  = () => {};
+// Keep error visible for PAIR_ERROR signals — all others suppressed
+console.error = (...a) => { if (_isSignal(...a)) _rawWrite(a.join(' ') + '\n'); };
+console.warn  = (...a) => { if (_isSignal(...a)) _rawWrite(a.join(' ') + '\n'); };
 
 // ── All requires at top-level — never require() inside event handlers ────────
 // Calling require() inside a hot event handler is fine for caching, but
@@ -174,16 +175,18 @@ async function startBot() {
 
   const sock = makeWASocket({
     version,
-    logger:              silentLogger(),
-    printQRInTerminal:   false,
-    browser:             Browsers.ubuntu('Chrome'),
-    auth:                state,
-    syncFullHistory:     false,
-    downloadHistory:     false,
-    markOnlineOnConnect: false,
-    getMessage:          async () => undefined,
-    keepAliveIntervalMs: 10_000,   // ping WhatsApp every 10s — prevents Fly.io NAT from dropping idle WS
-    connectTimeoutMs:    60_000,   // generous connect timeout for cloud environments
+    logger:                silentLogger(),
+    printQRInTerminal:     false,
+    browser:               Browsers.ubuntu('Chrome'),
+    auth:                  state,
+    syncFullHistory:       false,
+    downloadHistory:       false,
+    markOnlineOnConnect:   false,
+    getMessage:            async () => undefined,
+    keepAliveIntervalMs:   5_000,    // ping WA every 5s — keeps NAT alive on cloud hosts
+    connectTimeoutMs:      60_000,   // generous connect window
+    defaultQueryTimeoutMs: 0,        // no timeout on queries — prevents mid-pair dropouts
+    retryRequestDelayMs:   500,
     ...(pairNumber ? { qrTimeout: 0 } : {}),
   });
 
@@ -235,6 +238,7 @@ async function startBot() {
       if (bcPoller)             { clearInterval(bcPoller); bcPoller = null; }
 
       const code      = lastDisconnect?.error?.output?.statusCode;
+      const reason    = lastDisconnect?.error?.message || 'unknown';
       const reconnect = code !== DisconnectReason.loggedOut;
 
       if (code === 401 || code === DisconnectReason.loggedOut) {
@@ -242,6 +246,14 @@ async function startBot() {
         console.log(`LOGGED_OUT:${sessionNumber}`);
         return;
       }
+
+      // If we were in pairing mode and dropped before completing — don't silently
+      // loop. Surface the error so the user can retry from the dashboard.
+      if (pairNumber && !pairCodeRequested === false) {
+        console.error(`PAIR_ERROR:Connection dropped (code ${code || 'none'}) — ${reason}`);
+        return; // do NOT reconnect; user must click Pair again
+      }
+
       if (reconnect) setTimeout(startBot, 3000);
     }
 

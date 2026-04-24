@@ -162,6 +162,15 @@ function watchLog(sessionId, phone) {
           PAIR_CACHE.set(sessionId, code);
           emit(sessionId, 'pair_code', { code });
         }
+        if (line.includes('PAIR_ERROR:')) {
+          const msg = line.split('PAIR_ERROR:')[1]?.trim() || 'Pairing failed';
+          done = true; clearInterval(iv);
+          PAIR_CACHE.delete(sessionId);
+          emit(sessionId, 'error', { message: `Pairing failed: ${msg}. Please click Pair again.` });
+          await Sessions.updateStatus(sessionId, 'stopped');
+          clearLog(sessionId);
+          return;
+        }
         if (line.includes('BOT_STATUS:CONNECTED')) {
           done = true; clearInterval(iv);
           PAIR_CACHE.delete(sessionId);
