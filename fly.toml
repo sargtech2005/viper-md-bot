@@ -1,34 +1,36 @@
-# fly.toml — Viper Bot Fly.io config
+# fly.toml app configuration file generated for viper-md-bot on 2026-04-25T15:18:47Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "viper-md-bot"   # ← replace with your actual fly app name
-primary_region = "ams"
+app = 'viper-md-bot'
+primary_region = 'cdg'
 
 [build]
 
+[[mounts]]
+  source = 'viper_data'
+  destination = '/data'
+
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
+
+[checks]
+  [checks.health]
+    port = 3000
+    type = 'http'
+    interval = '30s'
+    timeout = '10s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
   memory = '2gb'
   cpu_kind = 'shared'
   cpus = 1
-
-# Persistent volume — keeps session credentials + JSON db across restarts
-# Run once: fly volumes create viper_data --size 1 --region ams
-[[mounts]]
-  source      = "viper_data"
-  destination = "/data"
-
-[checks]
-  [checks.health]
-    grace_period = "30s"
-    interval = "30s"
-    method = "GET"
-    path = "/health"
-    port = 3000
-    timeout = "10s"
-    type = "http"
+  memory_mb = 1024
