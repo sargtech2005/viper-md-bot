@@ -1,19 +1,28 @@
 /**
  * .song / .play — Download audio from YouTube
  *
- * Audio corruption fix: WhatsApp requires either:
- *   - audio/mpeg (MP3) for saved audio files
- *   - audio/ogg; codecs=opus for voice notes
+ * PRIMARY:  ytdl-core  (direct, no external API, already in package.json)
+ * FALLBACK: public APIs tried in sequence if ytdl-core fails
  *
- * Many APIs return AAC in MP4 container (.m4a) or WebM/Opus.
- * We ALWAYS convert to MP3 via ffmpeg to guarantee a playable file.
+ * Audio always converted to MP3 via ffmpeg for WhatsApp compatibility.
  */
 
-const yts   = require('yt-search');
+const yts    = require('yt-search');
+const ytdl   = require('@distube/ytdl-core');
 const axios  = require('axios');
 const { ffmpeg } = require('../../utils/converter');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Hard timeout wrapper — prevents any single operation from hanging forever
+function withTimeout(fn, ms, label) {
+  return Promise.race([
+    (typeof fn === 'function' ? fn() : fn),
+    new Promise((_, rej) =>
+      setTimeout(() => rej(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
 
 async function withRetry(fn, tries = 2, delay = 1000) {
   let last;
@@ -24,15 +33,90 @@ async function withRetry(fn, tries = 2, delay = 1000) {
   throw last;
 }
 
-// Wrap any async fn with a hard wall-clock timeout
-function withTimeout(fn, ms, label) {
-  return Promise.race([
-    fn(),
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${ms / 1000}s`)), ms)),
-  ]);
+// ── Detect actual audio format from magic bytes ──────────────────────────────
+function detectAudioFormat(buf) {
+  if (!buf || buf.length < 16) return 'mp3';
+  if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return 'mp3';
+  if (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0) return 'mp3';
+  if (buf.slice(0, 4).toString('ascii') === 'OggS') return 'ogg';
+  if (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) return 'webm';
+  if (buf.slice(0, 4).toString('ascii') === 'RIFF') return 'wav';
+  if (buf.slice(4, 8).toString('ascii') === 'ftyp') return 'm4a';
+  if (buf[0] === 0x00 && buf[1] === 0x00 && buf.slice(4, 8).toString('ascii') === 'ftyp') return 'm4a';
+  if (buf.slice(0, 4).toString('ascii') === 'fLaC') return 'flac';
+  return 'm4a';
 }
 
-// ── Download URL → Buffer (arraybuffer then stream fallback) ─────────────────
+// ── Convert to MP3 via ffmpeg ─────────────────────────────────────────────────
+async function toMP3(buffer, inputExt) {
+  if (inputExt === 'mp3') {
+    if (buffer[0] === 0x49 || (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0)) {
+      return buffer;
+    }
+    inputExt = 'm4a';
+  }
+  const mp3Buffer = await ffmpeg(buffer, [
+    '-vn',
+    '-map_metadata', '-1',
+    '-ac', '2',
+    '-ar', '44100',
+    '-b:a', '128k',
+    '-f', 'mp3',
+  ], inputExt, 'mp3');
+  if (!mp3Buffer || mp3Buffer.length < 8192) {
+    throw new Error(`ffmpeg produced empty output (${mp3Buffer?.length || 0} bytes)`);
+  }
+  return mp3Buffer;
+}
+
+// ── PRIMARY: ytdl-core direct download ───────────────────────────────────────
+async function downloadViaYtdl(videoUrl) {
+  // Get audio-only format info
+  const info = await withTimeout(
+    () => ytdl.getInfo(videoUrl, { requestOptions: { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0' } } }),
+    25_000,
+    'ytdl getInfo'
+  );
+
+  // Pick best audio-only format
+  const format = ytdl.chooseFormat(info.formats, {
+    quality: 'highestaudio',
+    filter: 'audioonly',
+  });
+
+  if (!format) throw new Error('ytdl: no audio format found');
+
+  // Stream to buffer
+  const stream = ytdl.downloadFromInfo(info, { format });
+  const chunks = [];
+  let total = 0;
+
+  await withTimeout(
+    () => new Promise((res, rej) => {
+      stream.on('data', chunk => {
+        total += chunk.length;
+        if (total > 50 * 1024 * 1024) { stream.destroy(); rej(new Error('ytdl: file too large (>50MB)')); return; }
+        chunks.push(chunk);
+      });
+      stream.on('end', res);
+      stream.on('error', rej);
+    }),
+    60_000,
+    'ytdl stream'
+  );
+
+  const buf = Buffer.concat(chunks);
+  if (buf.length < 8192) throw new Error(`ytdl: buffer too small (${buf.length} bytes)`);
+
+  const ext = format.container === 'webm' ? 'webm' : (format.container || 'm4a');
+  return {
+    buffer: buf,
+    ext,
+    title: info.videoDetails.title,
+  };
+}
+
+// ── FALLBACK: download a URL to buffer ───────────────────────────────────────
 async function downloadToBuffer(url) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
@@ -40,11 +124,10 @@ async function downloadToBuffer(url) {
     'Accept-Encoding': 'identity',
     'Referer': 'https://www.youtube.com/',
   };
-
   try {
     const r = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 30000,   // was 120000 — 30s is plenty; hung connections caused the 2hr freeze
+      timeout: 30000,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
       headers,
@@ -56,162 +139,60 @@ async function downloadToBuffer(url) {
   } catch (e1) {
     if (e1.response?.status === 451) throw new Error('Content blocked (451)');
     if (e1.response?.status === 403) throw new Error('Access denied (403)');
+    if (e1.code === 'ECONNABORTED' || e1.message.includes('timeout')) throw new Error('Download timed out');
+    throw e1;
   }
-
-  // Stream fallback
-  const r = await axios.get(url, {
-    responseType: 'stream',
-    timeout: 30000,
-    maxContentLength: Infinity,
-    headers,
-    validateStatus: s => s >= 200 && s < 400,
-  });
-  const chunks = [];
-  await new Promise((res, rej) => {
-    r.data.on('data', c => chunks.push(c));
-    r.data.on('end', res);
-    r.data.on('error', rej);
-  });
-  const buf = Buffer.concat(chunks);
-  if (buf.length < 8192) throw new Error(`Stream too small: ${buf.length} bytes`);
-  return buf;
 }
 
-// ── Detect actual audio format from magic bytes ──────────────────────────────
-function detectAudioFormat(buf) {
-  if (!buf || buf.length < 16) return 'mp3';
-
-  // MP3: ID3 tag or MPEG sync
-  if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return 'mp3'; // ID3
-  if (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0) return 'mp3';           // MPEG sync
-
-  // OGG / WebM Opus
-  if (buf.slice(0, 4).toString('ascii') === 'OggS') return 'ogg';
-
-  // WebM / MKV
-  if (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) return 'webm';
-
-  // WAV
-  if (buf.slice(0, 4).toString('ascii') === 'RIFF') return 'wav';
-
-  // MP4 / M4A — ftyp box (box size 4 bytes, then 'ftyp')
-  if (buf.slice(4, 8).toString('ascii') === 'ftyp') return 'm4a';
-  // Some MP4s start with 0x00000018 or similar
-  if (buf[0] === 0x00 && buf[1] === 0x00 && buf.slice(4, 8).toString('ascii') === 'ftyp') return 'm4a';
-
-  // FLAC
-  if (buf.slice(0, 4).toString('ascii') === 'fLaC') return 'flac';
-
-  // Default to m4a (most common from YT download APIs)
-  return 'm4a';
-}
-
-// ── Convert any audio buffer to MP3 via ffmpeg ───────────────────────────────
-async function toMP3(buffer, inputExt) {
-  // Already MP3 — validate it's playable before skipping conversion
-  if (inputExt === 'mp3') {
-    // Quick sanity: check it has ID3 or MPEG sync
-    if (buffer[0] === 0x49 || (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0)) {
-      return buffer; // Genuine MP3, no conversion needed
-    }
-    // Looks like MP3 by extension but magic bytes say otherwise — convert anyway
-    inputExt = 'm4a';
-  }
-
-  // Use ffmpeg to convert: input ext → mp3
-  const mp3Buffer = await ffmpeg(buffer, [
-    '-vn',                  // no video
-    '-map_metadata', '-1',  // strip metadata (avoids iTunes-specific tags that confuse WA)
-    '-ac', '2',             // stereo
-    '-ar', '44100',         // 44.1kHz sample rate
-    '-b:a', '128k',         // 128 kbps
-    '-f', 'mp3',            // force mp3 output format
-  ], inputExt, 'mp3');
-
-  if (!mp3Buffer || mp3Buffer.length < 8192) {
-    throw new Error(`ffmpeg produced empty output (${mp3Buffer?.length || 0} bytes)`);
-  }
-  return mp3Buffer;
-}
-
-// ── Download APIs ─────────────────────────────────────────────────────────────
-
+// ── FALLBACK APIs ─────────────────────────────────────────────────────────────
 async function apiYupra(url) {
   const r = await withRetry(() => axios.get(
     `https://api.yupra.my.id/api/downloader/ytmp3?url=${encodeURIComponent(url)}`,
-    { timeout: 35000 }
+    { timeout: 20000 }
   ));
   const d = r.data?.data;
-  if (r.data?.success && d?.download_url)
-    return { url: d.download_url, title: d.title, ext: 'mp3' };
+  if (r.data?.success && d?.download_url) return { url: d.download_url, title: d.title, ext: 'mp3' };
   throw new Error('Yupra: no URL');
 }
 
 async function apiSiputzx(url) {
   const r = await withRetry(() => axios.get(
     `https://api.siputzx.my.id/api/d/ytmp3?url=${encodeURIComponent(url)}`,
-    { timeout: 35000 }
+    { timeout: 20000 }
   ));
   const dlUrl = r.data?.data?.url || r.data?.dl || r.data?.url;
   if (dlUrl) return { url: dlUrl, title: r.data?.data?.title || r.data?.title, ext: 'mp3' };
   throw new Error('Siputzx: no URL');
 }
 
-async function apiEliteProTech(url) {
-  const r = await withRetry(() => axios.get(
-    `https://eliteprotech-apis.zone.id/ytdown?url=${encodeURIComponent(url)}&format=mp3`,
-    { timeout: 35000 }
-  ));
-  if (r.data?.success && r.data?.downloadURL)
-    return { url: r.data.downloadURL, title: r.data.title, ext: 'mp3' };
-  throw new Error('EliteProTech: no URL');
-}
-
-async function apiOkatsu(url) {
-  const r = await withRetry(() => axios.get(
-    `https://okatsu-rolezapiiz.vercel.app/downloader/ytmp3?url=${encodeURIComponent(url)}`,
-    { timeout: 35000 }
-  ));
-  if (r.data?.dl) return { url: r.data.dl, title: r.data.title, ext: 'mp3' };
-  throw new Error('Okatsu: no URL');
-}
-
 async function apiIzumiUrl(url) {
   const r = await withRetry(() => axios.get(
     `https://izumiiiiiiii.dpdns.org/downloader/youtube?url=${encodeURIComponent(url)}&format=mp3`,
-    { timeout: 35000 }
+    { timeout: 20000 }
   ));
-  if (r.data?.result?.download)
-    return { url: r.data.result.download, title: r.data.result.title, ext: 'mp3' };
+  if (r.data?.result?.download) return { url: r.data.result.download, title: r.data.result.title, ext: 'mp3' };
   throw new Error('IzumiURL: no URL');
 }
 
 async function apiIzumiQuery(query) {
   const r = await withRetry(() => axios.get(
     `https://izumiiiiiiii.dpdns.org/downloader/youtube-play?query=${encodeURIComponent(query)}`,
-    { timeout: 35000 }
+    { timeout: 20000 }
   ));
-  if (r.data?.result?.download)
-    return { url: r.data.result.download, title: r.data.result.title, ext: 'mp3' };
+  if (r.data?.result?.download) return { url: r.data.result.download, title: r.data.result.title, ext: 'mp3' };
   throw new Error('IzumiQuery: no URL');
 }
 
-async function apiCobalt(url) {
-  const r = await withRetry(() => axios.post('https://cobalt.tools/api/json', {
-    url, aFormat: 'mp3', isAudioOnly: true, disableMetadata: true,
-  }, {
-    timeout: 25000,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-  }));
-  if (r.data?.status === 'stream' && r.data?.url)
-    return { url: r.data.url, ext: 'mp3' };
-  const picked = r.data?.picker?.find(p => p.type === 'audio') || r.data?.picker?.[0];
-  if (picked?.url) return { url: picked.url, ext: 'mp3' };
-  throw new Error('Cobalt: no URL');
+async function apiEliteProTech(url) {
+  const r = await withRetry(() => axios.get(
+    `https://eliteprotech-apis.zone.id/ytdown?url=${encodeURIComponent(url)}&format=mp3`,
+    { timeout: 20000 }
+  ));
+  if (r.data?.success && r.data?.downloadURL) return { url: r.data.downloadURL, title: r.data.title, ext: 'mp3' };
+  throw new Error('EliteProTech: no URL');
 }
 
 async function apiInvidious(url) {
-  // Invidious public instances — open source YT frontend with direct audio links
   const vidId = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1];
   if (!vidId) throw new Error('Invidious: no video ID');
   const instances = [
@@ -221,9 +202,8 @@ async function apiInvidious(url) {
   ];
   for (const base of instances) {
     try {
-      const r = await axios.get(`${base}/api/v1/videos/${vidId}`, { timeout: 20000 });
+      const r = await axios.get(`${base}/api/v1/videos/${vidId}`, { timeout: 15000 });
       const streams = r.data?.adaptiveFormats || [];
-      // Pick best audio-only stream
       const audio = streams
         .filter(s => s.type?.includes('audio') && !s.type?.includes('video'))
         .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
@@ -261,7 +241,7 @@ module.exports = {
 
     try {
       if (!isYtUrl) {
-        const search = await yts(text);
+        const search = await withTimeout(() => yts(text), 15_000, 'YouTube search');
         if (!search?.videos?.length)
           return sock.sendMessage(chatId, { text: '❌ No results found. Try a different search.' }, { quoted: msg });
         const v       = search.videos[0];
@@ -273,7 +253,7 @@ module.exports = {
         try {
           const vidId = text.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1];
           if (vidId) {
-            const meta  = await yts({ videoId: vidId });
+            const meta  = await withTimeout(() => yts({ videoId: vidId }), 10_000, 'yt meta');
             videoTitle    = meta?.title;
             videoThumb    = meta?.thumbnail;
             videoDuration = meta?.timestamp;
@@ -294,40 +274,50 @@ module.exports = {
       }
     } catch {}
 
-    // ── 3. Try download APIs ──────────────────────────────────────────────
-    const apis = [
-      { name: 'Yupra',        fn: () => apiYupra(videoUrl) },
-      { name: 'Siputzx',      fn: () => apiSiputzx(videoUrl) },
-      { name: 'EliteProTech', fn: () => apiEliteProTech(videoUrl) },
-      { name: 'Okatsu',       fn: () => apiOkatsu(videoUrl) },
-      { name: 'Cobalt',       fn: () => apiCobalt(videoUrl) },
-      { name: 'IzumiURL',     fn: () => apiIzumiUrl(videoUrl) },
-      { name: 'Invidious',    fn: () => apiInvidious(videoUrl) },
-      // Query-based last resort
-      { name: 'IzumiQuery',   fn: () => apiIzumiQuery(videoTitle || text) },
-    ];
-
+    // ── 3. Try ytdl-core FIRST (most reliable, no external API needed) ────
     let rawBuffer = null;
     let rawExt    = 'mp3';
     let resolvedTitle = videoTitle || text;
 
-    for (const { name, fn } of apis) {
-      try {
-        console.log(`[Song] Trying ${name}...`);
-        // Hard 20s cap per API — prevents one hung API from blocking the entire chain
-        const result = await withTimeout(fn, 20_000, name);
-        if (!result?.url) { console.log(`[Song] ${name}: no URL`); continue; }
-        if (result.title) resolvedTitle = result.title;
+    try {
+      console.log('[Song] Trying ytdl-core...');
+      const result = await downloadViaYtdl(videoUrl);
+      rawBuffer     = result.buffer;
+      rawExt        = result.ext;
+      if (result.title) resolvedTitle = result.title;
+      console.log(`[Song] ✅ ytdl-core — ${rawBuffer.length} bytes, ext: ${rawExt}`);
+    } catch (e) {
+      console.log(`[Song] ytdl-core failed: ${e.message} — trying fallback APIs`);
+    }
 
-        const buf = await withTimeout(() => downloadToBuffer(result.url), 35_000, `${name} download`);
-        if (!buf || buf.length < 8192) { console.log(`[Song] ${name}: download too small`); continue; }
+    // ── 4. Fallback API chain if ytdl-core failed ─────────────────────────
+    if (!rawBuffer) {
+      const fallbackApis = [
+        { name: 'Yupra',        fn: () => apiYupra(videoUrl) },
+        { name: 'Siputzx',      fn: () => apiSiputzx(videoUrl) },
+        { name: 'IzumiURL',     fn: () => apiIzumiUrl(videoUrl) },
+        { name: 'EliteProTech', fn: () => apiEliteProTech(videoUrl) },
+        { name: 'Invidious',    fn: () => apiInvidious(videoUrl) },
+        { name: 'IzumiQuery',   fn: () => apiIzumiQuery(videoTitle || text) },
+      ];
 
-        rawBuffer = buf;
-        rawExt    = result.ext || detectAudioFormat(buf);
-        console.log(`[Song] ✅ ${name} — ${buf.length} bytes, detected format: ${rawExt}`);
-        break;
-      } catch (e) {
-        console.log(`[Song] ${name} failed: ${e.message}`);
+      for (const { name, fn } of fallbackApis) {
+        try {
+          console.log(`[Song] Trying ${name}...`);
+          const result = await withTimeout(fn, 20_000, name);
+          if (!result?.url) { console.log(`[Song] ${name}: no URL`); continue; }
+          if (result.title) resolvedTitle = result.title;
+
+          const buf = await withTimeout(() => downloadToBuffer(result.url), 35_000, `${name} download`);
+          if (!buf || buf.length < 8192) { console.log(`[Song] ${name}: too small`); continue; }
+
+          rawBuffer = buf;
+          rawExt    = result.ext || detectAudioFormat(buf);
+          console.log(`[Song] ✅ ${name} — ${buf.length} bytes`);
+          break;
+        } catch (e) {
+          console.log(`[Song] ${name} failed: ${e.message}`);
+        }
       }
     }
 
@@ -337,25 +327,21 @@ module.exports = {
       }, { quoted: msg });
     }
 
-    // ── 4. Detect actual format from magic bytes (don't trust API claims) ─
+    // ── 5. Detect actual format and convert to MP3 ────────────────────────
     const detectedExt = detectAudioFormat(rawBuffer);
-    console.log(`[Song] API said: ${rawExt}, magic bytes say: ${detectedExt} — using ${detectedExt}`);
+    console.log(`[Song] API said: ${rawExt}, magic bytes: ${detectedExt}`);
 
-    // ── 5. Convert to MP3 — ALWAYS — to guarantee WhatsApp compatibility ──
     let finalBuffer;
     try {
       finalBuffer = await toMP3(rawBuffer, detectedExt);
       console.log(`[Song] Converted to MP3: ${finalBuffer.length} bytes`);
     } catch (convErr) {
       console.error(`[Song] ffmpeg conversion failed: ${convErr.message}`);
-      // Last resort: send raw buffer and hope WA can play it
-      finalBuffer = rawBuffer;
+      finalBuffer = rawBuffer; // last resort: send unconverted
     }
 
     if (!finalBuffer || finalBuffer.length < 4096) {
-      return sock.sendMessage(chatId, {
-        text: '❌ Audio processing failed. Please try again.',
-      }, { quoted: msg });
+      return sock.sendMessage(chatId, { text: '❌ Audio processing failed. Please try again.' }, { quoted: msg });
     }
 
     // ── 6. Send ───────────────────────────────────────────────────────────

@@ -17,6 +17,12 @@ primary_region = "ams"
   cpu_kind = 'shared'
   cpus = 1
 
+# Persistent volume — keeps session credentials + JSON db across restarts
+# Run once: fly volumes create viper_data --size 1 --region ams
+[[mounts]]
+  source      = "viper_data"
+  destination = "/data"
+
 [checks]
   [checks.health]
     grace_period = "30s"

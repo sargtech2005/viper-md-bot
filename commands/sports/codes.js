@@ -1,111 +1,138 @@
 /**
- * .codes — Football betting codes for Nigerian platforms
+ * .codes — Football match finder for Nigerian betting platforms
  *
- * Fetches match data from TheSportsDB and generates the match/event IDs
- * for Sportybet, BetNaija, and 1xBet so users can quickly find the game.
+ * ⚠️  IMPORTANT DESIGN NOTE:
+ * Sportybet, BetNaija, 1xBet and Betway do NOT have public APIs for booking
+ * codes. The previous version generated FAKE codes using math formulas —
+ * those codes are not real and would lose users money if they tried to use
+ * them. This version is honest: it gives users the real match details they
+ * need to FIND the game themselves on the platform, instead of fake codes.
  *
  * Usage:
  *   .codes Arsenal vs Chelsea
- *   .codes today pl         ← all Premier League matches today with codes
+ *   .codes today
  */
 const axios  = require('axios');
 const { sc } = require('../../utils/categoryMenu');
 const config = require('../../config');
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+const UA       = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+const SPORTSDB = 'https://www.thesportsdb.com/api/v1/json/3';
 
-// ── Platform code generators ──────────────────────────────────────────────────
-// These generate codes that users can enter into the platform's "Booking Code"
-// or search the match by ID. Format is standardised per platform.
-function genSportybet(homeId, awayId, dateStr) {
-  // Sportybet Nigeria uses a numeric event ID format
-  const seed = parseInt(homeId) * 17 + parseInt(awayId) * 13 + parseInt(dateStr.replace(/-/g, '').slice(-4));
-  return 'SB' + String(seed % 9000000 + 1000000);
-}
-
-function genBetNaija(homeId, awayId, dateStr) {
-  const seed = parseInt(homeId) * 23 + parseInt(awayId) * 7 + parseInt(dateStr.replace(/-/g, '').slice(-4));
-  return 'BN' + String(seed % 9000000 + 1000000);
-}
-
-function gen1xBet(homeId, awayId, dateStr) {
-  const seed = parseInt(homeId) * 11 + parseInt(awayId) * 19 + parseInt(dateStr.replace(/-/g, '').slice(-4));
-  return '1X' + String(seed % 9000000 + 1000000).toUpperCase();
-}
-
-function genBetway(homeId, awayId) {
-  const seed = parseInt(homeId) * 31 + parseInt(awayId) * 5;
-  return 'BW-' + String(seed % 900000 + 100000);
-}
-
-// ── Fetch upcoming fixtures for a team ────────────────────────────────────────
-async function getUpcoming(teamId) {
-  const { data } = await axios.get(
-    `https://www.thesportsdb.com/api/v1/json/3/eventsnext.php?id=${teamId}`,
-    { timeout: 10000, headers: { 'User-Agent': UA } }
-  );
-  return data?.events || [];
+// Properly capitalise: "man city" → "Man City"
+function titleCase(str) {
+  return str.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
 async function searchTeam(name) {
-  const { data } = await axios.get(
-    `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`,
-    { timeout: 10000, headers: { 'User-Agent': UA } }
-  );
-  return data?.teams?.[0] || null;
+  try {
+    const { data } = await axios.get(
+      `${SPORTSDB}/searchteams.php?t=${encodeURIComponent(name)}`,
+      { timeout: 10000, headers: { 'User-Agent': UA } }
+    );
+    return data?.teams?.[0] || null;
+  } catch { return null; }
+}
+
+async function getUpcoming(teamId) {
+  try {
+    const { data } = await axios.get(
+      `${SPORTSDB}/eventsnext.php?id=${teamId}`,
+      { timeout: 10000, headers: { 'User-Agent': UA } }
+    );
+    return data?.events || [];
+  } catch { return []; }
 }
 
 async function getTodayMatches() {
-  const today = new Date().toISOString().split('T')[0];
-  const { data } = await axios.get(
-    `https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=${today}&s=Soccer`,
-    { timeout: 12000, headers: { 'User-Agent': UA } }
-  );
-  return data?.events || [];
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const { data } = await axios.get(
+      `${SPORTSDB}/eventsday.php?d=${today}&s=Soccer`,
+      { timeout: 12000, headers: { 'User-Agent': UA } }
+    );
+    return data?.events || [];
+  } catch { return []; }
+}
+
+// Convert UTC time to WAT (UTC+1)
+function toWAT(timeStr) {
+  if (!timeStr) return '—';
+  try {
+    const [h, m] = timeStr.split(':').map(Number);
+    const watH = (h + 1) % 24;
+    return `${String(watH).padStart(2, '0')}:${String(m).padStart(2, '0')} WAT`;
+  } catch { return timeStr; }
+}
+
+// Format match info block
+function matchBlock(e, extra = '') {
+  const home   = e.strHomeTeam || '?';
+  const away   = e.strAwayTeam || '?';
+  const league = e.strLeague   || 'Football';
+  const date   = e.dateEvent   || '—';
+  const time   = toWAT(e.strTime);
+  const venue  = e.strVenue    || '—';
+  const sid    = e.idEvent     || '—'; // TheSportsDB event ID — useful for reference
+
+  let t = '';
+  t += `┣◆ ⚽ *${home}* vs *${away}*\n`;
+  t += `┣◆ 🏆 *${league}*\n`;
+  t += `┣◆ ⏰ ${date} | ${time}\n`;
+  if (venue && venue !== '—') t += `┣◆ 🏟️ ${venue}\n`;
+  t += `┃\n`;
+  t += `┣◆ 🔍 *How to find on betting sites:*\n`;
+  t += `┃  Search: *"${home} vs ${away}"*\n`;
+  t += `┃  Filter by: *${league}* | Date: *${date}*\n`;
+  t += `┃\n`;
+  t += `┣◆ 🟢 *Sportybet NG* → sportybet.com → Search Matches\n`;
+  t += `┣◆ 🔵 *BetNaija*    → betnaija.com → Search\n`;
+  t += `┣◆ 🔴 *1xBet NG*    → 1xbet.ng → Live → Soccer\n`;
+  t += `┣◆ ⚫ *Betway NG*    → betway.com.ng → Football\n`;
+  if (extra) t += extra;
+  return t;
 }
 
 module.exports = {
   name: 'codes',
   aliases: ['betcodes', 'footballcodes', 'bettingcodes', 'code'],
   category: 'sports',
-  description: 'Get betting codes for football matches (Sportybet, BetNaija, 1xBet)',
-  usage: '.codes <home> vs <away>  |  .codes today [league]',
+  description: 'Find football matches on Nigerian betting platforms',
+  usage: '.codes <home> vs <away>  |  .codes today',
 
   async execute(sock, msg, args, extra) {
     try {
       const input = args.join(' ').trim();
+      const B     = config.botName;
 
       if (!input) {
         return extra.reply(
           `🎟️ *${sc('betting codes')}*\n\n` +
           `*Usage:*\n` +
           `• *.codes Arsenal vs Chelsea*\n` +
-          `• *.codes today* — all today's matches\n` +
-          `• *.codes today pl* — Premier League today\n\n` +
+          `• *.codes today* — all today's matches\n\n` +
           `*Platforms:* Sportybet 🟢 | BetNaija 🔵 | 1xBet 🔴 | Betway ⚫\n\n` +
-          `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`
+          `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`
         );
       }
 
-      const vsSplit = input.split(/\s+vs\.?\s+/i);
-
       // ── Mode 1: today's matches ──────────────────────────────────────────
       if (input.toLowerCase().startsWith('today') || input.toLowerCase() === 'all') {
-        const leagueFilter = args.slice(1).join(' ').toLowerCase();
-        await extra.reply('🔍 Fetching today\'s matches and codes...');
-        const events = await getTodayMatches();
+        const leagueFilter = args.slice(1).join(' ').toLowerCase().trim();
+        await extra.reply('🔍 Fetching today\'s matches...');
 
+        const events = await getTodayMatches();
         if (!events.length) return extra.reply('📭 No matches found for today.');
 
         const filtered = leagueFilter
           ? events.filter(e => e.strLeague?.toLowerCase().includes(leagueFilter))
           : events;
 
-        const show = filtered.slice(0, 15);
-        const today = new Date().toISOString().split('T')[0];
+        if (!filtered.length)
+          return extra.reply(`📭 No matches found today matching *${leagueFilter}*.`);
 
-        let t = `┏❐ 《 *🎟️ ${sc('match codes')} — Today* 》 ❐\n`;
-        t += `┃ ${show.length} matches | ${today}\n┃\n`;
+        const show  = filtered.slice(0, 10);
+        const today = new Date().toISOString().split('T')[0];
 
         // Group by league
         const grouped = {};
@@ -115,36 +142,34 @@ module.exports = {
           grouped[k].push(e);
         }
 
+        let t = `┏❐ 《 *🎟️ ${sc('matches')} — Today* 》 ❐\n`;
+        t += `┃ 📅 *${today}* | ${show.length} matches\n┃\n`;
+
         for (const [league, ms] of Object.entries(grouped)) {
           t += `┣◆ 🏆 *${league}*\n`;
           for (const e of ms) {
-            const hid    = e.idHomeTeam || '1000';
-            const aid    = e.idAwayTeam || '2000';
-            const dStr   = today;
+            const time = toWAT(e.strTime);
             t += `┃  ⚽ *${e.strHomeTeam}* vs *${e.strAwayTeam}*\n`;
-            t += `┃  ⏰ ${e.strTime?.slice(0, 5) || '—'} WAT\n`;
-            t += `┃  🟢 Sportybet: \`${genSportybet(hid, aid, dStr)}\`\n`;
-            t += `┃  🔵 BetNaija:  \`${genBetNaija(hid, aid, dStr)}\`\n`;
-            t += `┃  🔴 1xBet:     \`${gen1xBet(hid, aid, dStr)}\`\n`;
-            t += `┃\n`;
+            t += `┃  ⏰ ${time}\n`;
+            t += `┃  🔍 Search this match by name on betting sites\n┃\n`;
           }
         }
 
-        if (filtered.length > 15) t += `┣◆ ... +${filtered.length - 15} more matches\n┃\n`;
-        t += `┣◆ ⚠️ _Search codes on the platform's search bar_\n`;
-        t += `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
+        if (filtered.length > 10) t += `┣◆ ... +${filtered.length - 10} more (use *.codes today <league>* to filter)\n┃\n`;
+        t += `┣◆ 💡 *.codes <home> vs <away>* for full platform guide\n`;
+        t += `┣◆ ⚠️ _Bet responsibly. 18+ only._\n`;
+        t += `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
         return await extra.reply(t);
       }
 
       // ── Mode 2: specific match ────────────────────────────────────────────
+      const vsSplit = input.split(/\s+vs\.?\s+/i);
       if (vsSplit.length < 2) {
-        return extra.reply(
-          `❌ Format: *.codes <home> vs <away>*\nOr: *.codes today* for all matches`
-        );
+        return extra.reply(`❌ Format: *.codes <home> vs <away>*\nOr: *.codes today*`);
       }
 
-      const homeName = vsSplit[0].trim();
-      const awayName = vsSplit[1].trim();
+      const homeName = titleCase(vsSplit[0].trim());
+      const awayName = titleCase(vsSplit[1].trim());
 
       await extra.reply(`🔍 Looking up *${homeName}* vs *${awayName}*...`);
 
@@ -153,55 +178,70 @@ module.exports = {
         searchTeam(awayName),
       ]);
 
-      // Try to find the upcoming fixture between these two
+      // Find the exact fixture — ONLY accept if BOTH teams match, never fall back to wrong game
       let fixture = null;
       if (homeTeam) {
         const upcoming = await getUpcoming(homeTeam.idTeam);
-        fixture = upcoming.find(e =>
-          e.strAwayTeam?.toLowerCase().includes(awayName.toLowerCase()) ||
-          e.strHomeTeam?.toLowerCase().includes(awayName.toLowerCase())
-        ) || upcoming[0]; // fallback to next match if not found
+        // Strict match: away team name must contain what user typed (or vice versa)
+        fixture = upcoming.find(e => {
+          const fixtureAway = (e.strAwayTeam || '').toLowerCase();
+          const fixtureHome = (e.strHomeTeam || '').toLowerCase();
+          const searchAway  = awayName.toLowerCase();
+          const searchHome  = homeName.toLowerCase();
+          return (
+            (fixtureAway.includes(searchAway) || searchAway.includes(fixtureAway.split(' ')[0])) &&
+            (fixtureHome.includes(searchHome) || searchHome.includes(fixtureHome.split(' ')[0]))
+          );
+        });
+        // Also check if home/away are reversed
+        if (!fixture) {
+          fixture = upcoming.find(e => {
+            const fixtureAway = (e.strAwayTeam || '').toLowerCase();
+            const fixtureHome = (e.strHomeTeam || '').toLowerCase();
+            const searchAway  = awayName.toLowerCase();
+            const searchHome  = homeName.toLowerCase();
+            return (
+              fixtureHome.includes(searchAway) &&
+              fixtureAway.includes(searchHome)
+            );
+          });
+        }
       }
 
-      const hid    = homeTeam?.idTeam  || String(Math.floor(Math.random() * 9000) + 1000);
-      const aid    = awayTeam?.idTeam  || String(Math.floor(Math.random() * 9000) + 1000);
-      const dStr   = fixture?.dateEvent || new Date().toISOString().split('T')[0];
-      const league = fixture?.strLeague || homeTeam?.strLeague || 'Football';
+      // Build response
+      const league = fixture?.strLeague || homeTeam?.strLeague || awayTeam?.strLeague || 'Football';
+      const date   = fixture?.dateEvent || '—';
+      const time   = toWAT(fixture?.strTime);
       const venue  = fixture?.strVenue  || homeTeam?.strStadium || '—';
-      const time   = fixture?.strTime?.slice(0, 5) || '—';
-
-      const sbCode = genSportybet(hid, aid, dStr);
-      const bnCode = genBetNaija(hid, aid, dStr);
-      const xbCode = gen1xBet(hid, aid, dStr);
-      const bwCode = genBetway(hid, aid);
 
       let t = `┏❐ 《 *🎟️ ${sc('betting codes')}* 》 ❐\n┃\n`;
       t += `┣◆ ⚽ *${homeName}* vs *${awayName}*\n`;
       t += `┣◆ 🏆 *${league}*\n`;
-      if (time !== '—')   t += `┣◆ ⏰ ${dStr} | ${time} WAT\n`;
-      if (venue !== '—')  t += `┣◆ 🏟️ ${venue}\n`;
+      if (date !== '—') t += `┣◆ ⏰ ${date} | ${time}\n`;
+      if (venue && venue !== '—') t += `┣◆ 🏟️ ${venue}\n`;
       t += `┃\n`;
-      t += `┣◆ 🎟️ *${sc('match codes')}:*\n`;
+
+      if (!fixture) {
+        // Fixture not found — be honest, don't show wrong info
+        t += `┣◆ ⚠️ *Exact fixture not found in database*\n`;
+        t += `┃  This match may not be scheduled yet, or\n`;
+        t += `┃  the team names may be spelled differently.\n┃\n`;
+      }
+
+      t += `┣◆ 🔍 *How to find this match on betting sites:*\n`;
       t += `┃\n`;
-      t += `┃  🟢 *Sportybet NG*\n`;
-      t += `┃  Code: \`${sbCode}\`\n`;
-      t += `┃  → sportybet.com → Search Matches\n`;
+      t += `┃  1️⃣ Search: *"${homeName} ${awayName}"* or *"${homeName} vs ${awayName}"*\n`;
+      t += `┃  2️⃣ Filter by: *${league}*\n`;
+      if (date !== '—') t += `┃  3️⃣ Date: *${date}*\n`;
       t += `┃\n`;
-      t += `┃  🔵 *BetNaija*\n`;
-      t += `┃  Code: \`${bnCode}\`\n`;
-      t += `┃  → betnaija.com → Quick Booking\n`;
+      t += `┣◆ 🟢 *Sportybet NG* → sportybet.com → 🔍 Search Matches\n`;
+      t += `┣◆ 🔵 *BetNaija*    → betnaija.com → 🔍 Search\n`;
+      t += `┣◆ 🔴 *1xBet NG*    → 1xbet.ng → Football → ${league.includes('Serie') ? 'Italy' : league.includes('Premier') ? 'England' : 'Search'}\n`;
+      t += `┣◆ ⚫ *Betway NG*    → betway.com.ng → Football → Today\n`;
       t += `┃\n`;
-      t += `┃  🔴 *1xBet NG*\n`;
-      t += `┃  Code: \`${xbCode}\`\n`;
-      t += `┃  → 1xbet.ng → Booking Code\n`;
-      t += `┃\n`;
-      t += `┃  ⚫ *Betway NG*\n`;
-      t += `┃  Code: \`${bwCode}\`\n`;
-      t += `┃  → betway.com.ng → My Bets\n`;
-      t += `┃\n`;
-      t += `┣◆ 💡 *.predict ${homeName} vs ${awayName}* for AI tips\n`;
+      t += `┣◆ 💡 *.predict ${homeName} vs ${awayName}* for AI prediction\n`;
       t += `┣◆ ⚠️ _Bet responsibly. 18+ only._\n`;
-      t += `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
+      t += `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
 
       await extra.reply(t);
 

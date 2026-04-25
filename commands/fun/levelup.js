@@ -103,8 +103,15 @@ module.exports = {
 
       // ── LEADERBOARD ─────────────────────────────────────────────────────
       if (sub === 'top' || sub === 'leaderboard' || sub === 'lb') {
-        // Read all users and sort by EXP
-        const allUsers = database.read ? database.read('users') : {};
+        // Read all users directly from the users.json file
+        const fs = require('fs');
+        const path = require('path');
+        let allUsers = {};
+        try {
+          const usersFile = path.join(database.DB_PATH, 'users.json');
+          allUsers = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+        } catch { allUsers = {}; }
+
         const entries  = Object.entries(allUsers)
           .map(([id, u]) => ({ id, exp: u.exp || 0 }))
           .filter(u => u.exp > 0)
