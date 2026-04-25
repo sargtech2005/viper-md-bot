@@ -248,10 +248,10 @@ router.get('/:id/logs', async (req, res) => {
     if (!Worker.isRemote()) {
       // Local mode — read from in-memory log buffer via BotMgr
       const BotMgr = require('../bot-manager');
-      if (s.phone_number) logs = BotMgr.tailLog(s.phone_number, 100);
+      // Pass sessionId (number) for direct buffer lookup — more reliable than phone lookup
+      logs = BotMgr.tailLog(id, 150);
     } else {
-      // Worker mode — logs live in the worker process RAM; not accessible here
-      logs = '(logs are on the worker service)';
+      logs = '(logs are on the worker service — check worker process output)';
     }
 
     res.json({ ok: true, logs });

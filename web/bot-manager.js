@@ -31,7 +31,7 @@ const CREDS_TIMERS = new Map(); // sessionId → intervalId
 const PAIR_CACHE   = new Map(); // sessionId → pair code string
 const LOG_BUFFERS  = new Map(); // sessionId → string[] (ring, max 200 lines)
 
-const LOG_MAX = 200; // max lines kept in memory per session
+const LOG_MAX = 500; // increased from 200 — stores enough lines for real debugging
 
 function sessionDir(phone) { return path.join(TMP_ROOT, phone); }
 
@@ -314,15 +314,27 @@ function deleteSessionFiles(sessionId, phone) {
 }
 
 // ── tailLog — returns last N lines from in-memory buffer ──────────────────
-function tailLog(phone, n = 60) {
-  // Find sessionId by phone
+// Accepts either phone (string) or sessionId (number) for flexibility.
+function tailLog(phoneOrId, n = 100) {
+  // Try by sessionId first (number)
+  if (typeof phoneOrId === 'number' || /^\d+$/.test(String(phoneOrId))) {
+    const sid = parseInt(phoneOrId);
+    const buf = LOG_BUFFERS.get(sid);
+    if (buf && buf.length) return buf.slice(-n).join('\n');
+  }
+  // Fall back to finding by phone string
   for (const [sid, entry] of PROCS) {
-    if (entry.phone === phone) {
+    if (entry.phone === String(phoneOrId)) {
       const buf = LOG_BUFFERS.get(sid) || [];
-      return buf.slice(-n).join('\n') || '(no output captured)';
+      return buf.slice(-n).join('\n') || '(no output captured yet)';
     }
   }
-  return '(session not running)';
+  // Session not running — return whatever is still in buffer
+  for (const [sid, buf] of LOG_BUFFERS) {
+    // We can't match by phone here without PROCS entry, so return the most recent non-empty buffer
+    if (buf && buf.length) return `[session stopped] Last ${Math.min(n, buf.length)} lines:\n` + buf.slice(-n).join('\n');
+  }
+  return '(session not running or no output captured)';
 }
 
 // ── Resume sessions on server boot ─────────────────────────────────────────

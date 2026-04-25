@@ -12,14 +12,38 @@ const { startCleanup }         = require('./utils/cleanup');
 initializeTempSystem();
 startCleanup();
 
-// ── Signal filter — only let machine-readable lines reach bot-manager ────────
-const _rawWrite = process.stdout.write.bind(process.stdout);
-const _SIGNALS  = ['PAIR_CODE:', 'BOT_STATUS:CONNECTED', 'LOGGED_OUT:', 'PAIR_ERROR:', 'BOT_WARN:'];
-const _isSignal = (...a) => _SIGNALS.some(s => a.join(' ').includes(s));
-console.log   = (...a) => { if (_isSignal(...a)) _rawWrite(a.join(' ') + '\n'); };
-// Keep error visible for PAIR_ERROR signals — all others suppressed
-console.error = (...a) => { if (_isSignal(...a)) _rawWrite(a.join(' ') + '\n'); };
-console.warn  = (...a) => { if (_isSignal(...a)) _rawWrite(a.join(' ') + '\n'); };
+// ── Console filter — suppress ONLY noisy Baileys internals, keep everything else ──
+// Previously ALL output was suppressed unless it matched a signal keyword.
+// This was causing: blank session logs, invisible errors, and no way to debug.
+// Now we only drop the high-frequency Baileys protocol noise.
+const _rawWrite   = process.stdout.write.bind(process.stdout);
+const _rawErrWrite = process.stderr.write.bind(process.stderr);
+const _SIGNALS    = ['PAIR_CODE:', 'BOT_STATUS:CONNECTED', 'LOGGED_OUT:', 'PAIR_ERROR:', 'BOT_WARN:'];
+const _isSignal   = (...a) => _SIGNALS.some(s => a.join(' ').includes(s));
+
+// Noisy Baileys lines that flood logs with no useful info
+const _SUPPRESS_PATTERNS = [
+  'noise_', 'handshake', 'recv data', 'send data', 'keepalive',
+  'ping WA', 'connection noise', 'got ping', 'sending ping',
+  'tag:', 'msgRetryMap', 'proto decode', 'deciphered',
+];
+const _isSuppressed = (...a) => {
+  const msg = a.join(' ').toLowerCase();
+  return _SUPPRESS_PATTERNS.some(p => msg.includes(p));
+};
+
+console.log = (...a) => {
+  if (_isSuppressed(...a)) return; // drop Baileys noise
+  _rawWrite(a.map(x => (typeof x === 'object' ? JSON.stringify(x) : x)).join(' ') + '\n');
+};
+console.error = (...a) => {
+  if (_isSuppressed(...a)) return;
+  _rawErrWrite(a.map(x => (typeof x === 'object' ? JSON.stringify(x) : x)).join(' ') + '\n');
+};
+console.warn = (...a) => {
+  if (_isSuppressed(...a)) return;
+  _rawWrite(a.map(x => (typeof x === 'object' ? JSON.stringify(x) : x)).join(' ') + '\n');
+};
 
 // ── All requires at top-level — never require() inside event handlers ────────
 // Calling require() inside a hot event handler is fine for caching, but
@@ -187,7 +211,7 @@ async function startBot() {
     getMessage:            async () => undefined,
     keepAliveIntervalMs:   5_000,    // ping WA every 5s — keeps NAT alive on cloud hosts
     connectTimeoutMs:      60_000,   // generous connect window
-    defaultQueryTimeoutMs: 0,        // no timeout on queries — prevents mid-pair dropouts
+    defaultQueryTimeoutMs: 30_000,   // 30s per WA query — prevents hung queries blocking the bot
     retryRequestDelayMs:   500,
     ...(pairNumber ? { qrTimeout: 0 } : {}),
   });
