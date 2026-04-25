@@ -204,7 +204,7 @@
       <div id="pair-code-display" style="display:none">
         <div class="pair-code-box">
           <div class="pair-code" id="pair-code-value">——</div>
-          <div class="pair-countdown">Code expires in <span id="pair-timer">60</span>s</div>
+          <div class="pair-countdown">Code expires in <span id="pair-timer">120</span>s</div>
           <button class="vbtn vbtn-outline vbtn-sm" id="pair-copy-btn" onclick="copyPairCode()" style="margin-top:.75rem">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M13 7V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h3"/></svg>
             Copy Code
@@ -647,6 +647,24 @@ function startPairSSE() {
     silentRefresh();
   });
 
+  // pair_retry — WS dropped during pairing, bot is auto-reconnecting, keep UI alive
+  pairEventSource.addEventListener('pair_retry', e => {
+    let msg = 'Reconnecting to WhatsApp…';
+    try { msg = JSON.parse(e.data).message || msg; } catch {}
+    // Reset to loading state — new pair code is coming
+    document.getElementById('pair-code-display').style.display = 'none';
+    document.getElementById('pair-error').style.display        = 'none';
+    document.getElementById('pair-code-loading').style.display = 'block';
+    clearInterval(pairCountdown);
+    const cd = document.querySelector('.pair-countdown');
+    if (cd) cd.textContent = msg;
+  });
+
+  // warn — informational message (e.g. server UTC time)
+  pairEventSource.addEventListener('warn', e => {
+    try { console.info('[Bot]', JSON.parse(e.data).message); } catch {}
+  });
+
   pairEventSource.addEventListener('logged_out', () => {
     stopPairSSE();
     document.getElementById('pair-error-text').textContent     = 'Session was logged out.';
@@ -760,7 +778,7 @@ function showCodeInPairModal(code) {
   loading.style.display = 'none';
   display.style.display = 'block';
   val.textContent = code;
-  startPairCountdown(60);
+  startPairCountdown(120);
   silentRefresh();
 }
 

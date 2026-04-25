@@ -105,7 +105,7 @@ async function pairSession(sessionId, phone) {
     const BotMgr = require('./bot-manager');
     if (BotMgr.isRunning(sessionId)) BotMgr.stopSession(sessionId);
     BotMgr.startBot(sessionId, phone, { pairNumber: phone });
-    BotMgr.watchLog(sessionId, phone);
+    BotMgr.watchLog(sessionId, phone, { isPairing: true }); // no deadline — stays alive until handshake complete
     return;
   }
   // Send directly to Worker HTTP (not DB) so pairing is instant — no 2s poll delay

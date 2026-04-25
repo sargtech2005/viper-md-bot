@@ -221,9 +221,11 @@ async function startBot() {
           const fmt  = code?.length === 8
             ? `${code.slice(0, 4)}-${code.slice(4)}`
             : code;
+          const serverUtc = new Date().toISOString();
           console.log(`PAIR_CODE:${fmt}`);
+          console.warn(`BOT_WARN:Server UTC when code generated: ${serverUtc}`);
         } catch (e) {
-          console.error('❌ Pair code error:', e.message);
+          console.error(`PAIR_ERROR:requestPairingCode failed — ${e.message}`);
           if (pairAttempts < 3) pairCodeRequested = false;
         }
       } else if (!pairNumber) {
@@ -249,9 +251,11 @@ async function startBot() {
 
       // If we were in pairing mode and dropped before completing — don't silently
       // loop. Surface the error so the user can retry from the dashboard.
-      if (pairNumber && !pairCodeRequested === false) {
+      if (pairNumber && !state.creds?.registered) {
         console.error(`PAIR_ERROR:Connection dropped (code ${code || 'none'}) — ${reason}`);
-        return; // do NOT reconnect; user must click Pair again
+        // Auto-retry — watchLog is still alive waiting for the next PAIR_CODE
+        setTimeout(startBot, 2000);
+        return;
       }
 
       if (reconnect) setTimeout(startBot, 3000);

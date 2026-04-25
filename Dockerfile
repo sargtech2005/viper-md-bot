@@ -1,8 +1,8 @@
 FROM node:20-alpine
 
 # Build tools for native modules + git (needed for GitHub-sourced npm packages)
-# ffmpeg added: required for audio conversion in .song / .play commands
-RUN apk add --no-cache python3 make g++ vips-dev git ffmpeg
+# ffmpeg: audio conversion   chrony: NTP clock sync (critical for WhatsApp pair codes)
+RUN apk add --no-cache python3 make g++ vips-dev git ffmpeg chrony
 
 WORKDIR /app
 
@@ -13,9 +13,13 @@ RUN npm install --omit=dev
 
 COPY . .
 
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s \
   CMD node -e "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-CMD ["node", "web/server.js"]
+# entrypoint.sh syncs clock via NTP before starting the server
+CMD ["/app/entrypoint.sh"]

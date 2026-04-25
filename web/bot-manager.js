@@ -136,19 +136,25 @@ function stopCredsSync(sessionId) {
 }
 
 // ── Signal watcher — reads from in-memory log buffer ──────────────────────
-// Called immediately after startBot(). Polls LOG_BUFFERS (filled by pipe)
-// for the 3 machine-readable signals the child emits. No disk I/O.
-function watchLog(sessionId, phone) {
-  let   seen     = 0;
-  let   done     = false;
-  const deadline = Date.now() + 120_000;
+// During PAIRING: no deadline — stays alive until BOT_STATUS:CONNECTED.
+// During normal boot: 120s deadline as a safety net.
+function watchLog(sessionId, phone, { isPairing = false } = {}) {
+  let seen = 0;
+  let done = false;
+
+  // Pairing mode: no deadline at all — wait forever for handshake
+  // Normal mode: 120s safety net
+  const deadline = isPairing ? null : Date.now() + 120_000;
 
   const iv = setInterval(async () => {
-    if (done || Date.now() > deadline) {
+    // Only apply deadline in non-pairing mode
+    if (!isPairing && (done || Date.now() > deadline)) {
       clearInterval(iv);
       if (!done) emit(sessionId, 'error', { message: 'Timed out. Please try again.' });
       return;
     }
+    if (done) { clearInterval(iv); return; }
+
     try {
       const buf   = LOG_BUFFERS.get(sessionId) || [];
       const fresh = buf.slice(seen);
@@ -162,14 +168,17 @@ function watchLog(sessionId, phone) {
           PAIR_CACHE.set(sessionId, code);
           emit(sessionId, 'pair_code', { code });
         }
+        if (line.includes('BOT_WARN:')) {
+          const msg = line.split('BOT_WARN:')[1]?.trim() || '';
+          emit(sessionId, 'warn', { message: msg });
+        }
         if (line.includes('PAIR_ERROR:')) {
-          const msg = line.split('PAIR_ERROR:')[1]?.trim() || 'Pairing failed';
-          done = true; clearInterval(iv);
-          PAIR_CACHE.delete(sessionId);
-          emit(sessionId, 'error', { message: `Pairing failed: ${msg}. Please click Pair again.` });
-          await Sessions.updateStatus(sessionId, 'stopped');
-          clearLog(sessionId);
-          return;
+          // During pairing: surface the error but DON'T stop watching.
+          // index.js will auto-restart the WS and emit a fresh PAIR_CODE.
+          // Only stop if user manually cancels.
+          const msg = line.split('PAIR_ERROR:')[1]?.trim() || 'Connection dropped';
+          emit(sessionId, 'pair_retry', { message: `Reconnecting… (${msg})` });
+          return; // keep iv alive — wait for next PAIR_CODE
         }
         if (line.includes('BOT_STATUS:CONNECTED')) {
           done = true; clearInterval(iv);
@@ -177,7 +186,6 @@ function watchLog(sessionId, phone) {
           emit(sessionId, 'connected', { message: 'Bot connected!' });
           await Sessions.updateStatus(sessionId, 'connected');
           await saveCredsToDb(sessionId, phone);
-          // Clear log buffer — pairing done, no need to keep it
           clearLog(sessionId);
           return;
         }
