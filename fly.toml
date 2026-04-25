@@ -1,6 +1,6 @@
 # fly.toml — Viper Bot Fly.io config
 
-app = "viper-md-bot"   # ← replace with your actual fly app name
+app = "viper-md-bot"
 primary_region = "ams"
 
 [build]
@@ -15,13 +15,7 @@ primary_region = "ams"
 [[vm]]
   memory = '2gb'
   cpu_kind = 'shared'
-  cpus = 2
-
-# Persistent volume — keeps session credentials + JSON db across restarts
-# Run once: fly volumes create viper_data --size 1 --region ams
-[[mounts]]
-  source      = "viper_data"
-  destination = "/data"
+  cpus = 1
 
 [checks]
   [checks.health]
