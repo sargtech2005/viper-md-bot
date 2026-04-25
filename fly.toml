@@ -15,7 +15,7 @@ primary_region = "ams"
 [[vm]]
   memory = '2gb'
   cpu_kind = 'shared'
-  cpus = 1
+  cpus = 2
 
 # Persistent volume — keeps session credentials + JSON db across restarts
 # Run once: fly volumes create viper_data --size 1 --region ams
