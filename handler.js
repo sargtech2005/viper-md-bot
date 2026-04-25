@@ -6,6 +6,7 @@ const config = require('./config');
 const database = require('./database');
 const { loadCommands } = require('./utils/commandLoader');
 const { addMessage } = require('./utils/groupstats');
+const levelupCmd      = require('./commands/fun/levelup');
 const { jidDecode, jidEncode } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -542,6 +543,22 @@ const handleMessage = async (sock, msg) => {
     // Track group message statistics
     if (isGroup) {
       addMessage(from, sender);
+
+      // ── Passive EXP — award on every group message (with cooldown) ──────
+      if (!msg.key.fromMe) {
+        const userId   = sender.split('@')[0];
+        const expResult = levelupCmd.awardPassiveExp(userId, from);
+        if (expResult?.leveledUp) {
+          const { level, name, emoji } = levelupCmd.getLevelInfo(expResult.newExp);
+          const lvlMsg =
+            `🎉 *LEVEL UP!* 🎉\n\n` +
+            `@${userId} has levelled up!\n\n` +
+            `${emoji} *Level ${level} — ${name}*\n` +
+            `⭐ Total EXP: *${expResult.newExp.toLocaleString()}*\n\n` +
+            `> _Keep chatting to level up more!_ 🐍`;
+          sock.sendMessage(from, { text: lvlMsg, mentions: [sender] }).catch(() => {});
+        }
+      }
     }
     
     // Return early for non-group messages with no recognizable content

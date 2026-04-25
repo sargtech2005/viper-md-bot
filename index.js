@@ -158,6 +158,8 @@ const isSystem = jid =>
   !jid || ['@broadcast', 'status.broadcast', '@newsletter'].some(s => jid.includes(s));
 
 // ── Main bot function ────────────────────────────────────────────────────────
+let _connectedNotified = false; // module-level — survives reconnects, resets only on full restart
+
 async function startBot() {
   const sessionFolder = process.env.SESSION_DIR
     ? process.env.SESSION_DIR
@@ -201,7 +203,6 @@ async function startBot() {
   let pairCodeRequested  = false;
   let pairAttempts       = 0;
   let bcPoller           = null;
-  let _connectedNotified = false; // prevents repeated connected DMs on reconnect
 
   // ── Connection handler ────────────────────────────────────────────────────
   sock.ev.on('connection.update', async (update) => {
