@@ -556,19 +556,30 @@ const handleMessage = async (sock, msg) => {
     }
 
     // ── Passive EXP — award on every message (groups AND DMs) ───────────────
-    // Using from (chatId) as the cooldown scope so DMs and each group are tracked separately.
     if (!msg.key.fromMe) {
       const userId   = sender.split('@')[0];
       const expResult = levelupCmd.awardPassiveExp(userId, from);
       if (expResult?.leveledUp) {
         const { level, name, emoji } = levelupCmd.getLevelInfo(expResult.newExp);
-        const lvlMsg =
-          `🎉 *LEVEL UP!* 🎉\n\n` +
-          `@${userId} has levelled up!\n\n` +
-          `${emoji} *Level ${level} — ${name}*\n` +
-          `⭐ Total EXP: *${expResult.newExp.toLocaleString()}*\n\n` +
-          `> _Keep chatting to level up more!_ 🐍`;
-        sock.sendMessage(from, { text: lvlMsg, mentions: [sender] }).catch(() => {});
+        // Try sending a level-up image card; fall back to text if it fails
+        try {
+          const { makeLevelUpCard, fetchPpBase64 } = require('./utils/imageCard');
+          const ppBase64 = await fetchPpBase64(sock, sender).catch(() => null);
+          const imgBuf = await makeLevelUpCard({
+            username: userId, level, levelName: name,
+            exp: expResult.newExp, botName: config.botName, ppBase64,
+          });
+          await sock.sendMessage(from, {
+            image: imgBuf, mimetype: 'image/png',
+            caption: `🎉 @${userId} levelled up to *${emoji} Level ${level} — ${name}*!\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`,
+            mentions: [sender],
+          }).catch(() => {});
+        } catch {
+          const lvlMsg =
+            `🎉 *LEVEL UP!* 🎉\n\n@${userId} reached *${emoji} Level ${level} — ${name}*\n` +
+            `⭐ Total EXP: *${expResult.newExp.toLocaleString()}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
+          sock.sendMessage(from, { text: lvlMsg, mentions: [sender] }).catch(() => {});
+        }
       }
     }
     

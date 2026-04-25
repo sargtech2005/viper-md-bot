@@ -96,36 +96,93 @@ module.exports = {
   }
 };
 
-// ── Extract direct download URL from a MediaFire page ───────────────────────
+// ── Extract direct download URL from a MediaFire link ───────────────────────
 async function getDirectLink(pageUrl) {
-  // If it's already a direct download URL pattern, return as-is
-  if (pageUrl.includes('download.mediafire.com') || pageUrl.includes('/download/')) {
-    return pageUrl;
+  // Already a direct CDN link
+  if (pageUrl.includes('download.mediafire.com')) return pageUrl;
+
+  // Extract the file key from the URL
+  // Formats:
+  //   mediafire.com/file/FILEKEY/filename/file
+  //   mediafire.com/file/FILEKEY/
+  //   mediafire.com/download/FILEKEY
+  const keyMatch = pageUrl.match(
+    /mediafire\.com\/(?:file|download)\/([a-zA-Z0-9]+)/i
+  );
+  const fileKey = keyMatch?.[1];
+
+  // ── Method 1: MediaFire JSON API (most reliable, no HTML scraping needed) ──
+  if (fileKey) {
+    try {
+      const { data } = await axios.get(
+        `https://www.mediafire.com/api/1.5/file/get_info.php?quick_key=${fileKey}&response_format=json`,
+        {
+          timeout: 15000,
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }
+      );
+      const info = data?.response?.file_info;
+      if (info?.links?.normal_download) return info.links.normal_download;
+      if (info?.links?.download)        return info.links.download;
+    } catch (_) {}
   }
 
-  const html = await axios.get(pageUrl, {
-    timeout: 20000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      'Accept': 'text/html,application/xhtml+xml',
-    },
-    maxRedirects: 5,
-  }).then(r => r.data).catch(() => null);
+  // ── Method 2: Scrape the HTML page ───────────────────────────────────────
+  let html = null;
+  try {
+    const r = await axios.get(pageUrl, {
+      timeout: 20000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+      maxRedirects: 5,
+    });
+    html = r.data;
+  } catch (_) {}
 
-  if (!html) return null;
+  if (html) {
+    const patterns = [
+      // Current MediaFire layout (2024-2025) — aria-label on anchor
+      /href="(https:\/\/download\.mediafire\.com\/[^"]+)"[^>]*(?:aria-label|id)="[^"]*(?:download|Download)/i,
+      // Direct download.mediafire.com href anywhere
+      /href="(https:\/\/download\.mediafire\.com\/[^"?]+(?:\?[^"]*)?)">/i,
+      // JSON blob in page script
+      /"download_link"\s*:\s*"([^"]+)"/i,
+      // Legacy downloadButton id
+      /id="downloadButton"[^>]*href="([^"]+)"/i,
+      // window.location direct
+      /window\.location(?:\.href)?\s*=\s*['"]( https:\/\/download\.mediafire\.com\/[^'"]+)['"]/i,
+      // Any download.mediafire.com URL in the page
+      /(https:\/\/download\.mediafire\.com\/[^\s"'<>]+)/i,
+    ];
 
-  // Try multiple extraction patterns MediaFire uses
-  const patterns = [
-    /id="downloadButton"[^>]*href="([^"]+)"/i,
-    /href="(https:\/\/download\.mediafire\.com\/[^"]+)"/i,
-    /"direct_download_url"\s*:\s*"([^"]+)"/i,
-    /window\.location\.href\s*=\s*'(https:\/\/[^']+)'/i,
-    /download_link['"]\s*:\s*['"]([^'"]+)['"]/i,
-  ];
+    for (const pat of patterns) {
+      const m = html.match(pat);
+      if (m?.[1]) return m[1].replace(/&amp;/g, '&').trim();
+    }
+  }
 
-  for (const pat of patterns) {
-    const m = html.match(pat);
-    if (m?.[1]) return m[1].replace(/&amp;/g, '&');
+  // ── Method 3: Follow redirect from /download/ path ────────────────────────
+  if (fileKey) {
+    try {
+      const r = await axios.get(
+        `https://www.mediafire.com/download/${fileKey}`,
+        {
+          timeout: 15000,
+          maxRedirects: 0,
+          validateStatus: s => s >= 200 && s < 400,
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        }
+      );
+      const loc = r.headers?.location;
+      if (loc && loc.includes('download.mediafire.com')) return loc;
+    } catch (e) {
+      // axios throws on 3xx when maxRedirects=0; extract Location from error
+      const loc = e.response?.headers?.location;
+      if (loc && loc.includes('download.mediafire.com')) return loc;
+    }
   }
 
   return null;

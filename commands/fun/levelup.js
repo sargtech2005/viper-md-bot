@@ -11,6 +11,7 @@
 
 const database = require('../../database');
 const config   = require('../../config');
+const { makeRankCard, makeLevelUpCard, fetchPpBase64 } = require('../../utils/imageCard');
 
 // ── EXP Config ───────────────────────────────────────────────────────────────
 const EXP_PER_MSG     = () => Math.floor(Math.random() * 4) + 2; // 2-5 EXP per message
@@ -154,23 +155,32 @@ module.exports = {
       const userId = extra.sender.split('@')[0];
       const exp    = getExp(userId);
       const { level, name, emoji, nextExp, progress } = getLevelInfo(exp);
-      const bar    = progressBar(progress);
-      const toNext = nextExp ? nextExp - exp : 0;
 
-      let t = `┏❐ 《 *🎮 YOUR RANK CARD* 》 ❐\n┃\n`;
-      t += `┣◆ 👤 *${userId}*\n`;
-      t += `┣◆ ${emoji} Level *${level}* — *${name}*\n`;
-      t += `┣◆ ⭐ EXP: *${exp.toLocaleString()}*\n`;
-      t += `┣◆ 📊 Progress: [${bar}] ${progress}%\n`;
-      if (nextExp) {
-        t += `┣◆ 🎯 Next level: *${nextExp.toLocaleString()} EXP*\n`;
-        t += `┣◆ 💬 Need: *${toNext.toLocaleString()} more EXP*\n`;
-      } else {
-        t += `┣◆ 🏆 *MAX LEVEL — Viper Elite!*\n`;
+      const ppBase64 = await fetchPpBase64(sock, extra.sender).catch(() => null);
+
+      try {
+        const imgBuf = await makeRankCard({
+          username: userId, level, levelName: name, levelEmoji: emoji,
+          exp, nextExp, progress, botName: B, ppBase64,
+        });
+        return await sock.sendMessage(extra.from, {
+          image: imgBuf, mimetype: 'image/png',
+          caption: `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`,
+        }, { quoted: msg });
+      } catch (imgErr) {
+        console.error('[RankCard]', imgErr.message);
+        // Fallback to text
+        const bar = progressBar(progress);
+        const toNext = nextExp ? nextExp - exp : 0;
+        let t = `┏❐ 《 *🎮 YOUR RANK CARD* 》 ❐\n┃\n`;
+        t += `┣◆ 👤 *${userId}*\n┣◆ ${emoji} Level *${level}* — *${name}*\n`;
+        t += `┣◆ ⭐ EXP: *${exp.toLocaleString()}*\n`;
+        t += `┣◆ 📊 Progress: [${bar}] ${progress}%\n`;
+        if (nextExp) t += `┣◆ 🎯 Next: *${nextExp.toLocaleString()} EXP* | Need: *${toNext.toLocaleString()}*\n`;
+        else t += `┣◆ 🏆 *MAX LEVEL — Viper Elite!*\n`;
+        t += `┣◆ 💡 _Chat to earn EXP passively!_\n┃\n┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+        return extra.reply(t);
       }
-      t += `┣◆ 💡 _Chat to earn EXP passively!_\n`;
-      t += `┃\n┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-      return extra.reply(t);
 
     } catch (e) {
       await extra.reply(`❌ Error: ${e.message}`);

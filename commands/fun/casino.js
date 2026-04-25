@@ -445,17 +445,44 @@ module.exports = {
         setTimeout(async () => {
           HEIST_ROOMS.delete(roomId);
           const members=room.members, success=Math.random()<Math.min(0.25+members.length*0.12,0.85);
+          const { makeHeistCard, fetchPpBase64 } = require('../../utils/imageCard');
+          const date = new Date().toLocaleDateString('en-US');
+
           if(success) {
             const lootM=1.5+Math.random()*2, totalLoot=Math.floor(room.pot*lootM);
-            let t=`🎉 *HEIST SUCCESSFUL!*\n\n💰 Looted: *${fmt(totalLoot)}* coins (×${lootM.toFixed(2)})\n\n*Crew Shares (paid to wallet):*\n`;
-            for(const m of members) { const share=Math.floor((m.bet/room.pot)*totalLoot); addWallet(m.id, share); t+=`👤 ${m.id}: +*${fmt(share)}*\n`; }
+            let t=`🎉 *HEIST SUCCESSFUL!*\n\n💰 Looted: *${fmt(totalLoot)}* coins (×${lootM.toFixed(2)})\n\n*Crew Shares:*\n`;
+            for(const m of members) {
+              const share=Math.floor((m.bet/room.pot)*totalLoot);
+              addWallet(m.id, share);
+              t+=`👤 ${m.id}: +*${fmt(share)}*\n`;
+            }
             t+=`\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-            await sock.sendMessage(roomId, { text: t });
+            // Send image for the leader
+            try {
+              const ppBase64 = await fetchPpBase64(sock, extra.sender).catch(() => null);
+              const imgBuf = await makeHeistCard({
+                success: true, userId: room.leader, date,
+                amount: totalLoot, crewSize: members.length, botName: B, ppBase64,
+              });
+              await sock.sendMessage(roomId, { image: imgBuf, mimetype: 'image/png', caption: t });
+            } catch {
+              await sock.sendMessage(roomId, { text: t });
+            }
           } else {
-            let t=`🚨 *HEIST FAILED!*\n\nAll bets lost from wallets!\n\n*Losses:*\n`;
+            let t=`🚨 *HEIST FAILED!*\n\nAll bets lost!\n\n*Losses:*\n`;
+            const totalLost = room.pot;
             for(const m of members) t+=`👤 ${m.id}: -${fmt(m.bet)}\n`;
             t+=`\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-            await sock.sendMessage(roomId, { text: t });
+            try {
+              const ppBase64 = await fetchPpBase64(sock, extra.sender).catch(() => null);
+              const imgBuf = await makeHeistCard({
+                success: false, userId: room.leader, date,
+                amount: totalLost, crewSize: members.length, botName: B, ppBase64,
+              });
+              await sock.sendMessage(roomId, { image: imgBuf, mimetype: 'image/png', caption: t });
+            } catch {
+              await sock.sendMessage(roomId, { text: t });
+            }
           }
         }, 30000);
       }

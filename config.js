@@ -18,7 +18,7 @@ const raw = {
     ownerChatId: process.env.OWNER_CHAT_ID || '',
 
     // ── Bot defaults — overridden per-session from settings.json ───────────
-    botName:     'BOT MD',
+    botName:     'VIPER MD',
     prefix:      '.',
     sessionName: 'session',
     sessionID:   process.env.SESSION_ID || '',
@@ -27,7 +27,7 @@ const raw = {
     newsletterJid: process.env.NEWSLETTER_JID || '',
     updateZipUrl:  process.env.UPDATE_ZIP_URL || '',
 
-    packname:   'BOT MD',
+    packname:   'VIPER MD',
     packauthor: 'Bot Owner',
 
     selfMode:      false,
