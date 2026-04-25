@@ -198,9 +198,10 @@ async function startBot() {
   let lastActivity = Date.now();
   const wd = null; // watchdog disabled
 
-  let pairCodeRequested = false;
-  let pairAttempts      = 0;
-  let bcPoller          = null;
+  let pairCodeRequested  = false;
+  let pairAttempts       = 0;
+  let bcPoller           = null;
+  let _connectedNotified = false; // prevents repeated connected DMs on reconnect
 
   // ── Connection handler ────────────────────────────────────────────────────
   sock.ev.on('connection.update', async (update) => {
@@ -258,6 +259,8 @@ async function startBot() {
 
     if (connection === 'open') {
       lastActivity = Date.now();
+      if (_connectedNotified) return; // already sent — don't spam on every reconnect
+      _connectedNotified = true;
       const num      = sock.user.id.split(':')[0];
       const botName  = database.getSetting('botName', config.botName);
       const ownerRaw = database.getSetting('ownerDisplayName', null)
