@@ -189,6 +189,24 @@ async function boot() {
     await BotMgr.resumeSessions();
     BotMgr.startLogoutMonitor();
   }
+
+  // ── Self-ping keepalive ─────────────────────────────────────────────────────
+  // Pings /health every 4 minutes to keep the fly.io machine active and prevent
+  // the WhatsApp WebSocket from going idle and disconnecting.
+  const _selfPingUrl = process.env.APP_URL
+    || `http://localhost:${PORT}`;
+  const _pingInterval = 4 * 60 * 1000; // 4 minutes
+  setInterval(async () => {
+    try {
+      const http = require('http');
+      const url  = new URL('/health', _selfPingUrl);
+      const req  = http.get({ hostname: url.hostname, port: url.port || 80, path: url.pathname }, res => {
+        res.resume(); // drain response
+      });
+      req.on('error', () => {}); // silent — don't crash on network blip
+    } catch (_) {}
+  }, _pingInterval);
+  console.log(`🏓 Self-ping keepalive active (every 4 min → ${_selfPingUrl}/health)`);
 }
 
 boot().catch(e => {

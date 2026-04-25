@@ -561,8 +561,11 @@ const handleMessage = async (sock, msg) => {
       }
     }
     
-    // Return early for non-group messages with no recognizable content
-    if (!content || actualMessageTypes.length === 0) return;
+    // Return early only if there is truly no message content object at all.
+    // Do NOT return just because all keys are "protocol" types — in Baileys v7
+    // group messages often arrive as { messageContextInfo, extendedTextMessage }
+    // and we must not drop them. We only hard-bail if content itself is null.
+    if (!content) return;
     
     // 🔹 Button response should also check unwrapped content
     const btn = content.buttonsResponseMessage || msg.message?.buttonsResponseMessage;
@@ -764,8 +767,10 @@ const handleMessage = async (sock, msg) => {
         
         // Only process if it's an image or video (not documents)
         if (mediaMessage) {
-          // Skip if message has a command prefix (let command handle it)
-          if (!body.startsWith(dbSetting('prefix'))) {
+          // Skip autosticker if message has a command prefix (let command handle it)
+          const _asDbPfx = dbSetting('prefix') || '.';
+          const _asPfxPool = [...new Set([_asDbPfx, '.', '/', '#'])];
+          if (!_asPfxPool.some(p => body.startsWith(p))) {
             try {
               // Import sticker command logic
               const stickerCmd = commands.get('sticker');
@@ -884,11 +889,14 @@ const handleMessage = async (sock, msg) => {
       }
     }
 
-    // Check if message starts with prefix
-    if (!body.startsWith(dbSetting('prefix'))) return;
-    
+    // Check if message starts with ANY allowed prefix (.  /  #  or the DB-configured one)
+    const _dbPrefix    = dbSetting('prefix') || '.';
+    const _prefixPool  = [...new Set([_dbPrefix, '.', '/', '#'])]; // always include the three standard ones
+    const _usedPrefix  = _prefixPool.find(p => body.startsWith(p));
+    if (!_usedPrefix) return;
+
     // Parse command
-    const args = body.slice(dbSetting('prefix').length).trim().split(/\s+/);
+    const args = body.slice(_usedPrefix.length).trim().split(/\s+/);
     const commandName = args.shift().toLowerCase();
     
     // Get command

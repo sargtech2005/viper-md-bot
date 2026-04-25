@@ -96,34 +96,67 @@ module.exports = {
   async execute(sock, msg, args, extra) {
     try {
       const userId  = extra.sender.split('@')[0];
-      const sub     = (args[0] || 'balance').toLowerCase();
+      const sub     = (args[0] || 'menu').toLowerCase();
       const econ    = getEconomy(userId);
       const B       = config.botName;
       const ctx     = msg.message?.extendedTextMessage?.contextInfo || msg.message?.contextInfo || {};
       const mentions = ctx.mentionedJid || [];
 
       // ── MENU ──────────────────────────────────────────────────────────────
-      const ALL = ['balance','deposit','withdraw','gift','loan','daily','slots','dice','flip',
+      const ALL = ['menu','balance','deposit','withdraw','gift','loan','daily','slots','dice','flip',
                    'blackjack','bj','roulette','crash','wheel','mine','rob','invest','steal','lottery','heist'];
       if (!ALL.includes(sub)) {
-        let t = `┏❐ 《 *🎰 VIPER CASINO* 》 ❐\n┃\n`;
-        t += `┣◆ 💵 *Wallet:* ${fmt(econ.wallet)} coins\n`;
-        t += `┣◆ 🏦 *Bank:*   ${fmt(econ.bank)} coins\n┃\n`;
-        t += `┣◆ *💳 BANKING*\n`;
-        t += `┃  .casino balance\n`;
-        t += `┃  .casino deposit <amt|all>\n`;
-        t += `┃  .casino withdraw <amt|all>\n`;
-        t += `┃  .casino gift @user <amt>\n`;
-        t += `┃  .casino loan @user <amt>\n`;
-        t += `┃  .casino loan repay / status\n┃\n`;
-        t += `┣◆ *🎰 GAMES (use wallet)*\n`;
-        t += `┃  slots · dice · flip · blackjack\n`;
-        t += `┃  roulette · crash · wheel · mine\n`;
-        t += `┃  steal · rob · invest\n`;
-        t += `┃  lottery · heist · daily\n`;
-        t += `┃\n┣◆ ⚠️ _Virtual coins only — no real money_\n`;
-        t += `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-        return extra.reply(t);
+        // Unknown sub — show full casino menu
+        return extra.reply(
+          `┏❐ 《 *🎰 VIPER CASINO* 》 ❐\n┃\n` +
+          `┣◆ 💰 *Balance:* ${fmt(econ.wallet)} coins\n┃\n` +
+          `┣◆ 🎰 *.casino slots <bet>*\n` +
+          `┣◆ 🎲 *.casino dice <bet>*\n` +
+          `┣◆ 🪙 *.casino flip <bet> heads/tails*\n` +
+          `┣◆ 🃏 *.casino blackjack <bet>*\n` +
+          `┣◆ 🔴 *.casino roulette <bet> red/black/0-36*\n` +
+          `┣◆ 🚀 *.casino crash <bet> <1.5-50>*\n` +
+          `┣◆ 🎡 *.casino wheel <bet>*\n` +
+          `┣◆ 💣 *.casino mine <bet> <1-9>*\n` +
+          `┣◆ 🥷 *.casino steal @user*\n` +
+          `┣◆ 🔫 *.casino rob <bet>*\n` +
+          `┣◆ 📈 *.casino invest <bet> safe/risky/yolo*\n` +
+          `┣◆ 🎟️ *.casino lottery* (100 coins/ticket)\n` +
+          `┣◆ 👥 *.casino heist <bet>* (group game)\n` +
+          `┣◆ 💸 *.casino loan @user <amount>* (repay within 24h)\n` +
+          `┣◆ 🎁 *.casino gift @user <amount>*\n` +
+          `┣◆ 🎁 *.casino daily*\n` +
+          `┣◆ 💳 *.casino balance*\n┃\n` +
+          `┣◆ ⚠️ _Virtual coins only — no real money_\n` +
+          `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`
+        );
+      }
+
+      // ── MENU (explicit .casino menu) ─────────────────────────────────────
+      if (sub === 'menu') {
+        return extra.reply(
+          `┏❐ 《 *🎰 VIPER CASINO* 》 ❐\n┃\n` +
+          `┣◆ 💰 *Balance:* ${fmt(econ.wallet)} coins\n┃\n` +
+          `┣◆ 🎰 *.casino slots <bet>*\n` +
+          `┣◆ 🎲 *.casino dice <bet>*\n` +
+          `┣◆ 🪙 *.casino flip <bet> heads/tails*\n` +
+          `┣◆ 🃏 *.casino blackjack <bet>*\n` +
+          `┣◆ 🔴 *.casino roulette <bet> red/black/0-36*\n` +
+          `┣◆ 🚀 *.casino crash <bet> <1.5-50>*\n` +
+          `┣◆ 🎡 *.casino wheel <bet>*\n` +
+          `┣◆ 💣 *.casino mine <bet> <1-9>*\n` +
+          `┣◆ 🥷 *.casino steal @user*\n` +
+          `┣◆ 🔫 *.casino rob <bet>*\n` +
+          `┣◆ 📈 *.casino invest <bet> safe/risky/yolo*\n` +
+          `┣◆ 🎟️ *.casino lottery* (100 coins/ticket)\n` +
+          `┣◆ 👥 *.casino heist <bet>* (group game)\n` +
+          `┣◆ 💸 *.casino loan @user <amount>* (repay within 24h)\n` +
+          `┣◆ 🎁 *.casino gift @user <amount>*\n` +
+          `┣◆ 🎁 *.casino daily*\n` +
+          `┣◆ 💳 *.casino balance*\n┃\n` +
+          `┣◆ ⚠️ _Virtual coins only — no real money_\n` +
+          `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`
+        );
       }
 
       // ── BALANCE ───────────────────────────────────────────────────────────

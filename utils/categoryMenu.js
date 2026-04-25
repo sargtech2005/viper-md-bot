@@ -71,14 +71,22 @@ async function sendCategoryMenu(sock, msg, extra, category, icon, title) {
   t += `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
 
   const imgPath = getBotImage();
-  const ctx     = newsletterCtx();
+  // Only attach newsletter context in private chats (DMs).
+  // WhatsApp silently drops forwarded-newsletter messages sent inside groups.
+  const isGroup = extra.from && extra.from.endsWith('@g.us');
+  const ctx = isGroup ? {} : newsletterCtx();
 
   if (imgPath) {
-    await sock.sendMessage(extra.from, {
-      image: fs.readFileSync(imgPath),
-      caption: t,
-      ...ctx,
-    }, { quoted: msg });
+    try {
+      await sock.sendMessage(extra.from, {
+        image: fs.readFileSync(imgPath),
+        caption: t,
+        ...ctx,
+      }, { quoted: msg });
+    } catch (_) {
+      // Image send failed — fall back to plain text so the menu still shows
+      await sock.sendMessage(extra.from, { text: t }, { quoted: msg });
+    }
   } else {
     await sock.sendMessage(extra.from, { text: t }, { quoted: msg });
   }

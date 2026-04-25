@@ -77,13 +77,20 @@ function resolveMenuImage() {
 // ── Send helper (image caption or text) ──────────────────────────────────────
 async function send(sock, msg, extra, text) {
   const imgPath = resolveMenuImage();
-  const ctx     = buildCtx(extra.sender);
+  // Skip newsletter/forwarded context in groups — WhatsApp silently drops such messages in group chats.
+  const isGroup = extra.from && extra.from.endsWith('@g.us');
+  const ctx     = isGroup ? { mentions: [extra.sender] } : buildCtx(extra.sender);
   if (imgPath) {
-    await sock.sendMessage(extra.from,
-      { image: fs.readFileSync(imgPath), caption: text, ...ctx },
-      { quoted: msg });
+    try {
+      await sock.sendMessage(extra.from,
+        { image: fs.readFileSync(imgPath), caption: text, ...ctx },
+        { quoted: msg });
+    } catch (_) {
+      // Image send failed — fall back to plain text so the menu always shows
+      await sock.sendMessage(extra.from, { text }, { quoted: msg });
+    }
   } else {
-    await sock.sendMessage(extra.from, { text, ...ctx }, { quoted: msg });
+    await sock.sendMessage(extra.from, { text }, { quoted: msg });
   }
 }
 
