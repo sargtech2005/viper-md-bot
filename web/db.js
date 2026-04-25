@@ -44,17 +44,6 @@ async function initDB() {
       last_seen     TIMESTAMPTZ
     )`);
 
-    // Add creds_data column if upgrading from older schema
-    await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_data TEXT`);
-    await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_updated TIMESTAMPTZ`);
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TIMESTAMPTZ`);
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`);
-    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(64)`);
-    // Per-user sequential slot (fills gaps when sessions deleted)
-    await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS user_slot INTEGER`);
-    // Optional initial bot settings supplied at session-creation time (JSON)
-    await client.query(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS initial_settings JSONB`);
-
     await client.query(`CREATE TABLE IF NOT EXISTS coin_transactions (
       id          SERIAL PRIMARY KEY,
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -97,9 +86,29 @@ async function initDB() {
       await client.query(`INSERT INTO site_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO NOTHING`,[k,v]);
 
     await client.query('COMMIT');
-    console.log('[DB] ✅ Schema ready');
+    console.log('[DB] ✅ Core schema ready');
   } catch (err) { await client.query('ROLLBACK'); throw err; }
   finally { client.release(); }
+
+  // ── Column migrations — run OUTSIDE the transaction.
+  // ALTER TABLE requires ownership. If the DB user isn't owner (e.g. connecting
+  // to an existing Render DB from Fly.io), these fail silently — columns are
+  // already present from CREATE TABLE above on new DBs anyway.
+  const migrate = async (sql) => {
+    try { await pool.query(sql); }
+    catch (e) {
+      if (!['42701','42501'].includes(e.code)) // 42701=col exists, 42501=no permission
+        console.error('[DB] Migration note:', e.message);
+    }
+  };
+  await migrate(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_data TEXT`);
+  await migrate(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS creds_updated TIMESTAMPTZ`);
+  await migrate(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_daily_claim TIMESTAMPTZ`);
+  await migrate(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE`);
+  await migrate(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(64)`);
+  await migrate(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS user_slot INTEGER`);
+  await migrate(`ALTER TABLE bot_sessions ADD COLUMN IF NOT EXISTS initial_settings JSONB`);
+  console.log('[DB] ✅ Schema ready');
 }
 
 const Settings = {
