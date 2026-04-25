@@ -192,16 +192,11 @@ async function startBot() {
 
   store.bind(sock.ev);
 
-  // ── Activity watchdog ─────────────────────────────────────────────────────
+  // ── Activity watchdog DISABLED ────────────────────────────────────────────
+  // Auto-kill after 30min inactivity caused bots to stop replying in quiet groups.
+  // keepAliveIntervalMs pings keep the WS alive instead.
   let lastActivity = Date.now();
-  const wd = setInterval(async () => {
-    if (Date.now() - lastActivity > 30 * 60 * 1000 && sock.ws?.readyState === 1) {
-      console.log('⚠️  No activity — forcing reconnect...');
-      await sock.end();
-      clearInterval(wd);
-      setTimeout(startBot, 5000);
-    }
-  }, 5 * 60 * 1000);
+  const wd = null; // watchdog disabled
 
   let pairCodeRequested = false;
   let pairAttempts      = 0;
@@ -235,7 +230,7 @@ async function startBot() {
     }
 
     if (connection === 'close') {
-      clearInterval(wd);
+      if (wd) clearInterval(wd);
       if (sock._keepAliveTimer) { clearInterval(sock._keepAliveTimer); sock._keepAliveTimer = null; }
       if (bcPoller)             { clearInterval(bcPoller); bcPoller = null; }
 
