@@ -57,13 +57,24 @@ function ffmpeg(buffer, args = [], ext = '', ext2 = '') {
 
     const proc = spawn(ffmpegBin, ['-y', '-i', tmp, ...args, out]);
 
+    // Hard 90-second kill timer — prevents ffmpeg from hanging the bot process
+    // forever when an input file is malformed or a pipe stalls.
+    const killTimer = setTimeout(() => {
+      try { proc.kill('SIGKILL'); } catch (_) {}
+      tryUnlink(tmp);
+      tryUnlink(out);
+      reject(new Error('ffmpeg timed out after 90s'));
+    }, 90_000);
+
     proc.on('error', (e) => {
+      clearTimeout(killTimer);
       tryUnlink(tmp);
       tryUnlink(out);   // ← FIX: was missing — orphaned on spawn error
       reject(e);
     });
 
     proc.on('close', async (code) => {
+      clearTimeout(killTimer);
       tryUnlink(tmp);   // always clean up input
 
       if (code !== 0) {

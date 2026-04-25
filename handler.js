@@ -34,12 +34,15 @@ const commands = loadCommands();
 
 // 1. Per-chat cooldown — min gap between bot replies to the same chat
 //    Prevents the "machine-gun response" pattern that trips spam filters.
+//    Reduced from 1500ms → 500ms. Commands that arrive during the cooldown
+//    are now delayed (queued) instead of silently dropped.
 const _chatCooldown = new Map();
-const CHAT_COOLDOWN_MS = 1500; // 1.5s minimum between replies per chat
+const CHAT_COOLDOWN_MS = 500; // 0.5s minimum between replies per chat
 
-function _isChatCooledDown(jid) {
+function _getChatCooldownRemaining(jid) {
   const last = _chatCooldown.get(jid) || 0;
-  return Date.now() - last >= CHAT_COOLDOWN_MS;
+  const remaining = CHAT_COOLDOWN_MS - (Date.now() - last);
+  return remaining > 0 ? remaining : 0;
 }
 function _markChatUsed(jid) {
   _chatCooldown.set(jid, Date.now());
@@ -51,9 +54,10 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // 2. Global rate limiter — max commands per minute across all chats
-//    Prevents volume-based ban triggers.
+//    Raised from 25 → 60 (1/sec average). Now sends a message instead of
+//    silently dropping so users know the bot received their command.
 const _cmdTimestamps = [];
-const MAX_CMDS_PER_MIN = 25;
+const MAX_CMDS_PER_MIN = 60;
 
 function _isGlobalRateLimited() {
   const now = Date.now();
@@ -479,7 +483,13 @@ const handleMessage = async (sock, msg) => {
     }
 
     // ── ANTI-BAN: global rate limiter ────────────────────────────────────────
-    if (_isGlobalRateLimited()) return;
+    if (_isGlobalRateLimited()) {
+      // Don't silently drop — user deserves to know the bot is busy
+      try {
+        await sock.sendMessage(from, { text: '⏳ Bot is busy, please wait a moment and try again.' }, { quoted: msg });
+      } catch (_) {}
+      return;
+    }
 
     // Auto-React System (rate-limited per chat)
     try {
@@ -942,26 +952,38 @@ const handleMessage = async (sock, msg) => {
     }
 
     // ── ANTI-BAN: per-chat cooldown + human-like delay ───────────────────────
-    if (!_isChatCooledDown(from)) return; // too soon — skip silently
+    // Wait out any remaining cooldown instead of silently dropping the command.
+    const _cooldownWait = _getChatCooldownRemaining(from);
+    if (_cooldownWait > 0) await new Promise(r => setTimeout(r, _cooldownWait));
     _markChatUsed(from);
     _recordCmd();
     await _humanDelay(250, 700); // natural pause before every response
 
     // Execute command — isolated try-catch so a crashing command never
-    // kills the handler or disconnects the bot from WhatsApp
+    // kills the handler or disconnects the bot from WhatsApp.
+    // 90-second hard timeout prevents media/download commands from freezing
+    // the entire bot when an external API hangs indefinitely.
     console.log(`Executing command: ${commandName} from ${sender}`);
-    try { await command.execute(sock, msg, args, {
-      from,
-      sender,
-      isGroup,
-      groupMetadata,
-      isOwner: isOwner(sender),
-      isAdmin: await isAdmin(sock, sender, from, groupMetadata),
-      isBotAdmin: await isBotAdmin(sock, from, groupMetadata),
-      isMod: isMod(sender),
-      reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
-      react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } })
-    }); } catch (cmdErr) {
+    const CMD_TIMEOUT_MS = 90_000;
+    try {
+      await Promise.race([
+        command.execute(sock, msg, args, {
+          from,
+          sender,
+          isGroup,
+          groupMetadata,
+          isOwner: isOwner(sender),
+          isAdmin: await isAdmin(sock, sender, from, groupMetadata),
+          isBotAdmin: await isBotAdmin(sock, from, groupMetadata),
+          isMod: isMod(sender),
+          reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
+          react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } })
+        }),
+        new Promise((_, rej) =>
+          setTimeout(() => rej(new Error(`Command timed out after ${CMD_TIMEOUT_MS / 1000}s`)), CMD_TIMEOUT_MS)
+        ),
+      ]);
+    } catch (cmdErr) {
       console.error(`[CMD ERROR] ${commandName}:`, cmdErr.message);
       try { await sock.sendMessage(from, { text: `❌ Command error: ${cmdErr.message}` }, { quoted: msg }); } catch (_) {}
     }

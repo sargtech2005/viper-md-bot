@@ -88,9 +88,9 @@ function crashPoint() { const r=Math.random(); if(r<0.05)return 1.0; return pars
 
 module.exports = {
   name: 'casino',
-  aliases: ['gamble','slots','bet','bj','roulette','crash','wheel','mine','steal','rob','invest','lottery','heist','deposit','withdraw','loan','gift'],
+  aliases: ['gamble', 'slots', 'bet', 'bj'],
   category: 'fun',
-  description: '🎰 Full casino economy — wallet, bank, 17 games',
+  description: '🎰 Casino — wallet, bank, 17 games (.casino menu)',
   usage: '.casino [game/action] [amount]',
 
   async execute(sock, msg, args, extra) {
@@ -105,58 +105,41 @@ module.exports = {
       // ── MENU ──────────────────────────────────────────────────────────────
       const ALL = ['menu','balance','deposit','withdraw','gift','loan','daily','slots','dice','flip',
                    'blackjack','bj','roulette','crash','wheel','mine','rob','invest','steal','lottery','heist'];
+      const _casinoMenuText = () =>
+        `┏❐ 《 *🎰 VIPER CASINO* 》 ❐\n┃\n` +
+        `┣◆ 💵 *Wallet:* ${fmt(econ.wallet)} coins\n┃\n` +
+        `┣◆ 📊 *ECONOMY*\n` +
+        `┣◆ 💳 *.casino balance*\n` +
+        `┣◆ 🏦 *.casino deposit <amount|all>*\n` +
+        `┣◆ 💵 *.casino withdraw <amount|all>*\n` +
+        `┣◆ 🎁 *.casino daily* (+${fmt(500)} coins)\n` +
+        `┣◆ 🎁 *.casino gift @user <amount>*\n` +
+        `┣◆ 💸 *.casino loan @user <amount>*\n┃\n` +
+        `┣◆ 🎮 *GAMES*\n` +
+        `┣◆ 🎰 *.casino slots <bet>*\n` +
+        `┣◆ 🎲 *.casino dice <bet>*\n` +
+        `┣◆ 🪙 *.casino flip <bet> heads/tails*\n` +
+        `┣◆ 🃏 *.casino blackjack <bet>*\n` +
+        `┣◆ 🔴 *.casino roulette <bet> red/black/0-36*\n` +
+        `┣◆ 🚀 *.casino crash <bet> <1.5-50>*\n` +
+        `┣◆ 🎡 *.casino wheel <bet>*\n` +
+        `┣◆ 💣 *.casino mine <bet> <1-9>*\n` +
+        `┣◆ 🥷 *.casino steal @user*\n` +
+        `┣◆ 🔫 *.casino rob <bet>*\n` +
+        `┣◆ 📈 *.casino invest <bet> safe/risky/yolo*\n` +
+        `┣◆ 🎟️ *.casino lottery* (100 coins/ticket)\n` +
+        `┣◆ 👥 *.casino heist <bet>* (group game)\n┃\n` +
+        `┣◆ ⚠️ _Virtual coins only — no real money_\n` +
+        `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+
       if (!ALL.includes(sub)) {
         // Unknown sub — show full casino menu
-        return extra.reply(
-          `┏❐ 《 *🎰 VIPER CASINO* 》 ❐\n┃\n` +
-          `┣◆ 💰 *Balance:* ${fmt(econ.wallet)} coins\n┃\n` +
-          `┣◆ 🎰 *.casino slots <bet>*\n` +
-          `┣◆ 🎲 *.casino dice <bet>*\n` +
-          `┣◆ 🪙 *.casino flip <bet> heads/tails*\n` +
-          `┣◆ 🃏 *.casino blackjack <bet>*\n` +
-          `┣◆ 🔴 *.casino roulette <bet> red/black/0-36*\n` +
-          `┣◆ 🚀 *.casino crash <bet> <1.5-50>*\n` +
-          `┣◆ 🎡 *.casino wheel <bet>*\n` +
-          `┣◆ 💣 *.casino mine <bet> <1-9>*\n` +
-          `┣◆ 🥷 *.casino steal @user*\n` +
-          `┣◆ 🔫 *.casino rob <bet>*\n` +
-          `┣◆ 📈 *.casino invest <bet> safe/risky/yolo*\n` +
-          `┣◆ 🎟️ *.casino lottery* (100 coins/ticket)\n` +
-          `┣◆ 👥 *.casino heist <bet>* (group game)\n` +
-          `┣◆ 💸 *.casino loan @user <amount>* (repay within 24h)\n` +
-          `┣◆ 🎁 *.casino gift @user <amount>*\n` +
-          `┣◆ 🎁 *.casino daily*\n` +
-          `┣◆ 💳 *.casino balance*\n┃\n` +
-          `┣◆ ⚠️ _Virtual coins only — no real money_\n` +
-          `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`
-        );
+        return extra.reply(_casinoMenuText());
       }
 
       // ── MENU (explicit .casino menu) ─────────────────────────────────────
       if (sub === 'menu') {
-        return extra.reply(
-          `┏❐ 《 *🎰 VIPER CASINO* 》 ❐\n┃\n` +
-          `┣◆ 💰 *Balance:* ${fmt(econ.wallet)} coins\n┃\n` +
-          `┣◆ 🎰 *.casino slots <bet>*\n` +
-          `┣◆ 🎲 *.casino dice <bet>*\n` +
-          `┣◆ 🪙 *.casino flip <bet> heads/tails*\n` +
-          `┣◆ 🃏 *.casino blackjack <bet>*\n` +
-          `┣◆ 🔴 *.casino roulette <bet> red/black/0-36*\n` +
-          `┣◆ 🚀 *.casino crash <bet> <1.5-50>*\n` +
-          `┣◆ 🎡 *.casino wheel <bet>*\n` +
-          `┣◆ 💣 *.casino mine <bet> <1-9>*\n` +
-          `┣◆ 🥷 *.casino steal @user*\n` +
-          `┣◆ 🔫 *.casino rob <bet>*\n` +
-          `┣◆ 📈 *.casino invest <bet> safe/risky/yolo*\n` +
-          `┣◆ 🎟️ *.casino lottery* (100 coins/ticket)\n` +
-          `┣◆ 👥 *.casino heist <bet>* (group game)\n` +
-          `┣◆ 💸 *.casino loan @user <amount>* (repay within 24h)\n` +
-          `┣◆ 🎁 *.casino gift @user <amount>*\n` +
-          `┣◆ 🎁 *.casino daily*\n` +
-          `┣◆ 💳 *.casino balance*\n┃\n` +
-          `┣◆ ⚠️ _Virtual coins only — no real money_\n` +
-          `┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`
-        );
+        return extra.reply(_casinoMenuText());
       }
 
       // ── BALANCE ───────────────────────────────────────────────────────────

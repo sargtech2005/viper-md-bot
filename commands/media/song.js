@@ -15,13 +15,21 @@ const { ffmpeg } = require('../../utils/converter');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function withRetry(fn, tries = 3, delay = 1500) {
+async function withRetry(fn, tries = 2, delay = 1000) {
   let last;
   for (let i = 1; i <= tries; i++) {
     try { return await fn(); }
     catch (e) { last = e; if (i < tries) await sleep(delay * i); }
   }
   throw last;
+}
+
+// Wrap any async fn with a hard wall-clock timeout
+function withTimeout(fn, ms, label) {
+  return Promise.race([
+    fn(),
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${ms / 1000}s`)), ms)),
+  ]);
 }
 
 // ── Download URL → Buffer (arraybuffer then stream fallback) ─────────────────
@@ -36,7 +44,7 @@ async function downloadToBuffer(url) {
   try {
     const r = await axios.get(url, {
       responseType: 'arraybuffer',
-      timeout: 120000,
+      timeout: 30000,   // was 120000 — 30s is plenty; hung connections caused the 2hr freeze
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
       headers,
@@ -53,7 +61,7 @@ async function downloadToBuffer(url) {
   // Stream fallback
   const r = await axios.get(url, {
     responseType: 'stream',
-    timeout: 120000,
+    timeout: 30000,
     maxContentLength: Infinity,
     headers,
     validateStatus: s => s >= 200 && s < 400,
@@ -306,11 +314,12 @@ module.exports = {
     for (const { name, fn } of apis) {
       try {
         console.log(`[Song] Trying ${name}...`);
-        const result = await fn();
+        // Hard 20s cap per API — prevents one hung API from blocking the entire chain
+        const result = await withTimeout(fn, 20_000, name);
         if (!result?.url) { console.log(`[Song] ${name}: no URL`); continue; }
         if (result.title) resolvedTitle = result.title;
 
-        const buf = await downloadToBuffer(result.url);
+        const buf = await withTimeout(() => downloadToBuffer(result.url), 35_000, `${name} download`);
         if (!buf || buf.length < 8192) { console.log(`[Song] ${name}: download too small`); continue; }
 
         rawBuffer = buf;
