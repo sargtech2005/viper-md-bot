@@ -628,18 +628,22 @@ const handleMessage = async (sock, msg) => {
       }
     }
     
-    // Get message body from unwrapped content
-    let body = '';
-    if (content.conversation) {
-      body = content.conversation;
-    } else if (content.extendedTextMessage) {
-      body = content.extendedTextMessage.text || '';
-    } else if (content.imageMessage) {
-      body = content.imageMessage.caption || '';
-    } else if (content.videoMessage) {
-      body = content.videoMessage.caption || '';
-    }
-    
+    // Get message body — cover all WhatsApp message wrapping variants
+    const raw = msg.message || {};
+    let body =
+      raw.conversation ||
+      raw.extendedTextMessage?.text ||
+      raw.imageMessage?.caption ||
+      raw.videoMessage?.caption ||
+      raw.documentMessage?.caption ||
+      raw.buttonsResponseMessage?.selectedDisplayText ||
+      raw.listResponseMessage?.singleSelectReply?.selectedRowId ||
+      raw.templateButtonReplyMessage?.selectedDisplayText ||
+      raw.ephemeralMessage?.message?.conversation ||
+      raw.ephemeralMessage?.message?.extendedTextMessage?.text ||
+      raw.viewOnceMessage?.message?.imageMessage?.caption ||
+      raw.viewOnceMessage?.message?.videoMessage?.caption ||
+      '';
     body = (body || '').trim();
     
     // Check antiall protection (owner only feature)
@@ -935,10 +939,10 @@ const handleMessage = async (sock, msg) => {
     _recordCmd();
     await _humanDelay(250, 700); // natural pause before every response
 
-    // Execute command
+    // Execute command — isolated try-catch so a crashing command never
+    // kills the handler or disconnects the bot from WhatsApp
     console.log(`Executing command: ${commandName} from ${sender}`);
-    
-    await command.execute(sock, msg, args, {
+    try { await command.execute(sock, msg, args, {
       from,
       sender,
       isGroup,
@@ -949,7 +953,10 @@ const handleMessage = async (sock, msg) => {
       isMod: isMod(sender),
       reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
       react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } })
-    });
+    }); } catch (cmdErr) {
+      console.error(`[CMD ERROR] ${commandName}:`, cmdErr.message);
+      try { await sock.sendMessage(from, { text: `❌ Command error: ${cmdErr.message}` }, { quoted: msg }); } catch (_) {}
+    }
 
     // ── ANTI-BAN: stop typing indicator after command completes ─────────────
     if (dbSetting('autoTyping')) {
