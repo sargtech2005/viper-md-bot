@@ -4,10 +4,18 @@
  * Sharp is already installed (vips-dev is in the Dockerfile).
  * We render SVG → PNG buffer. No canvas, no puppeteer, no new packages.
  *
+ * Font note: Alpine Linux (our Docker base) ships NO fonts by default.
+ * The Dockerfile installs ttf-freefont + font-noto to fix this.
+ * Font-family in SVGs must use generic fallbacks that map to those packages:
+ *   sans-serif  → FreeSans / Noto Sans
+ *   monospace   → FreeMono
+ *   serif       → FreeSerif
+ * Do NOT use Arial, Courier New, etc. — they are unavailable on Alpine.
+ *
  * Functions:
  *   makeRankCard(opts)  → Buffer (PNG)
  *   makeHeistCard(opts) → Buffer (PNG)
- *   makeCasinoCard(opts)→ Buffer (PNG)
+ *   makeLevelUpCard(opts)→ Buffer (PNG)
  */
 
 const sharp = require('sharp');
@@ -51,11 +59,22 @@ function x(s) {
 }
 
 // ── SVG → PNG buffer ─────────────────────────────────────────────────────────
+// MIN_BYTES guard: a legitimate card should be well over 5 KB.
+// If Sharp returns a tiny buffer it means the SVG failed to render content
+// (usually a font or librsvg issue). Throwing here triggers the text fallback.
+const MIN_BYTES = 5000;
+
 async function svgToPng(svg, width, height) {
-  return sharp(Buffer.from(svg))
+  const buf = await sharp(Buffer.from(svg))
     .resize(width, height)
     .png()
     .toBuffer();
+
+  if (buf.length < MIN_BYTES) {
+    throw new Error(`SVG render produced a suspiciously small image (${buf.length} bytes). ` +
+      'Fonts may not be installed — check Dockerfile for ttf-freefont / font-noto.');
+  }
+  return buf;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -91,8 +110,10 @@ async function makeRankCard(opts) {
   const avatarImg = ppBase64
     ? `<image href="${ppBase64}" x="24" y="24" width="152" height="152" clip-path="url(#avatarClip)"/>`
     : `<circle cx="100" cy="100" r="76" fill="${C.bgCard}" stroke="${C.border}" stroke-width="2"/>
-       <text x="100" y="108" text-anchor="middle" font-size="48" fill="${C.grey}">👤</text>`;
+       <text x="100" y="116" text-anchor="middle" font-size="48" font-family="sans-serif" fill="${C.grey}">?</text>`;
 
+  // NOTE: font-family uses generic CSS families (sans-serif, monospace) which
+  // map to FreeSans/Noto on Alpine. Do NOT use Arial, Courier New, etc.
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
     width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
@@ -126,20 +147,20 @@ async function makeRankCard(opts) {
 
   <!-- Level badge -->
   <rect x="64" y="156" width="72" height="26" rx="13" fill="${C.accent}"/>
-  <text x="100" y="174" text-anchor="middle" font-family="Arial,sans-serif" font-size="13"
+  <text x="100" y="174" text-anchor="middle" font-family="sans-serif" font-size="13"
         font-weight="bold" fill="${C.bg}">LEVEL ${x(level)}</text>
 
   <!-- Username -->
-  <text x="${barX}" y="44" font-family="Arial,sans-serif" font-size="22" font-weight="bold"
-        fill="${C.white}" filter="url(#glow)">☆ ${x(username)}</text>
+  <text x="${barX}" y="44" font-family="sans-serif" font-size="22" font-weight="bold"
+        fill="${C.white}" filter="url(#glow)">${x(username)}</text>
 
-  <!-- Level name + emoji (no emoji rendering in SVG — use text) -->
-  <text x="${barX}" y="76" font-family="Arial,sans-serif" font-size="16" fill="${C.accent}">
+  <!-- Level name -->
+  <text x="${barX}" y="76" font-family="sans-serif" font-size="16" fill="${C.accent}">
     ${x(levelName.toUpperCase())}
   </text>
 
   <!-- EXP label -->
-  <text x="${barX + barW}" y="130" text-anchor="end" font-family="Arial,sans-serif"
+  <text x="${barX + barW}" y="130" text-anchor="end" font-family="sans-serif"
         font-size="14" fill="${C.grey}">${x(expText)}</text>
 
   <!-- XP bar track -->
@@ -148,7 +169,7 @@ async function makeRankCard(opts) {
   <rect x="${barX}" y="${barY}" width="${fillW}" height="${barH}" rx="${barH / 2}" fill="url(#barGrad)" filter="url(#glow)"/>
 
   <!-- Bot name footer -->
-  <text x="${W - 20}" y="${H - 16}" text-anchor="end" font-family="Arial,sans-serif"
+  <text x="${W - 20}" y="${H - 16}" text-anchor="end" font-family="sans-serif"
         font-size="11" fill="${C.grey}">POWERED BY ${x(botName.toUpperCase())}</text>
 </svg>`;
 
@@ -172,7 +193,7 @@ async function makeHeistCard(opts) {
   const W = 800, H = 400;
   const { success, userId, date, amount, crewSize, botName, ppBase64 } = opts;
 
-  const headerBg  = success ? '#00c853' : '#d32f2f';
+  const headerBg   = success ? '#00c853' : '#d32f2f';
   const headerText = success ? 'HEIST REPORT: SUCCESS' : 'HEIST REPORT: CAUGHT';
   const outcomeText = success ? 'MISSION ACCOMPLISHED' : 'BUSTED BY ANTI-CORRUPT';
   const amountText  = success ? `+$${Math.abs(amount).toLocaleString()}` : `-$${Math.abs(amount).toLocaleString()}`;
@@ -181,7 +202,7 @@ async function makeHeistCard(opts) {
   const avatarImg = ppBase64
     ? `<image href="${ppBase64}" x="60" y="130" width="120" height="120" clip-path="url(#hClip)"/>`
     : `<circle cx="120" cy="190" r="60" fill="#21262d" stroke="#30363d" stroke-width="2"/>
-       <text x="120" y="198" text-anchor="middle" font-size="36" fill="${C.grey}">👤</text>`;
+       <text x="120" y="198" text-anchor="middle" font-size="36" font-family="sans-serif" fill="${C.grey}">?</text>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
     width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -194,7 +215,7 @@ async function makeHeistCard(opts) {
 
   <!-- Header banner -->
   <rect width="${W}" height="90" fill="${headerBg}"/>
-  <text x="${W / 2}" y="58" text-anchor="middle" font-family="Arial Black,Arial,sans-serif"
+  <text x="${W / 2}" y="58" text-anchor="middle" font-family="sans-serif"
         font-size="32" font-weight="900" fill="#ffffff">${x(headerText)}</text>
 
   <!-- Card body -->
@@ -205,25 +226,25 @@ async function makeHeistCard(opts) {
   ${avatarImg}
 
   <!-- Info lines -->
-  <text x="240" y="158" font-family="Courier New,monospace" font-size="16" fill="#8b949e">ID</text>
-  <text x="310" y="158" font-family="Courier New,monospace" font-size="16" fill="#ffffff">:  ${x(userId)}</text>
+  <text x="240" y="158" font-family="monospace" font-size="16" fill="#8b949e">ID</text>
+  <text x="310" y="158" font-family="monospace" font-size="16" fill="#ffffff">:  ${x(userId)}</text>
 
-  <text x="240" y="190" font-family="Courier New,monospace" font-size="16" fill="#8b949e">DATE</text>
-  <text x="310" y="190" font-family="Courier New,monospace" font-size="16" fill="#ffffff">:  ${x(date)}</text>
+  <text x="240" y="190" font-family="monospace" font-size="16" fill="#8b949e">DATE</text>
+  <text x="310" y="190" font-family="monospace" font-size="16" fill="#ffffff">:  ${x(date)}</text>
 
-  <text x="240" y="222" font-family="Courier New,monospace" font-size="16" fill="#8b949e">CREW</text>
-  <text x="310" y="222" font-family="Courier New,monospace" font-size="16" fill="#ffffff">:  ${x(crewSize)} members</text>
+  <text x="240" y="222" font-family="monospace" font-size="16" fill="#8b949e">CREW</text>
+  <text x="310" y="222" font-family="monospace" font-size="16" fill="#ffffff">:  ${x(crewSize)} members</text>
 
-  <text x="240" y="254" font-family="Courier New,monospace" font-size="16" fill="#8b949e">OUTCOME</text>
-  <text x="340" y="254" font-family="Courier New,monospace" font-size="16" font-weight="bold"
+  <text x="240" y="254" font-family="monospace" font-size="16" fill="#8b949e">OUTCOME</text>
+  <text x="340" y="254" font-family="monospace" font-size="16" font-weight="bold"
         fill="${success ? '#00ff88' : '#ff4757'}">:  ${x(outcomeText)}</text>
 
   <!-- Amount -->
-  <text x="240" y="300" font-family="Arial Black,Arial,sans-serif" font-size="28"
+  <text x="240" y="300" font-family="sans-serif" font-size="28"
         font-weight="900" fill="${amountColor}">${success ? 'EARNED: ' : 'FINE: '} ${x(amountText)}</text>
 
   <!-- Footer -->
-  <text x="${W / 2}" y="${H - 18}" text-anchor="middle" font-family="Arial,sans-serif"
+  <text x="${W / 2}" y="${H - 18}" text-anchor="middle" font-family="sans-serif"
         font-size="11" fill="#30363d">${x(botName.toUpperCase())} CASINO ENGINE</text>
 </svg>`;
 
@@ -240,7 +261,7 @@ async function makeLevelUpCard(opts) {
   const avatarImg = ppBase64
     ? `<image href="${ppBase64}" x="24" y="24" width="152" height="152" clip-path="url(#luClip)"/>`
     : `<circle cx="100" cy="100" r="76" fill="#21262d"/>
-       <text x="100" y="108" text-anchor="middle" font-size="48" fill="${C.grey}">👤</text>`;
+       <text x="100" y="116" text-anchor="middle" font-size="48" font-family="sans-serif" fill="${C.grey}">?</text>`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
     width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -266,26 +287,26 @@ async function makeLevelUpCard(opts) {
 
   <!-- Level badge -->
   <rect x="60" y="158" width="80" height="26" rx="13" fill="${C.green}"/>
-  <text x="100" y="176" text-anchor="middle" font-family="Arial,sans-serif" font-size="13"
+  <text x="100" y="176" text-anchor="middle" font-family="sans-serif" font-size="13"
         font-weight="bold" fill="#0d1117">LEVEL ${x(level)}</text>
 
   <!-- LEVEL UP banner -->
-  <text x="220" y="52" font-family="Arial Black,Arial,sans-serif" font-size="30"
-        font-weight="900" fill="${C.green}" filter="url(#glow2)">🎉 LEVEL UP!</text>
+  <text x="220" y="52" font-family="sans-serif" font-size="30"
+        font-weight="900" fill="${C.green}" filter="url(#glow2)">** LEVEL UP! **</text>
 
-  <text x="220" y="88" font-family="Arial,sans-serif" font-size="18" fill="${C.white}">
+  <text x="220" y="88" font-family="sans-serif" font-size="18" fill="${C.white}">
     ${x(username)}
   </text>
 
-  <text x="220" y="118" font-family="Arial,sans-serif" font-size="15" fill="${C.accent}">
+  <text x="220" y="118" font-family="sans-serif" font-size="15" fill="${C.accent}">
     Reached ${x(levelName.toUpperCase())}
   </text>
 
-  <text x="220" y="148" font-family="Arial,sans-serif" font-size="14" fill="${C.grey}">
+  <text x="220" y="148" font-family="sans-serif" font-size="14" fill="${C.grey}">
     Total EXP: ${x(exp.toLocaleString())}
   </text>
 
-  <text x="${W - 20}" y="${H - 16}" text-anchor="end" font-family="Arial,sans-serif"
+  <text x="${W - 20}" y="${H - 16}" text-anchor="end" font-family="sans-serif"
         font-size="11" fill="${C.grey}">POWERED BY ${x(botName.toUpperCase())}</text>
 </svg>`;
 

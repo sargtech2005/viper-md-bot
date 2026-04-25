@@ -158,28 +158,32 @@ module.exports = {
 
       const ppBase64 = await fetchPpBase64(sock, extra.sender).catch(() => null);
 
+      // Build stats text once — used as image caption AND as text-only fallback
+      const bar    = progressBar(progress);
+      const toNext = nextExp ? nextExp - exp : 0;
+      let statsText = `┏❐ 《 *🎮 YOUR RANK CARD* 》 ❐\n┃\n`;
+      statsText += `┣◆ 👤 *${userId}*\n`;
+      statsText += `┣◆ ${emoji} Level *${level}* — *${name}*\n`;
+      statsText += `┣◆ ⭐ EXP: *${exp.toLocaleString()}*\n`;
+      statsText += `┣◆ 📊 Progress: [${bar}] ${progress}%\n`;
+      if (nextExp) statsText += `┣◆ 🎯 Next: *${nextExp.toLocaleString()} EXP* | Need: *${toNext.toLocaleString()} more*\n`;
+      else statsText += `┣◆ 🏆 *MAX LEVEL — Viper Elite!*\n`;
+      statsText += `┣◆ 💡 _Chat to earn EXP passively!_\n┃\n┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+
       try {
         const imgBuf = await makeRankCard({
           username: userId, level, levelName: name, levelEmoji: emoji,
           exp, nextExp, progress, botName: B, ppBase64,
         });
+        // Send image card + full stats text together as caption
         return await sock.sendMessage(extra.from, {
           image: imgBuf, mimetype: 'image/png',
-          caption: `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`,
+          caption: statsText,
         }, { quoted: msg });
       } catch (imgErr) {
         console.error('[RankCard]', imgErr.message);
-        // Fallback to text
-        const bar = progressBar(progress);
-        const toNext = nextExp ? nextExp - exp : 0;
-        let t = `┏❐ 《 *🎮 YOUR RANK CARD* 》 ❐\n┃\n`;
-        t += `┣◆ 👤 *${userId}*\n┣◆ ${emoji} Level *${level}* — *${name}*\n`;
-        t += `┣◆ ⭐ EXP: *${exp.toLocaleString()}*\n`;
-        t += `┣◆ 📊 Progress: [${bar}] ${progress}%\n`;
-        if (nextExp) t += `┣◆ 🎯 Next: *${nextExp.toLocaleString()} EXP* | Need: *${toNext.toLocaleString()}*\n`;
-        else t += `┣◆ 🏆 *MAX LEVEL — Viper Elite!*\n`;
-        t += `┣◆ 💡 _Chat to earn EXP passively!_\n┃\n┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-        return extra.reply(t);
+        // Image failed — send same text standalone
+        return extra.reply(statsText);
       }
 
     } catch (e) {

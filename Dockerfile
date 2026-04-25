@@ -2,7 +2,11 @@ FROM node:20-alpine
 
 # Build tools for native modules + git (needed for GitHub-sourced npm packages)
 # ffmpeg: audio conversion   chrony: NTP clock sync (critical for WhatsApp pair codes)
-RUN apk add --no-cache python3 make g++ vips-dev git ffmpeg chrony
+# ttf-freefont + font-noto: fonts for Sharp/librsvg SVG text rendering
+# Without these, ALL text in generated SVG images renders blank/invisible on Alpine!
+RUN apk add --no-cache python3 make g++ vips-dev git ffmpeg chrony \
+    ttf-freefont font-noto fontconfig \
+    && fc-cache -fv
 
 WORKDIR /app
 
