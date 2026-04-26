@@ -18,6 +18,15 @@ const path = require('path');
 const USE_POSTGRES = !!process.env.DATABASE_URL;
 let pgPool = null;
 
+// Session isolation key — CRITICAL for multi-tenant Postgres deployments.
+// Every bot instance MUST have a unique SESSION_ID env var set.
+// Without this, all bots share the same 'settings', 'users', 'groups' rows
+// in Postgres, causing cross-session data leakage (bot names, menu images,
+// group settings and user EXP all bleed between different owners).
+// File mode is already isolated per-session via SESSION_DIR folder paths.
+const SESSION_SCOPE = (process.env.SESSION_ID || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+const scopedKey = (key) => `${SESSION_SCOPE}:${key}`;
+
 if (USE_POSTGRES) {
   try {
     const { Pool } = require('pg');
@@ -53,7 +62,7 @@ async function pgRead(key) {
   try {
     const res = await pgPool.query(
       'SELECT store_value FROM bot_data WHERE store_key = $1',
-      [key]
+      [scopedKey(key)]
     );
     return res.rows[0]?.store_value || {};
   } catch (e) {
@@ -69,7 +78,7 @@ async function pgWrite(key, value) {
        VALUES ($1, $2::jsonb, NOW())
        ON CONFLICT (store_key) DO UPDATE
          SET store_value = $2::jsonb, updated_at = NOW()`,
-      [key, JSON.stringify(value)]
+      [scopedKey(key), JSON.stringify(value)]
     );
     return true;
   } catch (e) {
