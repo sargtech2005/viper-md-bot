@@ -1,0 +1,37 @@
+# ── .dockerignore — VIPER BOT MD ─────────────────────────────────────────────
+# Excludes files from Docker build context → faster uploads, smaller images
+
+# Dev dependencies & local env
+node_modules
+npm-debug.log*
+.npm
+
+# Secrets — never bake into image (use Fly.io secrets instead)
+.env
+.env.*
+!.env.bak
+
+# Git & IDE
+.git
+.gitignore
+.vscode
+.idea
+*.swp
+*.swo
+
+# Docs & CI
+README.md
+*.md
+.github
+render.yaml
+fly.toml.bak
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Test / dev artifacts
+coverage
+*.test.js
+*.spec.js
+__tests__

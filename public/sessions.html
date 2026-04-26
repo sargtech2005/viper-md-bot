@@ -466,6 +466,10 @@ function sessionCard(s) {
         ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="restartSession(${s.id})">
              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><polygon points="5,3 19,10 5,17" fill="currentColor" stroke="none"/></svg>Start
            </button>` : ''}
+      ${hasPhone
+        ? `<button class="vbtn vbtn-sm" style="background:var(--green-pale);color:var(--green);border:1px solid rgba(34,197,94,.25)" onclick="confirmRestartSession(${s.id})" title="Restart session — reconnects bot without deleting">
+             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:12px;height:12px"><path d="M4 10a6 6 0 1 0 1.06-3.36"/><path d="M4 4v4h4"/></svg>Restart
+           </button>` : ''}
       ${running
         ? `<button class="vbtn vbtn-outline vbtn-sm" onclick="stopSession(${s.id})">
              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:12px;height:12px"><rect x="4" y="4" width="12" height="12" rx="1" fill="currentColor" stroke="none"/></svg>Stop
@@ -820,6 +824,16 @@ async function restartSession(id) {
     await api(`/api/sessions/${id}/restart`, { method:'POST' });
     toast('Session restarting...', 'success');
     setTimeout(silentRefresh, 2000);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// Restart button — works whether bot is running or stopped
+async function confirmRestartSession(id) {
+  if (!await vConfirm('The bot will briefly disconnect and reconnect automatically.', 'Restart this session?')) return;
+  try {
+    await api(`/api/sessions/${id}/restart`, { method:'POST' });
+    toast('⚡ Restarting session...', 'success');
+    setTimeout(silentRefresh, 2500);
   } catch(e) { toast(e.message, 'error'); }
 }
 
