@@ -22,7 +22,7 @@ mkdir -p /tmp/viper-sessions /tmp/viper-tmp
 #    --expose-gc                : allow manual GC calls
 #    --optimize-for-size        : smaller code caches = faster startup
 #    UV_THREADPOOL_SIZE already set to 16 in Dockerfile
-export NODE_OPTIONS="--max-old-space-size=1536 --expose-gc --optimize-for-size"
+export NODE_OPTIONS="--max-old-space-size=1536"
 
 echo "🐍 Starting VIPER BOT MD web server..."
 exec node web/server.js

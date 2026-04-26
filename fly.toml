@@ -14,7 +14,7 @@ primary_region = "ams"
 
 [env]
   NODE_ENV = "production"
-  NODE_OPTIONS = "--max-old-space-size=1536 --expose-gc"
+  NODE_OPTIONS = "--max-old-space-size=1536"
 
 [http_service]
   internal_port = 3000
