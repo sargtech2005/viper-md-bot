@@ -37,10 +37,25 @@ if (!process.env.JWT_SECRET) {
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ── Fly.io / Node.js performance tuning ──────────────────────────────────────
+// Keep HTTP connections alive — prevents TLS handshake overhead on every request
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Keep-Alive', 'timeout=60');
+  next();
+});
+
+// Compress responses (saves bandwidth, faster for dashboard/API)
+try {
+  const compression = require('compression');
+  app.use(compression({ level: 6, threshold: 1024 }));
+} catch (_) { /* compression not installed — skip */ }
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.set('trust proxy', 1);
+app.set('etag', 'strong'); // enable ETag for static assets
 
 app.use('/api/auth/', rateLimit({ windowMs:15*60*1000, max:20, message:{error:'Too many requests'} }));
 app.use('/api/',      rateLimit({ windowMs:60*1000,    max:150, message:{error:'Slow down'} }));
@@ -190,20 +205,25 @@ async function boot() {
     BotMgr.startLogoutMonitor();
   }
 
-  // ── Self-ping keepalive ─────────────────────────────────────────────────────
-  // Always ping localhost directly (avoids SSL issues with external APP_URL).
-  // This keeps the fly.io machine active and the WhatsApp WebSocket alive.
-  const _pingInterval = 4 * 60 * 1000; // 4 minutes
-  setInterval(async () => {
+  // ── Fly.io keepalive ──────────────────────────────────────────────────────
+  // Fly.io machines with auto_stop_machines=false NEVER sleep — no external
+  // ping is needed. The internal health check (/health every 15s in fly.toml)
+  // already proves liveness to Fly. We just warm the local HTTP server
+  // to prevent Node from going idle-GC during quiet periods.
+  //
+  // WHY ping localhost at all: Node.js event loop can become sluggish after
+  // long GC pauses on idle servers. A lightweight local HTTP hit every 30s
+  // keeps the event loop ticking and the response time fast on first message.
+  const _pingInterval = 30 * 1000; // 30 seconds — just enough to keep event loop warm
+
+  setInterval(() => {
     try {
-      const http = require('http');
-      // Always use localhost — never the external APP_URL — to avoid HTTPS cert issues
-      http.get({ hostname: '127.0.0.1', port: PORT, path: '/health' }, res => {
-        res.resume(); // drain response so socket closes cleanly
-      }).on('error', () => {}); // silent — don't crash on network blip
+      require('http')
+        .get({ hostname: '127.0.0.1', port: PORT, path: '/health', timeout: 3000 }, r => r.resume())
+        .on('error', () => {});
     } catch (_) {}
   }, _pingInterval);
-  console.log(`🏓 Self-ping keepalive active (every 4 min → localhost:${PORT}/health)`);
+  console.log('🏓 Fly.io event-loop warmup ping active (every 30s)');
 }
 
 boot().catch(e => {

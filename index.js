@@ -68,7 +68,7 @@ const database = require('./database');
 
 // ── Max media size for anti-delete / anti-viewonce (bytes) ──────────────────
 // Files larger than this are skipped to prevent OOM on 512 MB Render instances.
-const MAX_MEDIA_BYTES = 12 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 64 * 1024 * 1024; // 64MB — safe on 2GB Fly.io machine
 
 // ── Owner JID resolver ────────────────────────────────────────────────────────
 // SESSION_NUMBER may not be set on Render — always fall back to ownerNumber.
@@ -86,7 +86,7 @@ function resolveOwnerJid() {
 // messages can be deleted long after they were sent.
 const store = {
   messages:   new Map(),
-  maxPerChat: 50, // large enough to survive most delete delays
+  maxPerChat: 200, // 2GB RAM — keep 200 msgs/chat for better anti-delete coverage
   bind(ev) {
     ev.on('messages.upsert', ({ messages }) => {
       for (const msg of messages) {
@@ -106,7 +106,15 @@ const store = {
 
 // ── Dedup set — cleared every 2 min (was 5) to keep size small ───────────────
 const processed = new Set();
-setInterval(() => processed.clear(), 2 * 60 * 1000);
+// Dedup: prune entries older than 5min instead of blanket clear every 2min
+// This prevents re-processing while still bounding memory usage
+const _processedTs = new Map(); // id -> timestamp
+setInterval(() => {
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  for (const [k, ts] of _processedTs) {
+    if (ts < cutoff) { processed.delete(k); _processedTs.delete(k); }
+  }
+}, 60 * 1000); // prune every 1 minute
 
 // ── Group metadata cache — avoids repeated API calls for the same group ──────
 // Entries expire after 10 minutes so stale data doesn't linger.
@@ -208,11 +216,14 @@ async function startBot() {
     syncFullHistory:       false,
     downloadHistory:       false,
     markOnlineOnConnect:   false,
-    getMessage:            async () => undefined,
-    keepAliveIntervalMs:   5_000,    // ping WA every 5s — keeps NAT alive on cloud hosts
-    connectTimeoutMs:      60_000,   // generous connect window
-    defaultQueryTimeoutMs: 30_000,   // 30s per WA query — prevents hung queries blocking the bot
-    retryRequestDelayMs:   500,
+    getMessage:            async (key) => store.loadMessage(key.remoteJid, key.id),
+    // ── Fly.io High-Performance Tuning ───────────────────────────────────────
+    keepAliveIntervalMs:   10_000,   // 10s pings — Fly's NAT keeps connections alive, no need to over-ping
+    connectTimeoutMs:      30_000,   // faster connect timeout — Fly machines boot fast
+    defaultQueryTimeoutMs: 20_000,   // 20s is plenty; Fly has low latency to WA servers
+    retryRequestDelayMs:   250,      // retry faster — Fly is stable, transient errors are rare
+    generateHighQualityLinkPreview: false, // skip link previews — saves CPU
+    transactionOpts: { maxCommitRetries: 5, delayBetweenTriesMs: 500 },
     ...(pairNumber ? { qrTimeout: 0 } : {}),
   });
 
@@ -403,7 +414,7 @@ async function startBot() {
         const age = msg.messageTimestamp ? Date.now() - msg.messageTimestamp * 1000 : 0;
 
         if (!processed.has(id) && age <= 5 * 60 * 1000) {
-          processed.add(id);
+          processed.add(id); _processedTs.set(id, Date.now());
 
           if (!store.messages.has(from)) store.messages.set(from, new Map());
           store.messages.get(from).set(id, msg);

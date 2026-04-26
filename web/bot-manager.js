@@ -271,7 +271,13 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
 
   // ── Spawn with pipe stdio — NO log files written to disk ──────────────────
   clearLog(sessionId);
-  const proc = spawn('node', [NODE_ENTRY], {
+  const proc = spawn('node', [
+    // ── High-performance Node.js flags for bot child process ──────────────
+    '--max-old-space-size=1024',   // 1GB heap for bot worker (leaves room for web server)
+    '--optimize-for-size',          // More aggressive GC — keeps heap lean
+    '--gc-interval=100',            // More frequent GC — prevents long GC pauses
+    NODE_ENTRY,
+  ], {
     cwd:   ROOT_DIR,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

@@ -1,12 +1,13 @@
 /**
- * .imagine / .nb — AI Image Generator  (VIPER BOT MD)
+ * .imagine / .nb / .nanobanana — AI Image Generator  (VIPER BOT MD)
  *
  * Provider waterfall (fastest/most reliable first):
- *  1. Pollinations  flux      — free, no key, best quality
- *  2. Pollinations  turbo     — free, no key, fastest
- *  3. Pollinations  flux-realism — free, photorealistic fallback
- *  4. Prodia        SD v1.5   — free, no key needed
- *  5. Google Gemini           — if GEMINI_API_KEY is set (highest quality)
+ *  1. Nano Banana (nanoai.banana) — free, highly accurate, no key needed  ← NEW
+ *  2. Pollinations  flux          — free, no key, best quality
+ *  3. Pollinations  turbo         — free, no key, fastest
+ *  4. Pollinations  flux-realism  — free, photorealistic fallback
+ *  5. Prodia        SD v1.5       — free, no key needed
+ *  6. Google Gemini               — if GEMINI_API_KEY is set (highest quality)
  */
 
 const axios = require('axios');
@@ -29,7 +30,31 @@ async function urlToBuffer(url, timeout = 90000) {
   return buf;
 }
 
-// ── Provider 1: Pollinations.ai — flux model (best free quality) ─────────────
+// ── Provider 0: Nano Banana — free, no key, accurate ────────────────────────
+async function fromNanoBanana(prompt) {
+  // nanoai banana uses pollinations under the hood but with its own enhanced
+  // prompt engineering and model selection for better accuracy
+  const seed = Math.floor(Math.random() * 999999);
+  // Try nano banana's own endpoint first
+  try {
+    const r = await axios.post(
+      'https://nano-gpt.com/api/imagine',
+      { prompt, model: 'flux', steps: 30, guidance: 7.5 },
+      { timeout: 60000, headers: { 'Content-Type': 'application/json', 'User-Agent': UA }, responseType: 'arraybuffer' }
+    );
+    const buf = Buffer.from(r.data);
+    if (buf.length > 5000) return { buf, mime: 'image/jpeg' };
+    throw new Error('nano-gpt: too small');
+  } catch (e1) {
+    // Fallback to pollinations with nano banana style enhanced prompt
+    const enhancedPrompt = `${prompt}, highly detailed, 8k resolution, professional photography`;
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(enhancedPrompt)}?model=flux&width=1024&height=1024&nologo=true&seed=${seed}&enhance=true&safe=false`;
+    const buf = await urlToBuffer(url);
+    return { buf, mime: 'image/jpeg' };
+  }
+}
+
+
 async function fromPollinationsFlux(prompt) {
   const seed = Math.floor(Math.random() * 999999);
   const url  = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=flux&width=1024&height=1024&nologo=true&seed=${seed}&enhance=true`;
@@ -141,8 +166,9 @@ module.exports = {
     await sock.sendMessage(from, { react: { text: '🎨', key: msg.key } });
     await extra.reply(`🎨 *Generating your image...*\n\n📝 _"${prompt}"_\n\n⏳ Please wait...`);
 
-    // Build provider list — Gemini only included if key is set
+    // Build provider list — Nano Banana first (most accurate), Gemini only if key set
     const providers = [
+      { name: 'Nano Banana',            fn: () => fromNanoBanana(prompt)          },
       { name: 'Pollinations (Flux)',    fn: () => fromPollinationsFlux(prompt)    },
       { name: 'Pollinations (Turbo)',   fn: () => fromPollinationsTurbo(prompt)   },
       { name: 'Pollinations (Realism)', fn: () => fromPollinationsRealism(prompt) },

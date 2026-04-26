@@ -81,9 +81,10 @@ function resolveMenuImage() {
 // ── Send helper (image caption or text) ──────────────────────────────────────
 async function send(sock, msg, extra, text) {
   const imgPath = resolveMenuImage();
-  // Skip newsletter/forwarded context in groups — WhatsApp silently drops such messages in group chats.
-  const isGroup = extra.from && extra.from.endsWith('@g.us');
-  const ctx     = isGroup ? { mentions: [extra.sender] } : buildCtx(extra.sender);
+  // Include newsletter/forwarded context in all chats including groups.
+  // WhatsApp now supports forwarded-newsletter display in groups — this adds the
+  // "View Channel" button automatically.
+  const ctx = buildCtx(extra.sender);
   if (imgPath) {
     try {
       await sock.sendMessage(extra.from,

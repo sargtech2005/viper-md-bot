@@ -21,7 +21,7 @@ function dbSetting(key) {
 
 // Group metadata cache to prevent rate limiting
 const groupMetadataCache = new Map();
-const CACHE_TTL = 60000; // 1 minute cache
+const CACHE_TTL = 5 * 60 * 1000; // 5 min cache — 2GB RAM, reduce WA API hammering
 
 // Load all commands
 const commands = loadCommands();
@@ -37,7 +37,7 @@ const commands = loadCommands();
 //    Reduced from 1500ms → 500ms. Commands that arrive during the cooldown
 //    are now delayed (queued) instead of silently dropped.
 const _chatCooldown = new Map();
-const CHAT_COOLDOWN_MS = 500; // 0.5s minimum between replies per chat
+const CHAT_COOLDOWN_MS = 300; // 0.3s — Fly.io is stable, tighter cooldown
 
 function _getChatCooldownRemaining(jid) {
   const last = _chatCooldown.get(jid) || 0;
@@ -57,7 +57,7 @@ setInterval(() => {
 //    Raised from 25 → 60 (1/sec average). Now sends a message instead of
 //    silently dropping so users know the bot received their command.
 const _cmdTimestamps = [];
-const MAX_CMDS_PER_MIN = 60;
+const MAX_CMDS_PER_MIN = 120; // 2GB Fly — handle 2 cmds/sec across all chats
 
 function _isGlobalRateLimited() {
   const now = Date.now();
@@ -72,7 +72,7 @@ function _recordCmd() {
 // 3. Human-like typing delay — random pause before every reply
 //    Natural humans don't respond in <100ms. This prevents the
 //    instant-response signature of bots.
-function _humanDelay(min = 300, max = 900) {
+function _humanDelay(min = 100, max = 400) { // Fly.io is fast — shorter delays, still human-like
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   return new Promise(r => setTimeout(r, ms));
 }

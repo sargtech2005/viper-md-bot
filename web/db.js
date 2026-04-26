@@ -7,8 +7,17 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // Always needed on Render
-  max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000,
+  // Fly Postgres is internal — skip SSL for internal connections, use SSL for external
+  ssl: process.env.DATABASE_URL?.includes('localhost') || process.env.DATABASE_URL?.includes('.internal')
+    ? false
+    : { rejectUnauthorized: false },
+  max: 25,                     // Up from 10 — 2GB RAM can handle more concurrent connections
+  min: 3,                      // Keep 3 connections warm at all times — no cold-start lag
+  idleTimeoutMillis: 60000,    // Keep idle connections alive longer on Fly
+  connectionTimeoutMillis: 5000,
+  allowExitOnIdle: false,      // Never drop pool on idle — keep warm
+  keepAlive: true,             // TCP keepalive prevents Fly's NAT from dropping idle connections
+  keepAliveInitialDelayMillis: 10000,
 });
 pool.on('error', err => console.error('[DB] Pool error:', err.message));
 const query = (text, params) => pool.query(text, params);

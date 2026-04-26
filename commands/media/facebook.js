@@ -1,174 +1,147 @@
 /**
- * Facebook Downloader - Download Facebook videos
+ * Facebook Downloader — multi-provider with fallback
  */
 
-const { facebookdl } = require('@bochilteam/scraper-facebook');
 const axios = require('axios');
 const config = require('../../config');
 
-// Store processed message IDs to prevent duplicates
 const processedMessages = new Set();
+
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124';
+
+// Provider 1: getfvid / fbdownloader API
+async function tryFbdownloader(url) {
+  const r = await axios.post(
+    'https://getfvid.com/downloader',
+    new URLSearchParams({ url }),
+    { timeout: 20000, headers: { 'User-Agent': UA, 'Content-Type': 'application/x-www-form-urlencoded', 'Referer': 'https://getfvid.com/' } }
+  );
+  const matches = (r.data || '').match(/https:\/\/[^"'\s]+\.mp4[^"'\s]*/g) || [];
+  if (matches.length) return { videoUrl: matches[0] };
+  throw new Error('getfvid: no mp4');
+}
+
+// Provider 2: snapfrom / eliteprotech
+async function tryEliteProTech(url) {
+  const r = await axios.get(
+    `https://eliteprotech-apis.zone.id/fbdown?url=${encodeURIComponent(url)}`,
+    { timeout: 20000, headers: { 'User-Agent': UA } }
+  );
+  if (r.data?.success && r.data?.download_url) return { videoUrl: r.data.download_url, title: r.data.title };
+  throw new Error('eliteprotech fb: no data');
+}
+
+// Provider 3: siputzx
+async function trySiputzx(url) {
+  const r = await axios.get(
+    `https://api.siputzx.my.id/api/d/fb?url=${encodeURIComponent(url)}`,
+    { timeout: 20000, headers: { 'User-Agent': UA } }
+  );
+  const videoUrl = r.data?.data?.hd || r.data?.data?.sd || r.data?.hd || r.data?.sd;
+  if (videoUrl) return { videoUrl, title: r.data?.data?.title };
+  throw new Error('siputzx fb: no video');
+}
+
+// Provider 4: savefrom style (yupra)
+async function tryYupra(url) {
+  const r = await axios.get(
+    `https://api.yupra.my.id/api/downloader/facebook?url=${encodeURIComponent(url)}`,
+    { timeout: 20000, headers: { 'User-Agent': UA } }
+  );
+  if (r.data?.success && r.data?.data?.download_url) return { videoUrl: r.data.data.download_url, title: r.data.data.title };
+  throw new Error('yupra fb: no data');
+}
+
+// Provider 5: bochilteam scraper (original)
+async function tryBochil(url) {
+  const { facebookdl } = require('@bochilteam/scraper-facebook');
+  const data = await facebookdl(url);
+  if (!data?.video?.length) throw new Error('bochil: no video array');
+  const option = data.video[0];
+  if (!option?.download) throw new Error('bochil: no download fn');
+  const videoData = await option.download();
+  if (typeof videoData === 'string') return { videoUrl: videoData, title: data.title };
+  if (Buffer.isBuffer(videoData)) return { buffer: videoData, title: data.title };
+  if (videoData?.url) return { videoUrl: videoData.url, title: data.title };
+  throw new Error('bochil: invalid format');
+}
 
 module.exports = {
   name: 'facebook',
   aliases: ['fb', 'fbdl', 'facebookdl'],
   category: 'download',
   description: 'Download Facebook videos',
-  usage: '.facebook <Facebook URL>',
-  
+  usage: '.fb <Facebook URL>',
+
   async execute(sock, msg, args, extra) {
     try {
-      // Check if message has already been processed
-      if (processedMessages.has(msg.key.id)) {
-        return;
-      }
-      
-      // Add message ID to processed set
+      if (processedMessages.has(msg.key.id)) return;
       processedMessages.add(msg.key.id);
-      
-      // Clean up old message IDs after 5 minutes
-      setTimeout(() => {
-        processedMessages.delete(msg.key.id);
-      }, 5 * 60 * 1000);
-      
-      const text = msg.message?.conversation || 
-                   msg.message?.extendedTextMessage?.text ||
-                   args.join(' ');
-      
-      if (!text) {
-        return await extra.reply('Please provide a Facebook link for the video.');
+      setTimeout(() => processedMessages.delete(msg.key.id), 5 * 60 * 1000);
+
+      const chatId = extra.from;
+      const text = args.join(' ').trim() ||
+                   msg.message?.conversation ||
+                   msg.message?.extendedTextMessage?.text || '';
+
+      const urlMatch = text.match(/https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.watch)\/[^\s]+/);
+      const url = urlMatch ? urlMatch[0] : text.trim();
+
+      const fbPattern = /https?:\/\/(?:www\.|m\.|web\.)?(?:facebook\.com|fb\.com|fb\.watch)\//;
+      if (!url || !fbPattern.test(url)) {
+        return extra.reply(
+          '📘 *Facebook Downloader*\n\n' +
+          'Usage: `.fb <Facebook video URL>`\n' +
+          'Example: `.fb https://www.facebook.com/video/xyz`\n\n' +
+          '_Supports: Facebook videos, reels, watch_'
+        );
       }
-      
-      // Extract URL from command
-      const url = text.split(' ').slice(1).join(' ').trim();
-      
-      if (!url) {
-        return await extra.reply('Please provide a Facebook link for the video.');
-      }
-      
-      // Check for various Facebook URL formats
-      const facebookPatterns = [
-        /https?:\/\/(?:www\.|m\.)?facebook\.com\//,
-        /https?:\/\/(?:www\.|m\.)?fb\.com\//,
-        /https?:\/\/fb\.watch\//,
-        /https?:\/\/(?:www\.)?facebook\.com\/watch/,
-        /https?:\/\/(?:www\.)?facebook\.com\/.*\/videos\//
+
+      await sock.sendMessage(chatId, { react: { text: '⬇️', key: msg.key } });
+
+      const providers = [
+        { name: 'EliteProTech', fn: () => tryEliteProTech(url) },
+        { name: 'Siputzx',      fn: () => trySiputzx(url) },
+        { name: 'Yupra',        fn: () => tryYupra(url) },
+        { name: 'Bochil',       fn: () => tryBochil(url) },
+        { name: 'Getfvid',      fn: () => tryFbdownloader(url) },
       ];
-      
-      const isValidUrl = facebookPatterns.some(pattern => pattern.test(url));
-      
-      if (!isValidUrl) {
-        return await extra.reply('That is not a valid Facebook link. Please provide a valid Facebook video link.');
+
+      let result = null;
+      for (const { name, fn } of providers) {
+        try {
+          result = await fn();
+          console.log(`[FB] ✅ ${name}`);
+          break;
+        } catch (e) {
+          console.log(`[FB] ✗ ${name}: ${e.message}`);
+        }
       }
-      
-      await sock.sendMessage(extra.from, {
-        react: { text: '🔄', key: msg.key }
-      });
-      
-      try {
-        // Use @bochilteam/scraper-facebook
-        const data = await facebookdl(url);
-        
-        if (!data || !data.video || !Array.isArray(data.video) || data.video.length === 0) {
-          throw new Error('No video data found');
-        }
-        
-        // Get the highest quality video (first in array is usually highest)
-        const videoOption = data.video[0];
-        if (!videoOption || !videoOption.download) {
-          throw new Error('No video download function found');
-        }
-        
-        // Call the download function to get the video URL or buffer
-        const videoData = await videoOption.download();
-        
-        let videoUrl = null;
-        let videoBuffer = null;
-        
-        // Check if it's a URL or buffer
-        if (typeof videoData === 'string') {
-          videoUrl = videoData;
-        } else if (Buffer.isBuffer(videoData)) {
-          videoBuffer = videoData;
-        } else if (videoData && videoData.url) {
-          videoUrl = videoData.url;
-        } else if (videoData && videoData.data) {
-          videoBuffer = Buffer.from(videoData.data);
-        } else {
-          throw new Error('Invalid video data format');
-        }
-        
-        // Build caption with video info
-        const botName = config.botName.toUpperCase();
-        let caption = `*DOWNLOADED BY ${botName}*`;
-        
-        const parts = [];
-        
-        if (data.duration) {
-          parts.push(`⏱️ Duration: ${data.duration}`);
-        }
-        
-        if (videoOption.quality) {
-          parts.push(`📹 Quality: ${videoOption.quality}`);
-        }
-        
-        if (parts.length > 0) {
-          caption += '\n\n' + parts.join('\n');
-        }
-        
-        // Send video
-        if (videoBuffer) {
-          // Send as buffer
-          await sock.sendMessage(extra.from, {
-            video: videoBuffer,
-            mimetype: 'video/mp4',
-            caption: caption
-          }, { quoted: msg });
-        } else if (videoUrl) {
-          // Try URL first
-          try {
-            await sock.sendMessage(extra.from, {
-              video: { url: videoUrl },
-              mimetype: 'video/mp4',
-              caption: caption
-            }, { quoted: msg });
-          } catch (urlError) {
-            // If URL fails, download and send as buffer
-            console.error('URL send failed, trying buffer method:', urlError.message);
-            try {
-              const videoResponse = await axios.get(videoUrl, {
-                responseType: 'arraybuffer',
-                timeout: 60000,
-                maxContentLength: 100 * 1024 * 1024,
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                  'Referer': 'https://www.facebook.com/'
-                }
-              });
-              
-              const buffer = Buffer.from(videoResponse.data);
-              await sock.sendMessage(extra.from, {
-                video: buffer,
-                mimetype: 'video/mp4',
-                caption: caption
-              }, { quoted: msg });
-            } catch (bufferError) {
-              console.error('Buffer method also failed:', bufferError.message);
-              throw new Error('Failed to send video');
-            }
-          }
-        } else {
-          throw new Error('No video URL or buffer found');
-        }
-        
-      } catch (error) {
-        console.error('Error in Facebook download:', error);
-        await extra.reply(`❌ Failed to download Facebook video.\n\nError: ${error.message}\n\nPlease try again with a different link.`);
+
+      if (!result) {
+        await sock.sendMessage(chatId, { react: { text: '❌', key: msg.key } });
+        return extra.reply('❌ Could not download this Facebook video.\n\n_The video may be private, age-restricted, or temporarily unavailable._');
       }
+
+      const botName = config.botName.toUpperCase();
+      const caption = `📘 *Downloaded by ${botName}*${result.title ? `\n\n📝 ${result.title}` : ''}`;
+
+      if (result.buffer) {
+        await sock.sendMessage(chatId, { video: result.buffer, mimetype: 'video/mp4', caption }, { quoted: msg });
+      } else if (result.videoUrl) {
+        try {
+          await sock.sendMessage(chatId, { video: { url: result.videoUrl }, mimetype: 'video/mp4', caption }, { quoted: msg });
+        } catch (urlErr) {
+          // Download to buffer and retry
+          const r = await axios.get(result.videoUrl, { responseType: 'arraybuffer', timeout: 60000, headers: { 'User-Agent': UA, 'Referer': 'https://www.facebook.com/' } });
+          await sock.sendMessage(chatId, { video: Buffer.from(r.data), mimetype: 'video/mp4', caption }, { quoted: msg });
+        }
+      }
+
+      await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } });
     } catch (error) {
-      console.error('Error in Facebook command:', error);
-      await extra.reply('An error occurred while processing the request. Please try again later.');
+      console.error('[FB] Error:', error);
+      await extra.reply('❌ An error occurred. Please try again.');
     }
   }
 };
-

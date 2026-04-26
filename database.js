@@ -32,10 +32,15 @@ if (USE_POSTGRES) {
     const { Pool } = require('pg');
     pgPool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      max: 5,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+      // Fly Postgres is internal — skip SSL for internal .internal connections
+      ssl: process.env.DATABASE_URL?.includes('.internal') || process.env.DATABASE_URL?.includes('localhost')
+        ? false
+        : { rejectUnauthorized: false },
+      max: 8,                      // per-bot pool — enough for concurrent reads/writes
+      min: 2,                      // keep 2 warm on Fly — no cold-connect lag
+      idleTimeoutMillis: 60000,
+      connectionTimeoutMillis: 5000,
+      keepAlive: true,
     });
     pgPool.on('error', err => console.error('[DB] Pool error:', err.message));
     // Create the bot_data table if it doesn't exist (runs once on startup)

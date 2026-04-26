@@ -1,29 +1,44 @@
 FROM node:20-alpine
 
-# Build tools for native modules + git (needed for GitHub-sourced npm packages)
-# ffmpeg: audio conversion   chrony: NTP clock sync (critical for WhatsApp pair codes)
-# ttf-freefont + font-noto: fonts for Sharp/librsvg SVG text rendering
-# Without these, ALL text in generated SVG images renders blank/invisible on Alpine!
-RUN apk add --no-cache python3 make g++ vips-dev git ffmpeg chrony \
+# ── System dependencies ───────────────────────────────────────────────────────
+# python3/make/g++: native module compilation (sharp, canvas, etc.)
+# vips-dev: libvips for sharp image processing
+# git: npm packages sourced from GitHub
+# ffmpeg: audio/video conversion for media commands
+# chrony: NTP clock sync — CRITICAL for WhatsApp pairing codes (must be within 30s of real time)
+# ttf-freefont + font-noto: fonts for Sharp/librsvg SVG rendering — without these ALL SVG text is blank!
+# tini: proper PID 1 init — handles SIGTERM/SIGCHLD correctly, prevents zombie processes
+RUN apk add --no-cache \
+    python3 make g++ vips-dev git \
+    ffmpeg chrony \
     ttf-freefont font-noto fontconfig \
+    tini \
     && fc-cache -fv
+
+# ── Node.js performance environment ──────────────────────────────────────────
+ENV NODE_ENV=production
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+# UV_THREADPOOL_SIZE: libuv thread pool for I/O — default is 4, raise for concurrent bot sessions
+ENV UV_THREADPOOL_SIZE=16
 
 WORKDIR /app
 
+# ── Install dependencies (production only, cached layer) ─────────────────────
 COPY package*.json ./
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-RUN npm install --omit=dev
+RUN npm install --omit=dev --prefer-offline
 
+# ── Copy application code ─────────────────────────────────────────────────────
 COPY . .
 
-# Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s \
+# ── Health check — tighter timing matches fly.toml checks ────────────────────
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-# entrypoint.sh syncs clock via NTP before starting the server
+# ── Use tini as PID 1 — correct signal handling for Fly.io graceful restarts ──
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["/app/entrypoint.sh"]

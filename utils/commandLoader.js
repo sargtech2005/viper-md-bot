@@ -1,47 +1,63 @@
 /**
- * Command Loader - Separate module to avoid circular dependencies
+ * Command Loader — VIPER BOT MD
+ * Commands are loaded ONCE at startup and cached in memory.
+ * Re-calling loadCommands() returns the same Map (no disk re-scan).
+ * This is safe because commands don't change at runtime.
+ *
+ * Hot-reload: call loadCommands(true) to force a fresh scan (e.g. after .update)
  */
 
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
-// Load all commands
-const loadCommands = () => {
-  const commands = new Map();
+let _cache = null;
+
+const loadCommands = (forceReload = false) => {
+  if (_cache && !forceReload) return _cache;
+
+  const commands    = new Map();
   const commandsPath = path.join(__dirname, '..', 'commands');
-  
+
   if (!fs.existsSync(commandsPath)) {
-    console.log('Commands directory not found');
+    console.log('[CommandLoader] Commands directory not found');
+    _cache = commands;
     return commands;
   }
-  
+
+  let loaded = 0, failed = 0;
   const categories = fs.readdirSync(commandsPath);
-  
+
   categories.forEach(category => {
     const categoryPath = path.join(commandsPath, category);
-    if (fs.statSync(categoryPath).isDirectory()) {
-      const files = fs.readdirSync(categoryPath).filter(f => f.endsWith('.js'));
-      
-      files.forEach(file => {
-        try {
-          const command = require(path.join(categoryPath, file));
-          if (command.name) {
-            commands.set(command.name, command);
-            if (command.aliases) {
-              command.aliases.forEach(alias => {
-                commands.set(alias, command);
-              });
-            }
-          }
-        } catch (error) {
-          console.error(`Error loading command ${file}:`, error.message);
+    if (!fs.statSync(categoryPath).isDirectory()) return;
+
+    const files = fs.readdirSync(categoryPath).filter(f => f.endsWith('.js'));
+
+    files.forEach(file => {
+      const filePath = path.join(categoryPath, file);
+      try {
+        // Clear require cache on force-reload so updated files are picked up
+        if (forceReload && require.cache[require.resolve(filePath)]) {
+          delete require.cache[require.resolve(filePath)];
         }
-      });
-    }
+        const command = require(filePath);
+        if (command.name) {
+          commands.set(command.name, command);
+          if (Array.isArray(command.aliases)) {
+            command.aliases.forEach(alias => commands.set(alias, command));
+          }
+          loaded++;
+        }
+      } catch (error) {
+        console.error(`[CommandLoader] Error loading ${category}/${file}:`, error.message);
+        failed++;
+      }
+    });
   });
-  
+
+  console.log(`[CommandLoader] ✅ Loaded ${loaded} commands (${failed} failed)`);
+  _cache = commands;
   return commands;
 };
 
 module.exports = { loadCommands };
-
