@@ -1,4 +1,4 @@
-# fly.toml — Viper Bot Fly.io config (Lightning Speed ⚡)
+# fly.toml — Viper Bot Fly.io config (Lightning ⚡)
 
 app = "viper-md-bot"
 primary_region = "ams"
@@ -6,13 +6,14 @@ primary_region = "ams"
 [build]
 
 [deploy]
-  # Rolling deploy = new machine starts and passes health check BEFORE old one stops.
-  # Users never see a gap — instant cutover with zero downtime on every redeploy.
-  strategy = "rolling"
+  # "immediate" is correct for single-machine apps.
+  # "rolling" requires 2+ machines — on 1 machine it deadlocks:
+  # Fly keeps the old machine alive waiting to replace it, but there's
+  # nowhere to put the new one, so both fail with "machine still active".
+  strategy = "immediate"
 
 [env]
   NODE_ENV = "production"
-  # Node.js heap — V8 flags moved to entrypoint.sh for finer control
   NODE_OPTIONS = "--max-old-space-size=1536 --expose-gc"
 
 [http_service]
@@ -30,14 +31,14 @@ primary_region = "ams"
 [[vm]]
   memory = '2gb'
   cpu_kind = 'shared'
-  cpus = 2           # 2 vCPUs: concurrent sessions + web server
+  cpus = 2
 
 [checks]
   [checks.health]
-    grace_period = "8s"      # Reduced: new container warms up fast now
-    interval = "10s"         # Check every 10s — catch issues faster
+    grace_period = "10s"
+    interval = "15s"
     method = "GET"
     path = "/health"
     port = 3000
-    timeout = "4s"
+    timeout = "5s"
     type = "http"
