@@ -188,6 +188,45 @@ async function renderStyle2(sock, msg, extra, cmds, cats, total) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STYLE 3 — Interactive list-message menu (WhatsApp popup style)
+// ─────────────────────────────────────────────────────────────────────────────
+async function renderStyle3(sock, msg, extra, cmds, cats, total) {
+  const botName = database.getSetting('botName', config.botName);
+  const prefix  = database.getSetting('prefix',  config.prefix);
+
+  // Build one row per non-empty category
+  const rows = [];
+  for (const [key, meta] of Object.entries(CAT)) {
+    const count = cats[key] ? cats[key].length : 0;
+    if (count > 0) {
+      // Strip the hardcoded '.' from hint and reapply the live prefix
+      const cmdName = meta.hint.replace(/^[^a-zA-Z]+/, ''); // 'viper', 'squad', …
+      rows.push({
+        title:       meta.icon + ' ' + meta.label,
+        description: count + ' commands — tap to browse',
+        rowId:       prefix + cmdName,
+      });
+    }
+  }
+
+  try {
+    await sock.sendMessage(extra.from, {
+      listMessage: {
+        title:       '🐍 ' + botName + ' — MENU',
+        description: total + ' commands  •  ' + rows.length + ' categories\nPrefix: ' + prefix,
+        buttonText:  '📂 Browse Categories',
+        footerText:  'Powered by ' + botName,
+        listType:    1,          // SINGLE_SELECT
+        sections:    [{ title: 'Categories', rows }],
+      },
+    }, { quoted: msg });
+  } catch (_) {
+    // Fallback: style 1 compact text if list messages aren't supported
+    await renderStyle1(sock, msg, extra, cmds, cats, total);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Command export
 // ─────────────────────────────────────────────────────────────────────────────
 module.exports = {
@@ -214,7 +253,9 @@ module.exports = {
 
       const style = database.getSetting('menuStyle', 1);
 
-      if (style === 2) {
+      if (style === 3) {
+        await renderStyle3(sock, msg, extra, cmds, cats, total);
+      } else if (style === 2) {
         await renderStyle2(sock, msg, extra, cmds, cats, total);
       } else {
         await renderStyle1(sock, msg, extra, cmds, cats, total);
