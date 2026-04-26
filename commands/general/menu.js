@@ -18,18 +18,22 @@ const sc = s => {
 };
 
 // ── Category meta — shared by both styles ─────────────────────────────────────
+// label = what shows in the main menu (branded)
+// hint  = the command users type to open that sub-menu (must match nav shortcut name/alias)
+// Both menus (Style 1 compact + Style 2 expanded) use this single source of truth,
+// so renaming here automatically keeps both menus consistent.
 const CAT = {
-  ai:        { icon: '🤖', hint: '.aimenu',        label: 'ᴀɪ'         },
-  owner:     { icon: '👑', hint: '.owner',         label: 'ᴏᴡɴᴇʀ'      },
-  general:   { icon: '🌐', hint: '.general',       label: 'ᴍᴀɪɴ'       },
-  admin:     { icon: '👥', hint: '.admin',         label: 'ɢʀᴏᴜᴘ'      },
-  download:  { icon: '🎬', hint: '.download',      label: 'ᴅᴏᴡɴʟᴏᴀᴅ'   },
-  search:    { icon: '🔍', hint: '.searchmenu',    label: 'ꜱᴇᴀʀᴄʜ'     },
-  sports:    { icon: '⚽', hint: '.sports',        label: 'ꜱᴘᴏʀᴛꜱ'     },
-  fun:       { icon: '🎭', hint: '.fun',           label: 'ꜰᴜɴ'        },
-  utility:   { icon: '🔧', hint: '.utility',       label: 'ᴜᴛɪʟɪᴛʏ'    },
-  textmaker: { icon: '🖋️', hint: '.textmaker',     label: 'ᴛᴇxᴛᴍᴀᴋᴇʀ' },
-  developer: { icon: '💻', hint: '.developer',     label: 'ᴅᴇᴠᴇʟᴏᴘᴇʀ'  },
+  general:   { icon: '🐍', hint: '.viper',      label: 'ᴠɪᴘᴇʀ'    },  // core commands
+  admin:     { icon: '⚔️', hint: '.squad',      label: 'ꜱQᴜᴀᴅ'    },  // group management
+  owner:     { icon: '👑', hint: '.venom',      label: 'ᴠᴇɴᴏᴍ'    },  // owner-only
+  fun:       { icon: '🎮', hint: '.arcade',     label: 'ᴀʀᴄᴀᴅᴇ'   },  // games & fun
+  ai:        { icon: '🤖', hint: '.nexus',      label: 'ɴᴇxᴜꜱ'    },  // AI suite
+  download:  { icon: '📥', hint: '.media',      label: 'ᴍᴇᴅɪᴀ'    },  // downloads & stickers
+  utility:   { icon: '🔐', hint: '.vault',      label: 'ᴠᴀᴜʟᴛ'    },  // utility tools
+  search:    { icon: '🔍', hint: '.radar',      label: 'ʀᴀᴅᴀʀ'    },  // search
+  sports:    { icon: '⚽', hint: '.arena',      label: 'ᴀʀᴇɴᴀ'    },  // sports
+  textmaker: { icon: '🖋️', hint: '.studio',     label: 'ꜱᴛᴜᴅɪᴏ'  },  // text art
+  developer: { icon: '💻', hint: '.lab',        label: 'ʟᴀʙ'      },  // dev tools
 };
 
 // ── Runtime formatter ─────────────────────────────────────────────────────────

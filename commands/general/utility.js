@@ -1,12 +1,12 @@
 const { sendCategoryMenu } = require('../../utils/categoryMenu');
 module.exports = {
-  name: 'utility',
-  aliases: ['utilitymenu'],
+  name: 'vault',
+  aliases: ['vault', 'utility', 'utilitymenu'],
   category: 'general',
   isNavShortcut: true,
   description: 'Show utility commands',
-  usage: '.utility',
+  usage: '.vault',
   async execute(sock, msg, args, extra) {
-    await sendCategoryMenu(sock, msg, extra, 'utility', '🔧', 'utility');
+    await sendCategoryMenu(sock, msg, extra, 'utility', '🔐', 'vault');
   },
 };

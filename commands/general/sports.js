@@ -1,9 +1,12 @@
 const { sendCategoryMenu } = require('../../utils/categoryMenu');
 module.exports = {
-  name: 'sports', aliases: ['football', 'sportsmenu', 'footballmenu'],
-  category: 'general', isNavShortcut: true,
-  description: 'Show sports & football commands', usage: '.sports',
+  name: 'arena',
+  aliases: ['arena', 'sports', 'sportsmenu'],
+  category: 'general',
+  isNavShortcut: true,
+  description: 'Show sports commands',
+  usage: '.arena',
   async execute(sock, msg, args, extra) {
-    await sendCategoryMenu(sock, msg, extra, 'sports', '⚽', 'sports');
+    await sendCategoryMenu(sock, msg, extra, 'sports', '⚽', 'arena');
   },
 };

@@ -262,13 +262,32 @@ const getModerators = () => readSync('mods').moderators || [];
 // ── Per-session bot settings ──────────────────────────────────────────────────
 const getSettings = () => readSync('settings');
 const updateSettings = (data) => {
+  // IMPORTANT: always read the current cached value (or {} if not yet primed).
+  // In Postgres mode, if the cache hasn't been primed yet and we merge into {},
+  // we would wipe all existing settings for this session. The async prime at
+  // startup fills the cache before any command is processed, so in practice
+  // readSync will have the right data. But as a safety net we also trigger an
+  // async re-prime here if the settings cache is empty.
   const s = readSync('settings');
+  if (USE_POSTGRES && Object.keys(s).length === 0) {
+    // Cache not ready yet — schedule this write after the prime resolves
+    readAsync('settings').then(existing => {
+      const merged = { ...existing, ...data };
+      _cache.set('settings', merged);
+      if (USE_POSTGRES) pgWrite('settings', merged).catch(() => {});
+      else fileWrite('settings', merged);
+    }).catch(() => {});
+    return;
+  }
   const merged = { ...s, ...data };
   _cache.set('settings', merged);
   _dirty.add('settings');
 };
 const getSetting = (key, fallback = null) => {
   const s = readSync('settings');
+  // In Postgres mode: if the cache is empty it means the async prime hasn't
+  // completed yet. Return the fallback rather than a wrong value. The next
+  // call (after prime) will return the correct persisted value.
   return s.hasOwnProperty(key) ? s[key] : fallback;
 };
 

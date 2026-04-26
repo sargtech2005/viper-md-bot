@@ -1,12 +1,12 @@
 const { sendCategoryMenu } = require('../../utils/categoryMenu');
 module.exports = {
-  name: 'admin',
-  aliases: ['adminmenu'],
+  name: 'squad',
+  aliases: ['squad', 'admin', 'adminmenu'],
   category: 'general',
   isNavShortcut: true,
-  description: 'Show admin commands',
-  usage: '.admin',
+  description: 'Show group management commands',
+  usage: '.squad',
   async execute(sock, msg, args, extra) {
-    await sendCategoryMenu(sock, msg, extra, 'admin', '⚙️', 'admin');
+    await sendCategoryMenu(sock, msg, extra, 'admin', '⚔️', 'squad');
   },
 };

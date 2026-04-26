@@ -1,12 +1,12 @@
 const { sendCategoryMenu } = require('../../utils/categoryMenu');
 module.exports = {
   name: 'media',
-  aliases: ['mediamenu'],
+  aliases: ['media', 'download', 'downloadmenu'],
   category: 'general',
   isNavShortcut: true,
-  description: 'Show media commands',
+  description: 'Show media & download commands',
   usage: '.media',
   async execute(sock, msg, args, extra) {
-    await sendCategoryMenu(sock, msg, extra, 'media', '🎬', 'media');
+    await sendCategoryMenu(sock, msg, extra, 'download', '📥', 'media');
   },
 };

@@ -49,15 +49,15 @@ const DEV_TOOLS = [
 ];
 
 module.exports = {
-  name: 'developer',
-  aliases: ['dev', 'devtools', 'devmenu'],
+  name: 'lab',
+  aliases: ['lab', 'developer', 'dev', 'devtools', 'devmenu'],
   category: 'developer',
-  description: 'Developer tools menu',
-  usage: '.developer',
+  description: 'Viper Lab — developer tools menu',
+  usage: '.lab',
 
   async execute(sock, msg, args, extra) {
     try {
-      let t = `┏❐ 《 *💻 ${sc('developer tools')} ᴍᴇɴᴜ* 》 ❐\n`;
+      let t = `┏❐ 《 *💻 ${sc('viper lab')} ᴍᴇɴᴜ* 》 ❐\n`;
       t += `┃\n`;
       t += `┣◆ 🔢 ${sc('total')}: *${DEV_TOOLS.length} tools*\n`;
       t += `┣◆ ⚡ ${sc('prefix')}: *${config.prefix}*\n`;

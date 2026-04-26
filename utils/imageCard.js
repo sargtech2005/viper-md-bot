@@ -49,6 +49,9 @@ const C = {
   xpTrack:   '#21262d',
 };
 
+// ── Number formatter (e.g. 10000 → "10,000") ─────────────────────────────────
+const fmt = (n) => Number(n).toLocaleString();
+
 // ── escapeXml helper ─────────────────────────────────────────────────────────
 function x(s) {
   return String(s ?? '')

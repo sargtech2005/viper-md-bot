@@ -258,6 +258,11 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
     ...process.env,
     SESSION_DIR:    sd,
     SESSION_NUMBER: phone,
+    // SESSION_ID scopes ALL Postgres keys to this session (e.g. "default:settings" → "2348xxx:settings").
+    // Without this, every bot shares the same Postgres rows — one user's
+    // .setbotname or .setprefix overwrites EVERYONE ELSE's settings on restart.
+    // Phone number is the right scope: unique per session and stable across restarts.
+    SESSION_ID: phone,
   };
   if (pairNumber && !hadCreds) env.PAIR_NUMBER = pairNumber;
 

@@ -1,17 +1,12 @@
-/**
- * .owner — list all owner-only commands  (VIPER BOT MD)
- */
 const { sendCategoryMenu } = require('../../utils/categoryMenu');
-
 module.exports = {
-  name: 'owner',
-  aliases: ['ownermenu'],
+  name: 'venom',
+  aliases: ['venom', 'owner', 'ownermenu'],
   category: 'general',
   isNavShortcut: true,
-  description: 'Show owner commands',
-  usage: '.owner',
-
+  description: 'Show owner-only commands',
+  usage: '.venom',
   async execute(sock, msg, args, extra) {
-    await sendCategoryMenu(sock, msg, extra, 'owner', '👑', 'owner');
+    await sendCategoryMenu(sock, msg, extra, 'owner', '👑', 'venom');
   },
 };

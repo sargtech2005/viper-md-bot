@@ -1,12 +1,12 @@
 const { sendCategoryMenu } = require('../../utils/categoryMenu');
 module.exports = {
-  name: 'textmaker',
-  aliases: ['textmakermenu'],
+  name: 'studio',
+  aliases: ['studio', 'textmaker', 'textmakermenu'],
   category: 'general',
   isNavShortcut: true,
-  description: 'Show textmaker commands',
-  usage: '.textmaker',
+  description: 'Show text art commands',
+  usage: '.studio',
   async execute(sock, msg, args, extra) {
-    await sendCategoryMenu(sock, msg, extra, 'textmaker', '🖋️', 'textmaker');
+    await sendCategoryMenu(sock, msg, extra, 'textmaker', '🖋️', 'studio');
   },
 };
