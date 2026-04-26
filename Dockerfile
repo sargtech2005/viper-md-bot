@@ -19,8 +19,8 @@ WORKDIR /app
 
 # ── Install dependencies — separate layer, only rebuilds when package.json changes
 # npm ci is faster & more reliable than npm install (uses lockfile exactly)
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --prefer-offline || npm install --omit=dev --prefer-offline
+COPY package.json ./
+RUN npm install --omit=dev --prefer-offline
 
 # ── Final image — copy deps then code (code changes skip the npm layer) ───────
 FROM node:20-alpine AS final
