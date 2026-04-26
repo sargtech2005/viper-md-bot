@@ -231,26 +231,13 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
 
   if (!fs.existsSync(sd)) fs.mkdirSync(sd, { recursive: true });
 
-  // Seed initial settings from DB if present
+  // Pull initial_settings from bot_sessions row so we can pass them to the child
+  let initSettingsEnv = '';
   try {
-    const dbPath       = path.join(sd, 'db');
-    const settingsFile = path.join(dbPath, 'settings.json');
     const sr    = await Sessions.findById(sessionId);
     const initS = sr.rows[0]?.initial_settings;
     if (initS && typeof initS === 'object' && Object.keys(initS).length) {
-      fs.mkdirSync(dbPath, { recursive: true });
-      let existing = {};
-      try { if (fs.existsSync(settingsFile)) existing = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
-      const mapped = { ...existing };
-      if (!mapped.botName    && initS.botName)    mapped.botName    = initS.botName;
-      if (!mapped.ownerName  && initS.ownerName)  mapped.ownerName  = initS.ownerName;
-      if (!mapped.prefix     && initS.prefix)     mapped.prefix     = initS.prefix;
-      if (mapped.selfMode   === undefined && initS.selfMode   !== undefined) mapped.selfMode   = initS.selfMode;
-      if (mapped.autoStatus === undefined && initS.autoStatus !== undefined) mapped.autoStatus = initS.autoStatus;
-      if (mapped.autoReact  === undefined && initS.autoReact  !== undefined) mapped.autoReact  = initS.autoReact;
-      if (mapped.autoRead   === undefined && initS.autoRead   !== undefined) mapped.autoRead   = initS.autoRead;
-      if (mapped.autoTyping === undefined && initS.autoTyping !== undefined) mapped.autoTyping = initS.autoTyping;
-      fs.writeFileSync(settingsFile, JSON.stringify(mapped, null, 2));
+      initSettingsEnv = JSON.stringify(initS);
     }
   } catch {}
 
@@ -258,11 +245,27 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
     ...process.env,
     SESSION_DIR:    sd,
     SESSION_NUMBER: phone,
-    // SESSION_ID scopes ALL Postgres keys to this session (e.g. "default:settings" → "2348xxx:settings").
-    // Without this, every bot shares the same Postgres rows — one user's
-    // .setbotname or .setprefix overwrites EVERYONE ELSE's settings on restart.
-    // Phone number is the right scope: unique per session and stable across restarts.
+
+    // ── SESSION_ID ──────────────────────────────────────────────────────────
+    // Scopes ALL bot_data Postgres keys to this session.
+    // e.g. "default:settings" → "2348083086811:settings"
+    // Without this every bot shares the same rows — one user's .setbotname
+    // overwrites everyone else's on restart.
     SESSION_ID: phone,
+
+    // ── OWNER_NUMBERS ───────────────────────────────────────────────────────
+    // The session owner's phone number IS the bot owner.
+    // Without this, isOwner() always returns false in groups because the
+    // global OWNER_NUMBERS secret is the platform admin, not the session user.
+    // Appended to whatever global OWNER_NUMBERS is set in fly.io secrets so
+    // the platform admin can still control bots if needed.
+    OWNER_NUMBERS: [process.env.OWNER_NUMBERS, phone].filter(Boolean).join(','),
+
+    // ── INITIAL_SETTINGS ────────────────────────────────────────────────────
+    // Passed on every start so database.js can seed Postgres if this session's
+    // settings key is empty (i.e. brand new session, never saved settings yet).
+    // Does nothing if settings already exist in Postgres — safe to pass always.
+    ...(initSettingsEnv ? { INITIAL_SETTINGS: initSettingsEnv } : {}),
   };
   if (pairNumber && !hadCreds) env.PAIR_NUMBER = pairNumber;
 

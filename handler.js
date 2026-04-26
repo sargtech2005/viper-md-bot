@@ -202,22 +202,38 @@ const getGroupMetadata = getCachedGroupMetadata;
 const isOwner = (sender) => {
   if (!sender) return false;
 
-  const normalizedSender = normalizeJidWithLid(sender);
-  const senderNumber     = normalizeJid(normalizedSender);
+  // Strip device suffix and domain — always compare bare numbers
+  // e.g. "2348083086811:0@s.whatsapp.net" → "2348083086811"
+  const senderNumber = sender.split(':')[0].split('@')[0];
 
-  // ── Super owners (global config) ────────────────────────────────────────
-  const superOwner = config.ownerNumber.some(owner => {
-    const norm = normalizeJidWithLid(owner.includes('@') ? owner : `${owner}@s.whatsapp.net`);
-    return normalizeJid(norm) === senderNumber;
-  });
-  if (superOwner) return true;
+  // ── 1. SESSION_NUMBER — the number that paired this bot instance ─────────
+  // This is ALWAYS an owner. It's the number that went through the pairing
+  // flow and owns this session.
+  const sessionNum = (process.env.SESSION_NUMBER || '').split(':')[0].split('@')[0];
+  if (sessionNum && senderNumber === sessionNum) return true;
 
-  // ── Session owner (the number that paired this instance) ────────────────
-  const sessionNum = process.env.SESSION_NUMBER;
-  if (sessionNum) {
-    const sessNorm = normalizeJid(`${sessionNum}@s.whatsapp.net`);
-    if (sessNorm === senderNumber) return true;
-  }
+  // ── 2. Extra owner numbers saved in bot settings via .setownernum ────────
+  // Stored as a comma-separated string or array in database settings key "ownerNumbers"
+  try {
+    const db = require('./database');
+    const stored = db.getSetting('ownerNumbers', '');
+    const extras = (Array.isArray(stored) ? stored : String(stored).split(','))
+      .map(n => n.trim().split(':')[0].split('@')[0])
+      .filter(Boolean);
+    if (extras.includes(senderNumber)) return true;
+  } catch {}
+
+  // ── 3. Global env OWNER_NUMBERS (platform/fly.io secret) ─────────────────
+  const envOwners = (process.env.OWNER_NUMBERS || '')
+    .split(',')
+    .map(n => n.trim().split(':')[0].split('@')[0])
+    .filter(Boolean);
+  if (envOwners.includes(senderNumber)) return true;
+
+  // ── 4. config.ownerNumber (hardcoded fallback, if any) ───────────────────
+  const configOwners = (config.ownerNumber || [])
+    .map(n => n.trim().split(':')[0].split('@')[0]);
+  if (configOwners.includes(senderNumber)) return true;
 
   return false;
 };
@@ -545,12 +561,23 @@ const handleMessage = async (sock, msg) => {
     
     // from already defined above in DM block check
     const isGroup = from.endsWith('@g.us');
-    // In a group, msg.key.participant holds the ACTUAL sender (even when fromMe=true,
-    // e.g. owner typing from their paired phone). Outside a group, fromMe=true means
-    // it really is the bot, so we use sock.user.id.
-    const sender = isGroup
-      ? (msg.key.participant || msg.key.remoteJid)
-      : (msg.key.fromMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : msg.key.remoteJid); // Should always be true now due to DM block above
+    // ── Sender resolution ────────────────────────────────────────────────
+    // In newer WhatsApp, when the owner sends from a linked device in a group,
+    // msg.key.fromMe=true but msg.key.participant is a LID (e.g. "xxxx@lid")
+    // instead of a phone JID. LID→phone mapping requires session files that
+    // may not be available, causing isOwner() to return false in groups.
+    //
+    // Rule: if fromMe=true in ANY context, the sender is the paired phone owner.
+    // Use sock.user.id (the bot's own login JID = the owner's number) directly.
+    // For group messages from OTHER users, fromMe=false so we use participant.
+    const ownerJid = sock.user?.id
+      ? sock.user.id.split(':')[0] + '@s.whatsapp.net'
+      : null;
+    const sender = msg.key.fromMe
+      ? (ownerJid || msg.key.participant || msg.key.remoteJid)
+      : (isGroup
+          ? (msg.key.participant || msg.key.remoteJid)
+          : msg.key.remoteJid);
     
     // Fetch group metadata immediately if it's a group
     const groupMetadata = isGroup ? await getGroupMetadata(sock, from) : null;
@@ -1360,30 +1387,66 @@ const handleAntilink = async (sock, msg, groupMetadata) => {
       if (senderIsAdmin || senderIsOwner) return;
       
       const botIsAdmin = await isBotAdmin(sock, from, groupMetadata);
-      const action = (groupSettings.antilinkAction || 'delete').toLowerCase();
-      
+      const action     = (groupSettings.antilinkAction || 'delete').toLowerCase();
+      const MAX_WARNS  = config.maxWarnings || 3;
+      const senderTag  = `@${sender.split('@')[0]}`;
+
+      // Always delete the link first regardless of action
+      try { await sock.sendMessage(from, { delete: msg.key }); } catch (_) {}
+
       if (action === 'kick' && botIsAdmin) {
         try {
-          await sock.sendMessage(from, { delete: msg.key });
           await sock.groupParticipantsUpdate(from, [sender], 'remove');
-          await sock.sendMessage(from, { 
-            text: `🔗 Anti-link triggered. Link removed.`,
-            mentions: [sender]
-          }, { quoted: msg });
-        } catch (e) {
-          console.error('Failed to kick for antilink:', e);
+          await sock.sendMessage(from, {
+            text: `🔗 *Antilink* — Link removed!
+
+👢 ${senderTag} has been *kicked* for sharing a link.`,
+            mentions: [sender],
+          });
+        } catch (e) { console.error('[Antilink] kick failed:', e.message); }
+
+      } else if (action === 'warn') {
+        // Increment warning count for this sender in this group
+        const grpData = database.getGroupSettings(from);
+        const warnings = grpData.warnings || {};
+        const senderId = sender.split('@')[0];
+        warnings[senderId] = (warnings[senderId] || 0) + 1;
+        database.updateGroupSettings(from, { warnings });
+
+        const count = warnings[senderId];
+        if (count >= MAX_WARNS && botIsAdmin) {
+          // Max warnings reached — kick
+          warnings[senderId] = 0;
+          database.updateGroupSettings(from, { warnings });
+          try {
+            await sock.groupParticipantsUpdate(from, [sender], 'remove');
+            await sock.sendMessage(from, {
+              text: `🔗 *Antilink* — Link removed!
+
+⚠️ ${senderTag} reached *${MAX_WARNS}/${MAX_WARNS} warnings* and has been *kicked*!`,
+              mentions: [sender],
+            });
+          } catch (e) { console.error('[Antilink] warn-kick failed:', e.message); }
+        } else {
+          await sock.sendMessage(from, {
+            text: `🔗 *Antilink* — Link removed!
+
+⚠️ Warning *${count}/${MAX_WARNS}* for ${senderTag}.
+${count >= MAX_WARNS - 1 ? '🚨 _One more link and you will be kicked!_' : '_Repeated links will get you removed._'}`,
+            mentions: [sender],
+          });
         }
+
       } else {
-        // Default: delete message
+        // Default: delete + notify
         try {
-          await sock.sendMessage(from, { delete: msg.key });
-          await sock.sendMessage(from, { 
-            text: `🔗 Anti-link triggered. Link removed.`,
-            mentions: [sender]
-          }, { quoted: msg });
-        } catch (e) {
-          console.error('Failed to delete message for antilink:', e);
-        }
+          await sock.sendMessage(from, {
+            text: `🔗 *Antilink* — Link removed!
+
+${senderTag} please avoid sharing links here.`,
+            mentions: [sender],
+          });
+        } catch (e) { console.error('[Antilink] delete failed:', e.message); }
       }
     }
   } catch (error) {

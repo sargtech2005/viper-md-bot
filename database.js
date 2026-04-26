@@ -191,14 +191,59 @@ if (!USE_POSTGRES) {
   _cache.set('warnings', fileRead('warnings'));
   _cache.set('users', fileRead('users'));
 } else {
-  // Prime caches async from Postgres on startup
+  // Prime caches async from Postgres on startup.
+  // After priming settings, seed from INITIAL_SETTINGS env if this session
+  // has never saved settings before (first boot / fresh session).
+  // INITIAL_SETTINGS is injected by bot-manager.js from bot_sessions.initial_settings.
+  // This is the ONLY way initial session config (bot name, prefix, etc.) reaches
+  // the bot in Postgres mode — JSON file seeding is ignored by Postgres-mode bots.
   Promise.all([
     readAsync('groups'),
     readAsync('mods'),
     readAsync('settings'),
     readAsync('warnings'),
     readAsync('users'),
-  ]).then(() => console.log('[DB] Cache primed from PostgreSQL')).catch(() => {});
+  ]).then(async () => {
+    console.log('[DB] Cache primed from PostgreSQL');
+
+    const initEnv = process.env.INITIAL_SETTINGS;
+    if (initEnv) {
+      try {
+        const initS    = JSON.parse(initEnv);
+        const existing = _cache.get('settings') || {};
+
+        // Only seed keys that haven't been explicitly saved yet.
+        // If the user already ran .setbotname, we must not overwrite their choice.
+        let needsWrite = false;
+        const seeded   = { ...existing };
+
+        const seedIfMissing = (key, val) => {
+          if (val !== undefined && val !== null && val !== '' && !seeded.hasOwnProperty(key)) {
+            seeded[key] = val;
+            needsWrite = true;
+          }
+        };
+
+        seedIfMissing('botName',    initS.botName);
+        seedIfMissing('ownerName',  initS.ownerName);
+        seedIfMissing('prefix',     initS.prefix);
+        seedIfMissing('selfMode',   initS.selfMode);
+        seedIfMissing('autoStatus', initS.autoStatus);
+        seedIfMissing('autoReact',  initS.autoReact);
+        seedIfMissing('autoRead',   initS.autoRead);
+        seedIfMissing('autoTyping', initS.autoTyping);
+        seedIfMissing('autoSticker',initS.autoSticker);
+
+        if (needsWrite) {
+          _cache.set('settings', seeded);
+          await pgWrite('settings', seeded);
+          console.log('[DB] Seeded initial settings from session config:', Object.keys(initS).filter(k => !existing.hasOwnProperty(k)));
+        }
+      } catch (e) {
+        console.error('[DB] Failed to parse INITIAL_SETTINGS env:', e.message);
+      }
+    }
+  }).catch(() => {});
 }
 
 // ── Warnings ──────────────────────────────────────────────────────────────────
