@@ -313,4 +313,98 @@ async function makeLevelUpCard(opts) {
   return svgToPng(svg, W, H);
 }
 
-module.exports = { makeRankCard, makeHeistCard, makeLevelUpCard, fetchPpBase64 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GENERIC GAME RESULT CARD
+// ═══════════════════════════════════════════════════════════════════════════════
+/**
+ * @param {object} opts
+ * @param {string}  opts.gameName     — e.g. "🎰 Slots", "🎲 Dice"
+ * @param {boolean} opts.win          — true = green win, false = red loss
+ * @param {string}  opts.username     — display name (pushName preferred)
+ * @param {number}  opts.bet          — amount wagered
+ * @param {number}  opts.change       — net change (positive=gain, negative=loss)
+ * @param {number}  opts.newBalance   — wallet after result
+ * @param {string}  opts.resultLine   — one-line outcome summary, e.g. "Triple 7s!"
+ * @param {string}  opts.botName
+ * @param {string|null} opts.ppBase64
+ */
+async function makeGameCard(opts) {
+  const W = 820, H = 220;
+  const { gameName, win, username, bet, change, newBalance, resultLine, botName, ppBase64 } = opts;
+
+  const accentColor = win ? '#00ff88' : '#ff4757';
+  const headerBg    = win ? '#003322' : '#330011';
+  const changeStr   = change >= 0 ? `+${fmt(change)}` : `${fmt(change)}`;
+  const outcomeStr  = win ? 'WIN' : 'LOSS';
+
+  const avatarImg = ppBase64
+    ? `<image href="${ppBase64}" x="28" y="44" width="132" height="132" clip-path="url(#gcClip)"/>`
+    : `<circle cx="94" cy="110" r="66" fill="#21262d" stroke="#30363d" stroke-width="1"/>
+       <text x="94" y="128" text-anchor="middle" font-size="40" font-family="sans-serif" fill="#8b949e">?</text>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <clipPath id="gcClip"><circle cx="94" cy="110" r="66"/></clipPath>
+    <linearGradient id="gcBg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${headerBg}"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+    <filter id="gcGlow">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="${W}" height="${H}" rx="14" fill="url(#gcBg)"/>
+  <rect width="${W}" height="${H}" rx="14" fill="none" stroke="${accentColor}" stroke-width="2" opacity="0.6"/>
+
+  <!-- Left accent bar -->
+  <rect x="0" y="16" width="4" height="${H - 32}" rx="2" fill="${accentColor}"/>
+
+  <!-- Avatar ring + image -->
+  <circle cx="94" cy="110" r="70" fill="none" stroke="${accentColor}" stroke-width="3" filter="url(#gcGlow)"/>
+  ${avatarImg}
+
+  <!-- OUTCOME badge top-right -->
+  <rect x="${W - 120}" y="12" width="108" height="34" rx="17" fill="${accentColor}"/>
+  <text x="${W - 66}" y="34" text-anchor="middle" font-family="sans-serif"
+        font-size="14" font-weight="900" fill="#0d1117">${x(outcomeStr)}</text>
+
+  <!-- Game name -->
+  <text x="188" y="46" font-family="sans-serif" font-size="26" font-weight="900"
+        fill="#ffffff" filter="url(#gcGlow)">${x(gameName)}</text>
+
+  <!-- Username -->
+  <text x="188" y="78" font-family="sans-serif" font-size="16" fill="${accentColor}">
+    ${x(username)}
+  </text>
+
+  <!-- Result line -->
+  <text x="188" y="112" font-family="sans-serif" font-size="15" fill="#c9d1d9">
+    ${x(resultLine)}
+  </text>
+
+  <!-- Stats row -->
+  <text x="188" y="148" font-family="monospace" font-size="14" fill="#8b949e">BET</text>
+  <text x="240" y="148" font-family="monospace" font-size="14" fill="#ffffff">: ${x(fmt(bet))} coins</text>
+
+  <text x="420" y="148" font-family="monospace" font-size="14" fill="#8b949e">RESULT</text>
+  <text x="490" y="148" font-family="monospace" font-size="14" font-weight="bold"
+        fill="${accentColor}">: ${x(changeStr)} coins</text>
+
+  <!-- Wallet -->
+  <text x="188" y="182" font-family="monospace" font-size="14" fill="#8b949e">WALLET</text>
+  <text x="256" y="182" font-family="monospace" font-size="14" fill="#ffffff">: ${x(fmt(newBalance))} coins</text>
+
+  <!-- Footer -->
+  <text x="${W - 16}" y="${H - 12}" text-anchor="end" font-family="sans-serif"
+        font-size="10" fill="#30363d">POWERED BY ${x(botName.toUpperCase())}</text>
+</svg>`;
+
+  return svgToPng(svg, W, H);
+}
+
+module.exports = { makeRankCard, makeHeistCard, makeLevelUpCard, makeGameCard, fetchPpBase64 };

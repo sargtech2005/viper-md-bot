@@ -126,7 +126,10 @@ module.exports = {
         entries.forEach(({ id, exp }, i) => {
           const { level, name, emoji } = getLevelInfo(exp);
           const badge = medals[i] || `${i+1}.`;
-          t += `┣◆ ${badge} *${id}*\n┃    ${emoji} Lvl ${level} — ${name} | ${exp.toLocaleString()} EXP\n`;
+          // Use stored displayName if available (saved when they run .levelup), else show number
+          const u = database.getUser(id) || {};
+          const displayName = u.displayName || id;
+          t += `┣◆ ${badge} *${displayName}*\n┃    ${emoji} Lvl ${level} — ${name} | ${exp.toLocaleString()} EXP\n`;
         });
         t += `┃\n┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
         return extra.reply(t);
@@ -152,8 +155,11 @@ module.exports = {
       }
 
       // ── OWN RANK ─────────────────────────────────────────────────────────
-      const userId = extra.sender.split('@')[0];
-      const exp    = getExp(userId);
+      const userId   = extra.sender.split('@')[0];
+      const username  = extra.pushName || userId;  // real WA display name
+      // Persist displayName so leaderboard can show real names too
+      database.updateUser(userId, { displayName: username });
+      const exp       = getExp(userId);
       const { level, name, emoji, nextExp, progress } = getLevelInfo(exp);
 
       const ppBase64 = await fetchPpBase64(sock, extra.sender).catch(() => null);
@@ -162,7 +168,7 @@ module.exports = {
       const bar    = progressBar(progress);
       const toNext = nextExp ? nextExp - exp : 0;
       let statsText = `┏❐ 《 *🎮 YOUR RANK CARD* 》 ❐\n┃\n`;
-      statsText += `┣◆ 👤 *${userId}*\n`;
+      statsText += `┣◆ 👤 *${username}*\n`;
       statsText += `┣◆ ${emoji} Level *${level}* — *${name}*\n`;
       statsText += `┣◆ ⭐ EXP: *${exp.toLocaleString()}*\n`;
       statsText += `┣◆ 📊 Progress: [${bar}] ${progress}%\n`;
@@ -172,7 +178,7 @@ module.exports = {
 
       try {
         const imgBuf = await makeRankCard({
-          username: userId, level, levelName: name, levelEmoji: emoji,
+          username, level, levelName: name, levelEmoji: emoji,
           exp, nextExp, progress, botName: B, ppBase64,
         });
         // Send image card + full stats text together as caption

@@ -544,8 +544,13 @@ const handleMessage = async (sock, msg) => {
     const messageType = actualMessageTypes[0];
     
     // from already defined above in DM block check
-    const sender = msg.key.fromMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : msg.key.participant || msg.key.remoteJid;
-    const isGroup = from.endsWith('@g.us'); // Should always be true now due to DM block above
+    const isGroup = from.endsWith('@g.us');
+    // In a group, msg.key.participant holds the ACTUAL sender (even when fromMe=true,
+    // e.g. owner typing from their paired phone). Outside a group, fromMe=true means
+    // it really is the bot, so we use sock.user.id.
+    const sender = isGroup
+      ? (msg.key.participant || msg.key.remoteJid)
+      : (msg.key.fromMe ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : msg.key.remoteJid); // Should always be true now due to DM block above
     
     // Fetch group metadata immediately if it's a group
     const groupMetadata = isGroup ? await getGroupMetadata(sock, from) : null;
@@ -556,7 +561,12 @@ const handleMessage = async (sock, msg) => {
     }
 
     // ── Passive EXP — award on every message (groups AND DMs) ───────────────
-    if (!msg.key.fromMe) {
+    // Skip only if the sender is actually the bot itself (e.g. its own command replies).
+    // Do NOT skip just because fromMe=true — that also fires when the owner types from
+    // their paired phone in a group. Use the bot's JID as the skip condition instead.
+    const botJid = sock.user?.id ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : null;
+    const isBotItself = botJid && sender === botJid;
+    if (!isBotItself) {
       const userId   = sender.split('@')[0];
       const expResult = levelupCmd.awardPassiveExp(userId, from);
       if (expResult?.leveledUp) {
@@ -565,18 +575,23 @@ const handleMessage = async (sock, msg) => {
         try {
           const { makeLevelUpCard, fetchPpBase64 } = require('./utils/imageCard');
           const ppBase64 = await fetchPpBase64(sock, sender).catch(() => null);
+          // Use stored displayName first (set when they run .levelup), else pushName from this message, else number
+          const lvlDisplayName = (database.getUser(userId)||{}).displayName || msg.pushName || userId;
+          database.updateUser(userId, { displayName: lvlDisplayName });
           const imgBuf = await makeLevelUpCard({
-            username: userId, level, levelName: name,
+            username: lvlDisplayName, level, levelName: name,
             exp: expResult.newExp, botName: config.botName, ppBase64,
           });
+          const lvlCaption = `🎉 *${lvlDisplayName}* levelled up to *${emoji} Level ${level} — ${name}*!\n\n⭐ Total EXP: *${expResult.newExp.toLocaleString()}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
           await sock.sendMessage(from, {
             image: imgBuf, mimetype: 'image/png',
-            caption: `🎉 @${userId} levelled up to *${emoji} Level ${level} — ${name}*!\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`,
+            caption: lvlCaption,
             mentions: [sender],
           }).catch(() => {});
         } catch {
+          const lvlDisplayName = (database.getUser(userId)||{}).displayName || msg.pushName || userId;
           const lvlMsg =
-            `🎉 *LEVEL UP!* 🎉\n\n@${userId} reached *${emoji} Level ${level} — ${name}*\n` +
+            `🎉 *LEVEL UP!* 🎉\n\n*${lvlDisplayName}* reached *${emoji} Level ${level} — ${name}*\n` +
             `⭐ Total EXP: *${expResult.newExp.toLocaleString()}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${config.botName}* 🐍`;
           sock.sendMessage(from, { text: lvlMsg, mentions: [sender] }).catch(() => {});
         }
@@ -988,6 +1003,10 @@ const handleMessage = async (sock, msg) => {
           isAdmin: await isAdmin(sock, sender, from, groupMetadata),
           isBotAdmin: await isBotAdmin(sock, from, groupMetadata),
           isMod: isMod(sender),
+          // pushName: WhatsApp display name set by the user in their profile.
+          // Use this everywhere instead of raw phone numbers for a friendly UX.
+          pushName: msg.pushName || msg.verifiedBizName || sender.split('@')[0],
+          usedPrefix: _usedPrefix,
           reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
           react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } })
         }),
