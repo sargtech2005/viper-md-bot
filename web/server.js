@@ -45,10 +45,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Compress responses — level 1 is ~3x faster than level 6 with 90% of the savings
+// Compress responses (saves bandwidth, faster for dashboard/API)
 try {
   const compression = require('compression');
-  app.use(compression({ level: 1, threshold: 512 }));
+  app.use(compression({ level: 6, threshold: 1024 }));
 } catch (_) { /* compression not installed — skip */ }
 
 app.use(express.json({ limit: '10mb' }));
@@ -92,26 +92,8 @@ function csrfProtect(req, res, next) {
 }
 app.use('/api/', csrfProtect);
 
-// ── Static files — aggressive caching for CSS/JS/images, no-cache for HTML ───
-// CSS/JS assets get 7-day cache (browser skips the request entirely on repeat visits)
-// HTML pages get no-cache (so updates deploy instantly without stale page issues)
-app.use('/css', express.static(path.join(__dirname, '..', 'public', 'css'), {
-  maxAge: '7d', etag: true, lastModified: true,
-}));
-app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js'), {
-  maxAge: '7d', etag: true, lastModified: true,
-}));
-// Images, fonts, icons — 30-day cache
-app.use(express.static(path.join(__dirname, '..', 'public'), {
-  maxAge: '1d',
-  etag: true,
-  setHeaders(res, filePath) {
-    if (filePath.endsWith('.html')) {
-      // HTML: always revalidate so users get latest after deploy
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-    }
-  },
-}));
+// ── Static files ──────────────────────────────────────────────────────────────
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ── API routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth',     authRoutes);
