@@ -104,7 +104,6 @@ module.exports = {
 
       // ── LEADERBOARD ─────────────────────────────────────────────────────
       if (sub === 'top' || sub === 'leaderboard' || sub === 'lb') {
-        // Read all users directly from the users.json file
         const fs = require('fs');
         const path = require('path');
         let allUsers = {};
@@ -114,7 +113,7 @@ module.exports = {
         } catch { allUsers = {}; }
 
         const entries  = Object.entries(allUsers)
-          .map(([id, u]) => ({ id, exp: u.exp || 0 }))
+          .map(([id, u]) => ({ id, exp: typeof u.exp === 'number' ? u.exp : 0 }))
           .filter(u => u.exp > 0)
           .sort((a, b) => b.exp - a.exp)
           .slice(0, 10);
@@ -123,16 +122,27 @@ module.exports = {
 
         const medals = ['🥇','🥈','🥉'];
         let t = `┏❐ 《 *🏆 TOP RANKERS* 》 ❐\n┃\n`;
+        const cardEntries = [];
         entries.forEach(({ id, exp }, i) => {
           const { level, name, emoji } = getLevelInfo(exp);
           const badge = medals[i] || `${i+1}.`;
-          // Use stored displayName if available (saved when they run .levelup), else show number
           const u = database.getUser(id) || {};
           const displayName = u.displayName || id;
           t += `┣◆ ${badge} *${displayName}*\n┃    ${emoji} Lvl ${level} — ${name} | ${exp.toLocaleString()} EXP\n`;
+          cardEntries.push({ rank: i + 1, name: displayName, level, levelName: name, emoji, exp });
         });
         t += `┃\n┗❐\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-        return extra.reply(t);
+
+        // Try to send image card; fall back to text
+        try {
+          const { makeLeaderboardCard } = require('../../utils/imageCard');
+          const imgBuf = await makeLeaderboardCard({ entries: cardEntries, botName: B });
+          return await sock.sendMessage(extra.from, {
+            image: imgBuf, mimetype: 'image/png', caption: t,
+          }, { quoted: msg });
+        } catch {
+          return extra.reply(t);
+        }
       }
 
       // ── CHECK ANOTHER USER ───────────────────────────────────────────────

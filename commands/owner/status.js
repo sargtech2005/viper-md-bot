@@ -153,9 +153,30 @@ module.exports = {
 };
 
 // ── Post to status@broadcast (personal story) ────────────────────────────────
+// backgroundColor for text status MUST be an ARGB integer, not a hex string.
+// WhatsApp ignores hex strings silently — the status sends but shows default color.
+function hexToArgb(hex) {
+  // '#RRGGBB' → 0xFF_RR_GG_BB  (fully opaque)
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  // Signed 32-bit: 0xFF________ → negative in JS, that's expected by WA
+  return (0xFF000000 | (r << 16) | (g << 8) | b) >> 0;
+}
+
 async function postMyStatus(sock, content, bgColor) {
-  const payload = { ...content, backgroundColor: bgColor };
-  await sock.sendMessage('status@broadcast', payload);
+  const payload = { ...content };
+  if (content.text) {
+    // Text status needs ARGB int + font index (0=Sans Serif works everywhere)
+    payload.backgroundColor = hexToArgb(bgColor || DEFAULT_COLOR);
+    payload.font = 0;
+  }
+  // statusJidList: provide saved contacts JIDs so WA knows who can see it.
+  // An empty array is fine — WA uses privacy settings to determine audience.
+  await sock.sendMessage('status@broadcast', payload, {
+    statusJidList: [],
+  });
 }
 
 // ── Download quoted message media ────────────────────────────────────────────

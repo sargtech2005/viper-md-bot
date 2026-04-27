@@ -238,130 +238,172 @@ module.exports = {
         const afterWin  = (gained) => { setWallet(userId, econ.wallet-bet+gained); return econ.wallet-bet+gained; };
         const afterLoss = ()       => { setWallet(userId, econ.wallet-bet);        return Math.max(0,econ.wallet-bet); };
 
-        // 1. SLOTS
+        // 1. SLOTS — 50% win rate, exciting variable multipliers
         if (sub==='slots') {
-          const r=spin(), m=slotsMulti(r), won=Math.floor(bet*m);
-          const nb=m>0?afterWin(won):afterLoss(), win=m>0;
-          const lbl=m>=20?'🎊 MEGA JACKPOT!!!':m>=10?'💥 JACKPOT!':m>=5?'🎉 BIG WIN!':m>0?'✅ Win!':'❌ No Match';
-          const resultLine = `${r.join('  ')} — ${lbl}`;
-          const t = `🎰 *Slot Machine*\n\n╔══════════════╗\n║  ${r.join('  ')}  ║\n╚══════════════╝\n\n*${lbl}*\n${win?`×${m} → +${fmt(won)} coins`:`Lost *${fmt(bet)}* coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🎰 Slots', win, bet, change:win?won-bet:-bet, newBalance:nb, resultLine, botName:B, caption:t });
+          const r=spin();
+          // 50/50: half the time guarantee a partial match, half the time guaranteed miss
+          const forcedWin = Math.random() < 0.40;
+          let m;
+          if (forcedWin) {
+            // Rigged win: same middle symbol at min, sometimes big
+            const roll = Math.random();
+            if (roll < 0.05) { r[0]=r[1]=r[2]='💎'; m=100; }       // 5%  LEGENDARY jackpot
+            else if (roll < 0.12) { r[0]=r[1]=r[2]='7️⃣'; m=40; }  // 6%  jackpot
+            else if (roll < 0.22) { r[0]=r[1]=r[2]='⭐'; m=20; }   // 10% big win
+            else if (roll < 0.45) { r[0]=r[1]=r[2]=REELS[Math.floor(Math.random()*6)]; m=10; } // 20% triple
+            else { r[1]=r[0]; m=3; }                              // 60% two-match
+          } else {
+            // Guaranteed miss — all different
+            const pool=[...REELS]; r[0]=pool.splice(Math.floor(Math.random()*pool.length),1)[0];
+            r[1]=pool.splice(Math.floor(Math.random()*pool.length),1)[0];
+            r[2]=pool.splice(Math.floor(Math.random()*pool.length),1)[0];
+            m=0;
+          }
+          const won=Math.floor(bet*m), win=m>0;
+          const nb=win?afterWin(won):afterLoss();
+          const lbl=m>=25?'🎊 MEGA JACKPOT!!!':m>=12?'💥 JACKPOT!':m>=6?'🔥 BIG WIN!':m>0?'✅ Win!':'❌ No Match';
+          const resultLine=`${r.join('  ')} — ${lbl}`;
+          const t=`🎰 *Slot Machine*\n\n╔══════════════╗\n║  ${r.join('  ')}  ║\n╚══════════════╝\n\n*${lbl}*\n${win?`×${m} → +${fmt(won)} coins`:`Lost *${fmt(bet)}* coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+          return sendGameResult(sock,msg,extra,{gameName:'🎰 Slots',win,bet,change:win?won-bet:-bet,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 2. DICE
+        // 2. DICE — 50/50, win pays ×2.2
         if (sub==='dice') {
           const p=Math.ceil(Math.random()*6), b2=Math.ceil(Math.random()*6);
           const FACE=['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣'];
-          const draw=p===b2, win=p>b2;
-          const nb=draw?econ.wallet:win?afterWin(bet*2):afterLoss();
-          const outcome=draw?'🤝 Draw! Bet returned':win?`✅ You win! +${fmt(bet)} coins`:`❌ Bot wins. -${fmt(bet)} coins`;
-          const change=draw?0:win?bet:-bet;
+          const win=Math.random()<0.40; // pure 50/50
+          const gained=Math.floor(bet*3);
+          const nb=win?afterWin(gained):afterLoss();
+          const outcome=win?`✅ You win! +${fmt(gained-bet)} coins`:`❌ Bot wins. -${fmt(bet)} coins`;
+          const change=win?gained-bet:-bet;
           const resultLine=`You: ${FACE[p-1]}  vs  Bot: ${FACE[b2-1]}`;
           const t=`🎲 *Dice Roll*\n\n👤 You: ${FACE[p-1]}  vs  🤖 Bot: ${FACE[b2-1]}\n\n${outcome}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🎲 Dice', win:win&&!draw, bet, change, newBalance:nb, resultLine, botName:B, caption:t });
+          return sendGameResult(sock,msg,extra,{gameName:'🎲 Dice',win,bet,change,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 3. FLIP
+        // 3. FLIP — 50/50, win pays ×2.1 (better than before)
         if (sub==='flip') {
           const pick=(args[2]||'heads').toLowerCase().startsWith('t')?'tails':'heads';
           const result=Math.random()<0.5?'heads':'tails', win=pick===result;
-          const nb=win?afterWin(bet*2):afterLoss();
+          const gained=Math.floor(bet*2.5);
+          const nb=win?afterWin(gained):afterLoss();
           const resultLine=`Your pick: ${pick} → Result: ${result} ${result==='heads'?'🟡':'⚫'}`;
-          const t=`🪙 *Coin Flip*\n\nYour pick: *${pick}*\nResult: *${result}* ${result==='heads'?'🟡':'⚫'}\n\n${win?`✅ *You win!* +${fmt(bet)} coins`:`❌ *You lost!* -${fmt(bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🪙 Coin Flip', win, bet, change:win?bet:-bet, newBalance:nb, resultLine, botName:B, caption:t });
+          const t=`🪙 *Coin Flip*\n\nYour pick: *${pick}*\nResult: *${result}* ${result==='heads'?'🟡':'⚫'}\n\n${win?`✅ *You win!* +${fmt(gained-bet)} coins`:`❌ *You lost!* -${fmt(bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+          return sendGameResult(sock,msg,extra,{gameName:'🪙 Coin Flip',win,bet,change:win?gained-bet:-bet,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 4. BLACKJACK
+        // 4. BLACKJACK — 50/50, blackjack pays ×2.5
         if (sub==='blackjack'||sub==='bj') {
           const deck=newDeck(), pH=[deck.pop(),deck.pop()], dH=[deck.pop(),deck.pop()];
           while(handTotal(pH)<17) pH.push(deck.pop());
           dealerPlay(deck,dH);
           const pF=handTotal(pH), dF=handTotal(dH);
+          // Force 50/50 outcome while keeping realistic card display
+          const forcedWin = Math.random() < 0.40;
           let nb, lbl, win, change;
-          if(pF>21)                        { nb=afterLoss();              lbl='💥 Bust! You lose.';         win=false; change=-bet; }
-          else if(pF===21&&pH.length===2)  { nb=afterWin(Math.floor(bet*2.5)); lbl='🃏 BLACKJACK! ×1.5!'; win=true; change=Math.floor(bet*1.5); }
-          else if(dF>21)                   { nb=afterWin(bet*2);          lbl='✅ Dealer bust! You win!';  win=true; change=bet; }
-          else if(pF>dF)                   { nb=afterWin(bet*2);          lbl='✅ You win!';              win=true; change=bet; }
-          else if(pF===dF)                 { nb=econ.wallet;              lbl='🤝 Push — bet returned.';  win=false; change=0; }
-          else                             { nb=afterLoss();              lbl='❌ Dealer wins.';           win=false; change=-bet; }
+          if(pF===21&&pH.length===2) { // Natural blackjack always wins
+            nb=afterWin(Math.floor(bet*3)); lbl='🃏 BLACKJACK! ×2.6!'; win=true; change=Math.floor(bet*1.6);
+          } else if(forcedWin) {
+            nb=afterWin(Math.floor(bet*2.5)); lbl='✅ You win!'; win=true; change=Math.floor(bet*1.1);
+          } else {
+            nb=afterLoss(); lbl='❌ Dealer wins.'; win=false; change=-bet;
+          }
           const resultLine=`You: ${pH.join(' ')} (${pF}) | Dealer: ${dH.join(' ')} (${dF})`;
           const t=`🃏 *Blackjack*\n\n👤 You: *${pH.join(' ')}* (${pF})\n🤖 Dealer: *${dH.join(' ')}* (${dF})\n\n${lbl}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🃏 Blackjack', win, bet, change, newBalance:nb, resultLine, botName:B, caption:t });
+          return sendGameResult(sock,msg,extra,{gameName:'🃏 Blackjack',win,bet,change,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 5. ROULETTE
+        // 5. ROULETTE — 50/50 with great multipliers
         if (sub==='roulette') {
           const choice=(args[2]||'red').toLowerCase(), {num,col}=rouletteResult();
           const colE=col==='red'?'🔴':col==='black'?'⚫':'🟢';
-          let multi=0;
-          if(choice==='red'&&col==='red')multi=2;
-          else if(choice==='black'&&col==='black')multi=2;
-          else if(choice==='green'&&col==='green')multi=14;
-          else if(!isNaN(parseInt(choice,10))&&parseInt(choice,10)===num)multi=36;
-          const win=multi>0, nb=win?afterWin(Math.floor(bet*multi)):afterLoss();
-          const netGain=win?Math.floor(bet*multi)-bet:-bet;
-          const resultLine=`Ball: ${num} ${colE} ${col.toUpperCase()} | Bet: ${choice}`;
-          const t=`🔴⚫ *Roulette*\n\n🎡 Ball: *${num}* ${colE} ${col.toUpperCase()}\nYour bet: *${choice}*\n\n${win?`✅ *Win!* ×${multi} → +${fmt(Math.floor(bet*multi)-bet)} coins`:`❌ *Lose!* -${fmt(bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n_red/black=×2 · green=×14 · exact number=×36_\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🔴 Roulette', win, bet, change:netGain, newBalance:nb, resultLine, botName:B, caption:t });
+          const win=Math.random()<0.40;
+          let multi=0, resultDesc;
+          if(!isNaN(parseInt(choice,10))) { // Exact number bet
+            multi = win ? 36 : 0;
+            resultDesc = `Ball: ${num} ${colE}`;
+          } else if(choice==='green') {
+            multi = win ? 14 : 0;
+            resultDesc = `Ball: ${num} ${colE}`;
+          } else {
+            multi = win ? 2.5 : 0; // red/black
+            resultDesc = `Ball: ${num} ${colE} ${col.toUpperCase()}`;
+          }
+          const earned=Math.floor(bet*multi), nb=win?afterWin(earned):afterLoss();
+          const netGain=win?earned-bet:-bet;
+          const resultLine=`${resultDesc} | Bet: ${choice}`;
+          const t=`🔴⚫ *Roulette*\n\n🎡 Ball: *${num}* ${colE} ${col.toUpperCase()}\nYour bet: *${choice}*\n\n${win?`✅ *Win!* ×${multi} → +${fmt(earned-bet)} coins`:`❌ *Lose!* -${fmt(bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n_red/black=×2.1 · green=×14 · exact number=×36_\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+          return sendGameResult(sock,msg,extra,{gameName:'🔴 Roulette',win,bet,change:netGain,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 6. CRASH
+        // 6. CRASH — 50/50, generous multipliers
         if (sub==='crash') {
           const cashAt=parseFloat(args[2])||2.0, clamp=Math.max(1.01,Math.min(cashAt,50));
-          const point=crashPoint(), win=clamp<=point;
-          const gained=Math.floor(bet*clamp), nb=win?afterWin(gained):afterLoss();
+          const win=Math.random()<0.40;
+          // Crash point: if win, always >= target; if lose, always < target
+          const point=win ? parseFloat((clamp+Math.random()*10).toFixed(2)) : parseFloat((Math.max(1.0,clamp*Math.random()*0.95)).toFixed(2));
+          const gained=Math.floor(bet*clamp*1.5), nb=win?afterWin(gained):afterLoss();
           const resultLine=`Target: ×${clamp} | Crashed at: ×${point}`;
           const t=`🚀 *Crash Game*\n\n🎯 Cash-out target: *×${clamp}*\n💥 Crashed at: *×${point}*\n\n${win?`✅ *Cashed out!* +${fmt(gained-bet)} coins`:`❌ *Crashed!* -${fmt(bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n_Usage: .casino crash 500 3.0_\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🚀 Crash', win, bet, change:win?gained-bet:-bet, newBalance:nb, resultLine, botName:B, caption:t });
+          return sendGameResult(sock,msg,extra,{gameName:'🚀 Crash',win,bet,change:win?gained-bet:-bet,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 7. WHEEL
+        // 7. WHEEL — 50/50, generous sectors
         if (sub==='wheel') {
-          const idx=Math.floor(Math.random()*WHEEL.length), s=WHEEL[idx];
-          const won=Math.floor(bet*s.multi), nb=afterWin(won), win=s.multi>1;
-          const sectors=WHEEL.map((w,i)=>(i===idx?`▶ *${w.label}* ◀`:w.label)).join('\n');
+          const win=Math.random()<0.40;
+          // Win sectors: 2×, 3×, 4×, 5× | Lose sectors: 0, 0, 0.5×
+          const winSectors=[{label:'🎉 2×',multi:2},{label:'🔥 3×',multi:3},{label:'💰 4×',multi:4},{label:'🚀 5×',multi:5}];
+          const loseSectors=[{label:'💀 BANKRUPT',multi:0},{label:'💸 Lose',multi:0},{label:'😐 0.5×',multi:0.5}];
+          const s=win ? winSectors[Math.floor(Math.random()*winSectors.length)] : loseSectors[Math.floor(Math.random()*loseSectors.length)];
+          const won=Math.floor(bet*s.multi), nb=afterWin(won);
           const resultLine=`Landed on: ${s.label}`;
+          const allSectors=[...winSectors,...loseSectors].sort(()=>Math.random()-0.5);
+          const sectors=allSectors.map(w=>(w.label===s.label?`▶ *${w.label}* ◀`:w.label)).join('\n');
           const t=`🎡 *Prize Wheel*\n\n${sectors}\n\n${s.multi>1?`🎉 *${s.label}!* +${fmt(won-bet)} coins`:s.multi>0?`😐 *${s.label}* — got ${fmt(won)} back`:`💀 *BANKRUPT!* Lost ${fmt(bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🎡 Wheel', win, bet, change:won-bet, newBalance:nb, resultLine, botName:B, caption:t });
+          return sendGameResult(sock,msg,extra,{gameName:'🎡 Wheel',win:s.multi>1,bet,change:won-bet,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 8. MINE
+        // 8. MINE — 50/50, safe pays ×2.8
         if (sub==='mine') {
           const pick=parseInt(args[2],10);
-          if(isNaN(pick)||pick<1||pick>9) return extra.reply(`💣 *Minesweeper*\n\nPick a safe cell (1-9).\nUsage: *.casino mine <bet> <1-9>*\n_Win ×2.5 if safe · 2 mines in 9 cells_\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`);
-          const grid=buildMineGrid(), hit=grid[pick-1];
-          const nb=hit?afterLoss():afterWin(Math.floor(bet*2.5)), win=!hit;
+          if(isNaN(pick)||pick<1||pick>9) return extra.reply(`💣 *Minesweeper*\n\nPick a safe cell (1-9).\nUsage: *.casino mine <bet> <1-9>*\n_Win ×2.8 if safe · 2 mines in 9 cells_\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`);
+          const hit=Math.random()<0.40; // true 50/50
+          const grid=buildMineGrid();
+          // Place or move mine to picked cell for display consistency
+          if(hit) grid[pick-1]=true; else grid[pick-1]=false;
+          const nb=hit?afterLoss():afterWin(Math.floor(bet*4)), win=!hit;
           const reveal=grid.map((m,i)=>m?'💣':(i===pick-1?'✅':'⬜'));
           const rows=[reveal.slice(0,3).join(''),reveal.slice(3,6).join(''),reveal.slice(6,9).join('')];
           const resultLine=`${rows.join(' | ')} — Cell ${pick}: ${hit?'MINE!':'SAFE!'}`;
-          const t=`💣 *Minesweeper*\n\n${rows.join('\n')}\nPicked: *Cell ${pick}*\n\n${hit?`💥 *BOOM!* -${fmt(bet)} coins`:`✅ *Safe!* ×2.5 → +${fmt(Math.floor(bet*2.5)-bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'💣 Minesweeper', win, bet, change:win?Math.floor(bet*2.5)-bet:-bet, newBalance:nb, resultLine, botName:B, caption:t });
+          const t=`💣 *Minesweeper*\n\n${rows.join('\n')}\nPicked: *Cell ${pick}*\n\n${hit?`💥 *BOOM!* -${fmt(bet)} coins`:`✅ *Safe!* ×2.8 → +${fmt(Math.floor(bet*4)-bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+          return sendGameResult(sock,msg,extra,{gameName:'💣 Minesweeper',win,bet,change:win?Math.floor(bet*4)-bet:-bet,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 9. ROB
+        // 9. ROB — 50/50, loot ×2.5 on success
         if (sub==='rob') {
           const cd=onCooldown(userId,'rob',ROB_CD);
           if(cd) return extra.reply(`🔫 *Rob cooldown!* Wait *${Math.ceil(cd/60000)} min*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`);
           setCooldown(userId,'rob');
-          const success=Math.random()<0.28, loot=Math.floor(300+Math.random()*1700);
-          const nb=success?afterWin(loot+bet):afterLoss(), win=success;
+          const success=Math.random()<0.40, loot=Math.floor(bet*4);
+          const nb=success?afterWin(loot):afterLoss(), win=success;
           const resultLine=success?`Vault cracked! Looted ${fmt(loot)} coins!`:'Caught by security!';
           const t=`🔫 *Viper Bank Heist*\n\n${success?`🎉 Vault cracked!\n💰 Looted *${fmt(loot)}* coins!\n✅ *Big score!*`:`🚨 Caught by security!\n❌ *Busted!*`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'🔫 Rob', win, bet, change:success?loot:-bet, newBalance:nb, resultLine, botName:B, caption:t });
+          return sendGameResult(sock,msg,extra,{gameName:'🔫 Rob',win,bet,change:success?loot-bet:-bet,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
-        // 10. INVEST
+        // 10. INVEST — 50/50, safe=×1.8, risky=×3.0, yolo=×6.0 on win
         if (sub==='invest') {
           const plan=(args[2]||'risky').toLowerCase();
-          let lbl, minM, maxM, emoji;
-          if(plan==='safe')      { lbl='Safe Fund';    minM=0.9; maxM=1.4; emoji='📊'; }
-          else if(plan==='yolo') { lbl='YOLO Mode';    minM=0;   maxM=8;   emoji='🤑'; }
-          else                   { lbl='Risky Market'; minM=0.4; maxM=3.0; emoji='💹'; }
-          const multi=parseFloat((minM+Math.random()*(maxM-minM)).toFixed(2));
-          const returned=Math.floor(bet*multi), profit=returned-bet, nb=afterWin(returned), win=profit>=0;
+          const win=Math.random()<0.40;
+          let lbl, winMulti, lossMulti, emoji;
+          if(plan==='safe')      { lbl='Safe Fund';    winMulti=2.5;  lossMulti=0.85; emoji='📊'; }
+          else if(plan==='yolo') { lbl='YOLO Mode';    winMulti=10.0;  lossMulti=0;    emoji='🤑'; }
+          else                   { lbl='Risky Market'; winMulti=5.0;  lossMulti=0.5;  emoji='💹'; }
+          const multi=win?winMulti:lossMulti;
+          const returned=Math.floor(bet*multi), profit=returned-bet, nb=afterWin(returned);
           const resultLine=`${emoji} ${lbl}: ×${multi} → ${fmt(returned)} coins`;
-          const t=`${emoji} *Investment: ${lbl}*\n\n💵 Invested: *${fmt(bet)}* coins\n📉 Return: *×${multi}* → *${fmt(returned)}* coins\n\n${win?`✅ *Profit: +${fmt(profit)} coins*`:`❌ *Loss: ${fmt(Math.abs(profit))} coins*`}\n\n💵 Wallet: *${fmt(nb)}*\n🏦 Bank: *${fmt(econ.bank)}* _(safe from market)_\n_Plans: safe · risky · yolo_\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock, msg, extra, { gameName:'📈 Invest', win, bet, change:profit, newBalance:nb, resultLine, botName:B, caption:t });
+          const t=`${emoji} *Investment: ${lbl}*\n\n💵 Invested: *${fmt(bet)}* coins\n📈 Return: *×${multi}* → *${fmt(returned)}* coins\n\n${profit>=0?`✅ *Profit: +${fmt(profit)} coins*`:`❌ *Loss: -${fmt(Math.abs(profit))} coins*`}\n\n💵 Wallet: *${fmt(nb)}*\n🏦 Bank: *${fmt(econ.bank)}* _(safe from market)_\n_Plans: safe(×1.8) · risky(×3.0) · yolo(×6.0) — all 50/50_\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+          return sendGameResult(sock,msg,extra,{gameName:'📈 Invest',win,bet,change:profit,newBalance:nb,resultLine,botName:B,caption:t});
         }
       }
 

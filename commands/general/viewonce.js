@@ -128,15 +128,29 @@ module.exports = {
           { quoted: msg }
         );
       } else if (/audio/.test(mtype)) {
-        await sock.sendMessage(
-          chatId,
-          {
-            audio: buffer,
-            ptt: true,
-            mimetype: 'audio/ogg; codecs=opus'
-          },
-          { quoted: msg }
-        );
+        // Try PTT (voice note) first — most viewonce audio is voice notes
+        // If that fails, try as regular audio attachment
+        const audioMime = actualMsg[mtype]?.mimetype || 'audio/ogg; codecs=opus';
+        const isPtt = audioMime.includes('ogg') || actualMsg[mtype]?.ptt;
+        try {
+          await sock.sendMessage(
+            chatId,
+            {
+              audio: buffer,
+              ptt: isPtt,
+              mimetype: isPtt ? 'audio/ogg; codecs=opus' : 'audio/mpeg',
+              fileName: isPtt ? 'voice.ogg' : 'audio.mp3',
+            },
+            { quoted: msg }
+          );
+        } catch (_) {
+          // Last resort: send as regular audio
+          await sock.sendMessage(
+            chatId,
+            { audio: buffer, mimetype: 'audio/mpeg', fileName: 'audio.mp3' },
+            { quoted: msg }
+          );
+        }
       }
     } catch (error) {
       console.error('Error in viewonce command:', error);

@@ -7,6 +7,7 @@ const database = require('./database');
 const { loadCommands } = require('./utils/commandLoader');
 const { addMessage } = require('./utils/groupstats');
 const levelupCmd      = require('./commands/fun/levelup');
+const wcgCmd          = require('./commands/fun/wcg');
 const { jidDecode, jidEncode } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -588,14 +589,11 @@ const handleMessage = async (sock, msg) => {
     }
 
     // ── Passive EXP — award on every message (groups AND DMs) ───────────────
-    // Skip only if the sender is actually the bot itself (e.g. its own command replies).
-    // Do NOT skip just because fromMe=true — that also fires when the owner types from
-    // their paired phone in a group. Use the bot's JID as the skip condition instead.
-    const botJid = sock.user?.id ? sock.user.id.split(':')[0] + '@s.whatsapp.net' : null;
-    const isBotItself = botJid && sender === botJid;
-    if (!isBotItself) {
-      const userId   = sender.split('@')[0];
-      const expResult = levelupCmd.awardPassiveExp(userId, from);
+    // We award EXP to the owner too — they are a real user.
+    // The 30s per-user:group cooldown prevents any spam exploitation.
+    // Bot's own auto-replies also fire fromMe=true but the cooldown absorbs them harmlessly.
+    const userId   = sender.split('@')[0];
+    const expResult = levelupCmd.awardPassiveExp(userId, from);
       if (expResult?.leveledUp) {
         const { level, name, emoji } = levelupCmd.getLevelInfo(expResult.newExp);
         // Try sending a level-up image card; fall back to text if it fails
@@ -623,13 +621,17 @@ const handleMessage = async (sock, msg) => {
           sock.sendMessage(from, { text: lvlMsg, mentions: [sender] }).catch(() => {});
         }
       }
-    }
     
     // Return early only if there is truly no message content object at all.
     // Do NOT return just because all keys are "protocol" types — in Baileys v7
     // group messages often arrive as { messageContextInfo, extendedTextMessage }
     // and we must not drop them. We only hard-bail if content itself is null.
     if (!content) return;
+
+    // ── WCG Word Chain Game — route free-text replies to active games ────────
+    // Must happen BEFORE command parsing so plain words reach the game handler.
+    const wcgHandled = await wcgCmd.handleReply(sock, msg, extra).catch(() => false);
+    if (wcgHandled) return;
     
     // 🔹 Button response should also check unwrapped content
     const btn = content.buttonsResponseMessage || msg.message?.buttonsResponseMessage;

@@ -410,4 +410,39 @@ async function makeGameCard(opts) {
   return svgToPng(svg, W, H);
 }
 
-module.exports = { makeRankCard, makeHeistCard, makeLevelUpCard, makeGameCard, fetchPpBase64 };
+module.exports = { makeRankCard, makeHeistCard, makeLevelUpCard, makeGameCard, makeLeaderboardCard, fetchPpBase64 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LEADERBOARD CARD
+// ═══════════════════════════════════════════════════════════════════════════════
+async function makeLeaderboardCard(opts) {
+  const { entries, botName } = opts;
+  // entries = [{ rank, name, level, levelName, emoji, exp }]
+  const W = 720, H = 80 + entries.length * 58 + 40;
+  const medals = ['🥇', '🥈', '🥉'];
+  const C2 = { bg: '#0d1117', card: '#161b22', border: '#30363d', gold: '#f7c948', silver: '#c0c0c0', bronze: '#cd7f32', green: '#00e676', grey: '#8b949e', white: '#ffffff' };
+
+  const rows = entries.map((e, i) => {
+    const rankColor = i === 0 ? C2.gold : i === 1 ? C2.silver : i === 2 ? C2.bronze : C2.grey;
+    const yBase = 100 + i * 58;
+    const bar = Math.max(4, Math.round((e.exp / (entries[0].exp || 1)) * 420));
+    return `
+  <rect x="40" y="${yBase}" width="640" height="48" rx="8" fill="${C2.card}" stroke="${C2.border}" stroke-width="1"/>
+  <rect x="48" y="${yBase + 34}" width="${bar}" height="6" rx="3" fill="${rankColor}" opacity="0.35"/>
+  <text x="68" y="${yBase + 22}" font-family="monospace" font-size="18" font-weight="bold" fill="${rankColor}">${x(medals[i] || '#' + (i + 1))}</text>
+  <text x="110" y="${yBase + 22}" font-family="sans-serif" font-size="14" font-weight="700" fill="${C2.white}">${x(e.name)}</text>
+  <text x="110" y="${yBase + 40}" font-family="sans-serif" font-size="11" fill="${C2.grey}">${x(e.emoji)} Lvl ${e.level} — ${x(e.levelName)}</text>
+  <text x="660" y="${yBase + 22}" text-anchor="end" font-family="monospace" font-size="13" font-weight="bold" fill="${C2.green}">${e.exp.toLocaleString()} EXP</text>`;
+  }).join('');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect width="${W}" height="${H}" fill="${C2.bg}"/>
+  <rect width="${W}" height="72" fill="#1c2128"/>
+  <text x="${W / 2}" y="30" text-anchor="middle" font-family="sans-serif" font-size="11" fill="${C2.grey}" letter-spacing="4">POWERED BY ${x(botName.toUpperCase())}</text>
+  <text x="${W / 2}" y="58" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="900" fill="${C2.gold}">🏆  TOP RANKERS</text>
+  ${rows}
+  <text x="${W / 2}" y="${H - 10}" text-anchor="middle" font-family="sans-serif" font-size="10" fill="${C2.border}">Chat to earn EXP · Level up to climb the board</text>
+</svg>`;
+
+  return svgToPng(svg, W, H);
+}

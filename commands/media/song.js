@@ -274,50 +274,50 @@ module.exports = {
       }
     } catch {}
 
-    // ── 3. Try ytdl-core FIRST (most reliable, no external API needed) ────
+    // ── 3. Try fast public APIs FIRST (no ytdl bot-detection issues) ─────
     let rawBuffer = null;
     let rawExt    = 'mp3';
     let resolvedTitle = videoTitle || text;
 
-    try {
-      console.log('[Song] Trying ytdl-core...');
-      const result = await downloadViaYtdl(videoUrl);
-      rawBuffer     = result.buffer;
-      rawExt        = result.ext;
-      if (result.title) resolvedTitle = result.title;
-      console.log(`[Song] ✅ ytdl-core — ${rawBuffer.length} bytes, ext: ${rawExt}`);
-    } catch (e) {
-      console.log(`[Song] ytdl-core failed: ${e.message} — trying fallback APIs`);
+    const fastApis = [
+      { name: 'IzumiURL',     fn: () => apiIzumiUrl(videoUrl) },
+      { name: 'IzumiQuery',   fn: () => apiIzumiQuery(videoTitle || text) },
+      { name: 'Siputzx',      fn: () => apiSiputzx(videoUrl) },
+      { name: 'Yupra',        fn: () => apiYupra(videoUrl) },
+      { name: 'EliteProTech', fn: () => apiEliteProTech(videoUrl) },
+      { name: 'Invidious',    fn: () => apiInvidious(videoUrl) },
+    ];
+
+    for (const { name, fn } of fastApis) {
+      try {
+        console.log(`[Song] Trying ${name}...`);
+        const result = await withTimeout(fn, 18_000, name);
+        if (!result?.url) { console.log(`[Song] ${name}: no URL`); continue; }
+        if (result.title) resolvedTitle = result.title;
+
+        const buf = await withTimeout(() => downloadToBuffer(result.url), 30_000, `${name} download`);
+        if (!buf || buf.length < 8192) { console.log(`[Song] ${name}: too small`); continue; }
+
+        rawBuffer = buf;
+        rawExt    = result.ext || detectAudioFormat(buf);
+        console.log(`[Song] ✅ ${name} — ${buf.length} bytes`);
+        break;
+      } catch (e) {
+        console.log(`[Song] ${name} failed: ${e.message}`);
+      }
     }
 
-    // ── 4. Fallback API chain if ytdl-core failed ─────────────────────────
+    // ── 4. ytdl-core as LAST RESORT (slow, often rate-limited by YouTube) ─
     if (!rawBuffer) {
-      const fallbackApis = [
-        { name: 'Yupra',        fn: () => apiYupra(videoUrl) },
-        { name: 'Siputzx',      fn: () => apiSiputzx(videoUrl) },
-        { name: 'IzumiURL',     fn: () => apiIzumiUrl(videoUrl) },
-        { name: 'EliteProTech', fn: () => apiEliteProTech(videoUrl) },
-        { name: 'Invidious',    fn: () => apiInvidious(videoUrl) },
-        { name: 'IzumiQuery',   fn: () => apiIzumiQuery(videoTitle || text) },
-      ];
-
-      for (const { name, fn } of fallbackApis) {
-        try {
-          console.log(`[Song] Trying ${name}...`);
-          const result = await withTimeout(fn, 20_000, name);
-          if (!result?.url) { console.log(`[Song] ${name}: no URL`); continue; }
-          if (result.title) resolvedTitle = result.title;
-
-          const buf = await withTimeout(() => downloadToBuffer(result.url), 35_000, `${name} download`);
-          if (!buf || buf.length < 8192) { console.log(`[Song] ${name}: too small`); continue; }
-
-          rawBuffer = buf;
-          rawExt    = result.ext || detectAudioFormat(buf);
-          console.log(`[Song] ✅ ${name} — ${buf.length} bytes`);
-          break;
-        } catch (e) {
-          console.log(`[Song] ${name} failed: ${e.message}`);
-        }
+      try {
+        console.log('[Song] Trying ytdl-core (last resort)...');
+        const result = await downloadViaYtdl(videoUrl);
+        rawBuffer     = result.buffer;
+        rawExt        = result.ext;
+        if (result.title) resolvedTitle = result.title;
+        console.log(`[Song] ✅ ytdl-core — ${rawBuffer.length} bytes, ext: ${rawExt}`);
+      } catch (e) {
+        console.log(`[Song] ytdl-core also failed: ${e.message}`);
       }
     }
 
