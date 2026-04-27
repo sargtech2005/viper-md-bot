@@ -634,7 +634,6 @@ const handleMessage = async (sock, msg) => {
     const wcgHandled = await wcgCmd.handleReply(sock, msg, {
       sender,
       from,
-      body,
       pushName: msg.pushName || msg.verifiedBizName || sender.split('@')[0],
       reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
       react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } }),
