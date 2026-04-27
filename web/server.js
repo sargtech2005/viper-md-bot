@@ -26,14 +26,14 @@ const app  = express();
 const PORT = parseInt(process.env.PORT || '3000');
 
 // ── Validate required env vars early ─────────────────────────────────────────
+// NOTE: Do NOT process.exit here — HTTP server must start first so Fly.io
+// health checks can reach /health immediately on boot.
 if (!process.env.DATABASE_URL) {
-  console.error('❌ DATABASE_URL is not set.');
-  console.error('   On Render: Dashboard → your service → Environment → add DATABASE_URL');
-  process.exit(1);
+  console.error('❌ DATABASE_URL is not set. Fix: fly secrets set DATABASE_URL=<your-postgres-url>');
 }
 if (!process.env.JWT_SECRET) {
-  console.warn('⚠️  JWT_SECRET not set — using insecure default. Set it in Render Environment!');
-  process.env.JWT_SECRET = 'viper_insecure_default_change_me_in_render_dashboard';
+  console.warn('⚠️  JWT_SECRET not set — using insecure default. Fix: fly secrets set JWT_SECRET=<random>');
+  process.env.JWT_SECRET = 'viper_insecure_default_change_me_in_fly_secrets';
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -102,7 +102,12 @@ app.use('/api/admin',    adminRoutes);
 app.use('/api/wallet',   walletRoutes);
 
 // ── Health check (must always respond — used by Render & UptimeRobot) ---------
-app.get('/health', (_, res) => res.json({ ok: true, service: 'VIPER BOT MD', t: new Date().toISOString() }));
+// Health check — ALWAYS returns 200 so Fly.io never kills the machine.
+// DB status is reported in the body for observability but never blocks the 200.
+let _dbStatus = 'starting';
+app.get('/health', (_, res) => res.status(200).json({
+  ok: true, service: 'VIPER BOT MD', db: _dbStatus, t: new Date().toISOString()
+}));
 
 // -- SEO: sitemap.xml ----------------------------------------------------------
 app.get('/sitemap.xml', (req, res) => {
@@ -178,6 +183,7 @@ async function boot() {
     try {
       await initDB();
       dbReady = true;
+      _dbStatus = 'connected';
       console.log('✅ PostgreSQL connected and schema ready');
       break;
     } catch (err) {
@@ -190,8 +196,11 @@ async function boot() {
   }
 
   if (!dbReady) {
-    console.error('❌ Could not connect to PostgreSQL after 5 attempts. Check DATABASE_URL.');
-    process.exit(1);
+    // Keep the server alive even without DB — /health will still respond 200
+    // so Fly.io doesn't kill the machine. API routes will return 503 on DB calls.
+    _dbStatus = 'error';
+    console.error('❌ PostgreSQL unavailable after 5 attempts. Server stays up — fix DATABASE_URL secret.');
+    console.error('   Run: fly secrets set DATABASE_URL=postgres://...');
   }
 
   console.log('\n╔══════════════════════════════════════════╗');

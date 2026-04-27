@@ -35,10 +35,10 @@ primary_region = "ams"
 
 [checks]
   [checks.health]
-    grace_period = "10s"
+    grace_period = "40s"
     interval = "15s"
     method = "GET"
     path = "/health"
     port = 3000
-    timeout = "5s"
+    timeout = "10s"
     type = "http"
