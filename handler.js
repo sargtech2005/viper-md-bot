@@ -630,7 +630,15 @@ const handleMessage = async (sock, msg) => {
 
     // ── WCG Word Chain Game — route free-text replies to active games ────────
     // Must happen BEFORE command parsing so plain words reach the game handler.
-    const wcgHandled = await wcgCmd.handleReply(sock, msg, extra).catch(() => false);
+    // NOTE: `extra` is not a declared variable here — pass the needed fields inline.
+    const wcgHandled = await wcgCmd.handleReply(sock, msg, {
+      sender,
+      from,
+      body,
+      pushName: msg.pushName || msg.verifiedBizName || sender.split('@')[0],
+      reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
+      react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } }),
+    }).catch(() => false);
     if (wcgHandled) return;
     
     // 🔹 Button response should also check unwrapped content
