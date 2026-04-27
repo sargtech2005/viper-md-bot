@@ -283,13 +283,36 @@ module.exports = {
 
         // 3. FLIP — 50/50, win pays ×2.1 (better than before)
         if (sub==='flip') {
-          const pick=(args[2]||'heads').toLowerCase().startsWith('t')?'tails':'heads';
+          // Smart-detect arg order: user may type ".casino flip heads 500" OR ".casino flip 500 heads"
+          const _a1 = (args[1] || '').toLowerCase();
+          const _a2 = (args[2] || '').toLowerCase();
+          const _a1isChoice = _a1 === 'heads' || _a1 === 'tails' || _a1 === 'head' || _a1 === 'tail';
+          const _a2isChoice = _a2 === 'heads' || _a2 === 'tails' || _a2 === 'head' || _a2 === 'tail';
+          let pick;
+          let flipBet;
+          if (_a1isChoice) {
+            pick = _a1.startsWith('t') ? 'tails' : 'heads';
+            flipBet = parseBet(_a2, econ.wallet); // bet is args[2]
+          } else if (_a2isChoice) {
+            pick = _a2.startsWith('t') ? 'tails' : 'heads';
+            flipBet = parseBet(_a1, econ.wallet); // bet is args[1] (normal order)
+          } else {
+            pick = 'heads';
+            flipBet = parseBet(_a1, econ.wallet);
+          }
+          // Override the outer `bet` with the correctly parsed flip bet
+          const flipBetFinal = flipBet;
+          if (econ.wallet < flipBetFinal) return extra.reply(`❌ *Not enough in wallet!*\n💵 Wallet: *${fmt(econ.wallet)}* | Need: *${fmt(flipBetFinal)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`);
           const result=Math.random()<0.5?'heads':'tails', win=pick===result;
-          const gained=Math.floor(bet*2.5);
-          const nb=win?afterWin(gained):afterLoss();
+          const _fb=flipBetFinal;
+          const gained=Math.floor(_fb*2.5);
+          // Use flipBetFinal-aware wallet operations
+          const flipAfterWin  = (g) => { setWallet(userId, econ.wallet-_fb+g); return econ.wallet-_fb+g; };
+          const flipAfterLoss = ()  => { setWallet(userId, econ.wallet-_fb);   return Math.max(0,econ.wallet-_fb); };
+          const nb=win?flipAfterWin(gained):flipAfterLoss();
           const resultLine=`Your pick: ${pick} → Result: ${result} ${result==='heads'?'🟡':'⚫'}`;
-          const t=`🪙 *Coin Flip*\n\nYour pick: *${pick}*\nResult: *${result}* ${result==='heads'?'🟡':'⚫'}\n\n${win?`✅ *You win!* +${fmt(gained-bet)} coins`:`❌ *You lost!* -${fmt(bet)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
-          return sendGameResult(sock,msg,extra,{gameName:'🪙 Coin Flip',win,bet,change:win?gained-bet:-bet,newBalance:nb,resultLine,botName:B,caption:t});
+          const t=`🪙 *Coin Flip*\n\nYour pick: *${pick}*\nResult: *${result}* ${result==='heads'?'🟡':'⚫'}\n\n${win?`✅ *You win!* +${fmt(gained-_fb)} coins`:`❌ *You lost!* -${fmt(_fb)} coins`}\n\n💵 Wallet: *${fmt(nb)}*\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ ${B}* 🐍`;
+          return sendGameResult(sock,msg,extra,{gameName:'🪙 Coin Flip',win,bet:_fb,change:win?gained-_fb:-_fb,newBalance:nb,resultLine,botName:B,caption:t});
         }
 
         // 4. BLACKJACK — 50/50, blackjack pays ×2.5

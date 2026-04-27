@@ -588,12 +588,19 @@ const handleMessage = async (sock, msg) => {
       addMessage(from, sender);
     }
 
-    // ── Passive EXP — award on every message (groups AND DMs) ───────────────
-    // We award EXP to the owner too — they are a real user.
-    // The 30s per-user:group cooldown prevents any spam exploitation.
-    // Bot's own auto-replies also fire fromMe=true but the cooldown absorbs them harmlessly.
-    const userId   = sender.split('@')[0];
-    const expResult = levelupCmd.awardPassiveExp(userId, from);
+    // ── Passive EXP — award on CHAT messages ONLY, NOT commands ─────────────
+    // We check if the message starts with a command prefix BEFORE awarding EXP.
+    // Casino / game commands must NOT give EXP — only real chat messages do.
+    const userId = sender.split('@')[0];
+    // Quick body peek just for the EXP check (full body parsed later)
+    const _quickBody = (() => {
+      const _r = msg.message || {};
+      return (_r.conversation || _r.extendedTextMessage?.text || _r.imageMessage?.caption || '').trim();
+    })();
+    const _expPrefix   = dbSetting('prefix') || '.';
+    const _expPrefixes = [...new Set([_expPrefix, '.', '/', '#'])];
+    const _isCommand   = _expPrefixes.some(p => _quickBody.startsWith(p));
+    const expResult    = _isCommand ? null : levelupCmd.awardPassiveExp(userId, from);
       if (expResult?.leveledUp) {
         const { level, name, emoji } = levelupCmd.getLevelInfo(expResult.newExp);
         // Try sending a level-up image card; fall back to text if it fails
@@ -944,20 +951,20 @@ const handleMessage = async (sock, msg) => {
         const mentionedJids = content?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         const isMentioned   = mentionedJids.some(j => j.includes(botNumber));
 
-        if ((isDM || isMentioned) && body && !body.startsWith(dbSetting('prefix'))) {
-          const { askGemini } = require('./commands/ai/gemini');
-          const config2   = require('./config');
-          const botName2  = database.getSetting('botName', config2.botName) || 'Viper Bot';
+        if ((isDM || isMentioned) && body && !_expPrefixes.some(p => body.startsWith(p))) {
+          const { askMetaAI } = require('./commands/ai/metaai');
+          const config2  = require('./config');
+          const botName2 = database.getSetting('botName', config2.botName) || 'Viper Bot';
 
           // Typing indicator
           try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
 
-          const aiReply = await askGemini(from, body, botName2);
+          const aiReply = await askMetaAI(from, body, botName2);
           await sock.sendMessage(from, { text: aiReply }, { quoted: msg });
           return; // handled — don't fall through to command parser
         }
       } catch (e) {
-        console.error('[AutoReply] Gemini error:', e.message);
+        console.error('[AutoReply] Meta AI error:', e.message);
         // Don't crash — just skip auto-reply on error
       }
     }

@@ -104,13 +104,15 @@ module.exports = {
 
       // ── LEADERBOARD ─────────────────────────────────────────────────────
       if (sub === 'top' || sub === 'leaderboard' || sub === 'lb') {
-        const fs = require('fs');
-        const path = require('path');
+        // Use readAsync so it works in BOTH file mode AND Postgres mode.
+        // The old direct fs.readFileSync approach silently returns {} in Postgres
+        // mode because the JSON files are never written there.
         let allUsers = {};
         try {
-          const usersFile = path.join(database.DB_PATH, 'users.json');
-          allUsers = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-        } catch { allUsers = {}; }
+          allUsers = await database.readAsync('users');
+        } catch {
+          allUsers = database.readSync ? database.readSync('users') : {};
+        }
 
         const entries  = Object.entries(allUsers)
           .map(([id, u]) => ({ id, exp: typeof u.exp === 'number' ? u.exp : 0 }))
