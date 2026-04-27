@@ -951,17 +951,32 @@ const handleMessage = async (sock, msg) => {
         const mentionedJids = content?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         const isMentioned   = mentionedJids.some(j => j.includes(botNumber));
 
-        if ((isDM || isMentioned) && body && !_expPrefixes.some(p => body.startsWith(p))) {
-          const { askMetaAI } = require('./commands/ai/metaai');
+        // Group: also match plain-text @mention of bot number
+        const _bodyMention = body && (body.includes(botNumber) || body.includes('@' + botNumber));
+        const _isMentionedFull = isMentioned || _bodyMention;
+
+        if ((isDM || _isMentionedFull) && body && !_expPrefixes.some(p => body.startsWith(p))) {
+          const { askMetaAI, sendChunks, isCodingRequest, checkCodeRateLimit } = require('./commands/ai/metaai');
           const config2  = require('./config');
           const botName2 = database.getSetting('botName', config2.botName) || 'Viper Bot';
 
-          // Typing indicator
+          // Coding rate limit (same bucket as .metaai command — can't bypass via autoreply)
+          if (isCodingRequest(body)) {
+            const _uid = sender.split('@')[0];
+            const rl   = checkCodeRateLimit(_uid);
+            if (!rl.allowed) {
+              await sock.sendMessage(from, {
+                text: `⏱️ *Coding limit reached* — ~${rl.waitMins} min(s) remaining.\n_Normal chat is unlimited._`
+              }, { quoted: msg });
+              return;
+            }
+          }
+
           try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
 
-          const aiReply = await askMetaAI(from, body, botName2);
-          await sock.sendMessage(from, { text: aiReply }, { quoted: msg });
-          return; // handled — don't fall through to command parser
+          const chunks = await askMetaAI(from, body, botName2);
+          await sendChunks(sock, from, chunks, msg);
+          return;
         }
       } catch (e) {
         console.error('[AutoReply] Meta AI error:', e.message);
