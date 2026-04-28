@@ -29,7 +29,7 @@ primary_region = "ams"
     soft_limit = 800
 
 [[vm]]
-  memory = '2gb'
+  memory = '4gb'
   cpu_kind = 'shared'
   cpus = 2
 
