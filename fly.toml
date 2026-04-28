@@ -31,7 +31,7 @@ primary_region = "ams"
 [[vm]]
   memory = '4gb'
   cpu_kind = 'shared'
-  cpus = 4
+  cpus = 2
 
 [checks]
   [checks.health]
@@ -40,5 +40,5 @@ primary_region = "ams"
     method = "GET"
     path = "/health"
     port = 3000
-    timeout = "10s"
+    timeout = "20s"
     type = "http"
