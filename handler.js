@@ -974,7 +974,9 @@ const handleMessage = async (sock, msg) => {
 
           try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
 
-          const chunks = await askMetaAI(from, body, botName2);
+          // sessionId: bot own number — isolates memory per WhatsApp account
+          const _sessionId = (sock.user?.id || "").split(":")[0].split("@")[0];
+          const chunks = await askMetaAI(from, body, botName2, _sessionId);
           await sendChunks(sock, from, chunks, msg);
           return;
         }

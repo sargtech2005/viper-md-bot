@@ -118,8 +118,29 @@ function splitText(text, chunks) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTITY FIXER  — strip any provider name leaks from response
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKDOWN NORMALIZER — convert AI markdown to WhatsApp formatting
+// WhatsApp: *bold*, _italic_, ~strike~, ```mono```
+// AI returns: **bold**, __italic__, # Heading, etc.
+// ─────────────────────────────────────────────────────────────────────────────
+function normalizeMarkdown(text) {
+  if (!text) return text;
+  return text
+    // **bold** → *bold* (must do before single-asterisk rules)
+    .replace(/\*\*([^*\n]+?)\*\*/g, '*$1*')
+    // __italic__ → _italic_
+    .replace(/__([^_\n]+?)__/g, '_$1_')
+    // ### Heading / ## Heading / # Heading → *Heading*
+    .replace(/^#{1,6}\s+(.+)$/gm, '*$1*')
+    // - item or * item bullet → • item (WhatsApp style)
+    .replace(/^[\-\*]\s+/gm, '• ')
+    // Extra blank lines (3+ → 2)
+    .replace(/\n{3,}/g, '\n\n');
+}
+
 function fixIdentity(text, botName) {
   if (!text) return text;
+  text = normalizeMarkdown(text);
   return text
     // "I'm called ChatGPT" / "I am ChatGPT" / "My name is GPT-4" etc.
     .replace(/(?:I(?:'m| am)(?: called)?|[Mm]y name is)\s+(?:ChatGPT|GPT-?\d*|Gemini|Claude|Kaitlyn|LLaMA|Llama\s*\d*|an?\s+AI\s+(?:assistant|language\s+model))/gi,
@@ -146,19 +167,20 @@ function parseIntoChunks(rawText) {
     const emoji  = getLangEmoji(lang);
     const header = `${emoji} *${lang.toUpperCase()}*`;
     // Include lang on the ``` fence so WhatsApp renders it as a proper code block
-    const box    = `${header}\n\`\`\`${lang}\n${code}\n\`\`\``;
+    // WhatsApp monospace = ```text``` — language tag in fence shows as literal text
+    const box    = `${header}\n\`\`\`\n${code}\n\`\`\``;
 
     if (box.length > CHUNK_SIZE) {
       const lines = code.split('\n');
       let buffer = '', part = 1;
       for (const line of lines) {
         if ((buffer + '\n' + line).length > CHUNK_SIZE - 80) {
-          chunks.push(`${header} _(part ${part})_\n\`\`\`${lang}\n${buffer.trim()}\n\`\`\``);
+          chunks.push(`${header} _(part ${part})_\n\`\`\`\n${buffer.trim()}\n\`\`\``);
           buffer = ''; part++;
         }
         buffer += (buffer ? '\n' : '') + line;
       }
-      if (buffer.trim()) chunks.push(`${header} _(part ${part})_\n\`\`\`${lang}\n${buffer.trim()}\n\`\`\``);
+      if (buffer.trim()) chunks.push(`${header} _(part ${part})_\n\`\`\`\n${buffer.trim()}\n\`\`\``);
     } else {
       chunks.push(box);
     }
@@ -166,23 +188,69 @@ function parseIntoChunks(rawText) {
     lastIndex = match.index + match[0].length;
   }
 
-  // Handle unclosed code block: AI was cut off before the closing ```
+  // Handle tail — may be: plain text, unclosed block at start, or text + unclosed block
   const tail = rawText.slice(lastIndex).trim();
   if (tail) {
-    const unclosedMatch = tail.match(/^```[ \t]*(\w*)[ \t]*\r?\n([\s\S]+)$/);
-    if (unclosedMatch) {
-      // Treat the rest as a code block even without closing fence
-      const lang   = unclosedMatch[1] || 'code';
-      const code   = unclosedMatch[2].trim();
-      const emoji  = getLangEmoji(lang);
-      const header = `${emoji} *${lang.toUpperCase()}*`;
-      chunks.push(`${header} _[truncated]_\n\`\`\`\n${code}\n\`\`\``);
+    // Find the LAST opening ``` in tail that has no matching closing ```
+    // This covers: "Sure! Here is the code:\n```python\ndef add..."
+    const openFenceIdx = tail.search(/```[ \t]*\w*[ \t]*\r?\n/);
+    if (openFenceIdx !== -1) {
+      // Check if this fence is closed
+      const afterFence = tail.slice(openFenceIdx);
+      const closingIdx = afterFence.indexOf('\n```', 3); // look for \n``` after opening
+      if (closingIdx === -1) {
+        // Unclosed fence — text before it is normal, code after it is a sandbox
+        const textBefore = tail.slice(0, openFenceIdx).trim();
+        if (textBefore) splitText(textBefore, chunks);
+
+        const fenceMatch = afterFence.match(/```[ \t]*(\w*)[ \t]*\r?\n([\s\S]+)$/);
+        if (fenceMatch) {
+          const lang   = fenceMatch[1] || 'code';
+          const code   = fenceMatch[2].trim();
+          const emoji  = getLangEmoji(lang);
+          const header = `${emoji} *${lang.toUpperCase()}*`;
+          chunks.push(`${header} _[continues...]_\n\`\`\`\n${code}\n\`\`\``);
+        }
+      } else {
+        // Fence IS closed — this is a complete block the regex missed (edge case)
+        splitText(tail, chunks);
+      }
     } else {
       splitText(tail, chunks);
     }
   }
 
   return chunks.filter(Boolean);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTRA FREE MODELS — all via Pollinations (no API key needed)
+// Useful models: deepseek-r1 (complex reasoning/coding), mistral-large, qwen-72b
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Generic Pollinations POST builder — pass any supported model name
+async function tryPollinationsModel(chatId, userText, botName, model) {
+  pushHistory(chatId, 'user', userText);
+  const r = await axios.post(
+    'https://text.pollinations.ai/openai',
+    {
+      model,
+      messages: [
+        { role: 'system', content: buildSystemPrompt(botName) },
+        ...getHistory(chatId),
+      ],
+      max_tokens: MAX_TOKENS,
+      seed: 42,
+    },
+    {
+      timeout: 60000, // reasoning models are slower
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+    }
+  );
+  const text = r.data?.choices?.[0]?.message?.content?.trim();
+  if (!text || text.length < 2) throw new Error(`Empty response from ${model}`);
+  pushHistory(chatId, 'assistant', text);
+  return text;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -205,7 +273,8 @@ RESPONSE QUALITY:
 - Match the user's language (English, Nigerian Pidgin, Yoruba, Hausa, Igbo, etc.).
 
 FORMATTING FOR WHATSAPP:
-- Use *bold* for headers and important terms.
+- Use *bold* for emphasis — SINGLE asterisk: *word* NOT **word** (double asterisks break WhatsApp).
+- Use _italic_ for titles — single underscore ONLY: _word_ NOT __word__.
 - Use numbered lists for steps.
 - Use bullet points (•) for options.
 - Wrap ALL code in markdown fences with language: \`\`\`python ... \`\`\`
@@ -312,9 +381,10 @@ async function tryPollinationsGet(chatId, userText, botName) {
   const hist   = getHistory(chatId).slice(-4);
   const ctx    = hist.map(m => `${m.role === 'user' ? 'User' : botName}: ${m.content}`).join('\n');
   const prompt = `${buildSystemPrompt(botName)}\n\n${ctx ? ctx + '\n' : ''}User: ${userText}\n${botName}:`;
+  // model param forces a stronger model; jsonMode off for plain text
   const r = await axios.get(
-    `https://text.pollinations.ai/${encodeURIComponent(prompt)}`,
-    { timeout: 25000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    `https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=openai-large&seed=42`,
+    { timeout: 35000, headers: { 'User-Agent': 'Mozilla/5.0' } }
   );
   const text = typeof r.data === 'string' ? r.data.trim() : '';
   if (!text || text.length < 2) throw new Error('Empty Pollinations GET response');
@@ -326,12 +396,21 @@ async function tryPollinationsGet(chatId, userText, botName) {
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN ASK  — returns array of WA message chunks
 // ─────────────────────────────────────────────────────────────────────────────
-async function askMetaAI(chatId, userText, botName) {
+async function askMetaAI(chatId, userText, botName, sessionId) {
+  // Namespace chatId by session so multi-session bots don't share history
+  const scopedChatId = sessionId ? `${sessionId}:${chatId}` : chatId;
   const providers = [
-    { name: 'Groq/Llama',       fn: () => tryGroqMeta(chatId, userText, botName) },
-    { name: 'Pollinations',     fn: () => tryPollinations(chatId, userText, botName) },
-    { name: 'Pollinations-GET', fn: () => tryPollinationsGet(chatId, userText, botName) },
-    { name: 'Shizo',            fn: () => tryShizo(chatId, userText, botName) }, // last resort — unreliable
+    // ── Tier 1: Key-based (fastest, most reliable) ──────────────────────────
+    { name: 'Groq/Llama-3.3',    fn: () => tryGroqMeta(scopedChatId, userText, botName) },
+    // ── Tier 2: Pollinations free models (no key needed) ────────────────────
+    { name: 'Pollinations/GPT4o', fn: () => tryPollinations(scopedChatId, userText, botName) },         // GPT-4o via Pollinations
+    { name: 'DeepSeek-R1',        fn: () => tryPollinationsModel(scopedChatId, userText, botName, 'deepseek-r1') },  // Best for complex reasoning & code
+    { name: 'DeepSeek-V3',        fn: () => tryPollinationsModel(scopedChatId, userText, botName, 'deepseek') },    // Fast, great at code
+    { name: 'Mistral-Large',      fn: () => tryPollinationsModel(scopedChatId, userText, botName, 'mistral-large') }, // Strong general model
+    { name: 'Qwen-72B',           fn: () => tryPollinationsModel(scopedChatId, userText, botName, 'qwen') },         // Good at multilingual + code
+    { name: 'o3-mini',            fn: () => tryPollinationsModel(scopedChatId, userText, botName, 'openai-reasoning') }, // OpenAI reasoning model
+    { name: 'Pollinations-GET',   fn: () => tryPollinationsGet(scopedChatId, userText, botName) },
+    { name: 'Shizo',              fn: () => tryShizo(scopedChatId, userText, botName) }, // last resort — unreliable
   ];
 
   // Quality heuristic: Shizo leaks random training data as very short lines with no spaces
@@ -364,6 +443,40 @@ async function askMetaAI(chatId, userText, botName) {
   }
 
   if (!rawReply) throw new Error('All AI providers unavailable');
+
+  // Auto-continuation: if response ends with an unclosed code block, fetch the rest
+  const isTruncated = (text) => {
+    const t = text.trimEnd();
+    // Ends mid-code: open fence with no closing fence
+    const fenceCount = (t.match(/```/g) || []).length;
+    if (fenceCount % 2 !== 0) return true;
+    // Ends mid-sentence/mid-expression (heuristic)
+    if (/[=(,{\[\s]$/.test(t)) return true;
+    return false;
+  };
+
+  if (isTruncated(rawReply)) {
+    console.log(`[${botName}/AI] Response looks truncated — fetching continuation`);
+    // Push the truncated reply into history then ask to continue
+    // History was already updated by the provider, just ask for continuation
+    const continuationProviders = [
+      { name: 'Groq-cont',       fn: () => tryGroqMeta(scopedChatId, 'Please continue from exactly where you left off. Do not repeat anything, just continue the code/answer.', botName) },
+      { name: 'Pollinations-cont', fn: () => tryPollinations(scopedChatId, 'Please continue from exactly where you left off. Do not repeat anything.', botName) },
+    ];
+    for (const { name, fn } of continuationProviders) {
+      try {
+        const cont = await fn();
+        if (cont && cont.length > 10) {
+          console.log(`[${botName}/AI] ${name} continuation → ${cont.length} chars`);
+          rawReply = rawReply + '\n' + cont;
+          break;
+        }
+      } catch (e) {
+        console.log(`[${botName}/AI] ${name} continuation failed: ${e.message}`);
+      }
+    }
+  }
+
   const cleanReply = fixIdentity(rawReply, botName);
   return parseIntoChunks(cleanReply);
 }
@@ -439,7 +552,8 @@ module.exports = {
     try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
 
     try {
-      const chunks = await askMetaAI(chatId, text, botName);
+      const _sid = (sock.user?.id || "").split(":")[0].split("@")[0];
+      const chunks = await askMetaAI(chatId, text, botName, _sid);
       await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
       await sendChunks(sock, from, chunks, msg);
     } catch (e) {
