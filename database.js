@@ -114,14 +114,24 @@ if (!USE_POSTGRES) {
   }
 }
 
+function getFilePath(key) {
+  if (FILE_PATHS[key]) return FILE_PATHS[key];
+  // Arbitrary keys (e.g. 'ai_history') get a sanitised filename in DB_PATH
+  const safe = key.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  return path.join(DB_PATH, safe + '.json');
+}
+
 function fileRead(key) {
-  try { return JSON.parse(fs.readFileSync(FILE_PATHS[key], 'utf-8')); }
+  try { return JSON.parse(fs.readFileSync(getFilePath(key), 'utf-8')); }
   catch { return key === 'mods' ? { moderators: [] } : {}; }
 }
 
 function fileWrite(key, value) {
-  try { fs.writeFileSync(FILE_PATHS[key], JSON.stringify(value, null, 2)); return true; }
-  catch { return false; }
+  try {
+    if (!fs.existsSync(DB_PATH)) fs.mkdirSync(DB_PATH, { recursive: true });
+    fs.writeFileSync(getFilePath(key), JSON.stringify(value, null, 2));
+    return true;
+  } catch { return false; }
 }
 
 // ── Unified read/write — auto-selects backend ─────────────────────────────────
