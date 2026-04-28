@@ -946,14 +946,24 @@ const handleMessage = async (sock, msg) => {
         const botJid    = sock.user?.id || '';
         const botNumber = botJid.split(':')[0].split('@')[0];
 
-        // Detect DM (not a group) OR a group @mention of the bot
+        // Detect DM (not a group) OR a group @mention/reply to the bot
         const isDM = !isGroup;
-        const mentionedJids = content?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        const isMentioned   = mentionedJids.some(j => j.includes(botNumber));
+        const _ctx = content?.extendedTextMessage?.contextInfo
+                  || content?.imageMessage?.contextInfo
+                  || content?.videoMessage?.contextInfo
+                  || content?.documentMessage?.contextInfo
+                  || {};
+        const mentionedJids  = _ctx.mentionedJid || [];
+        const isMentioned    = mentionedJids.some(j => j.includes(botNumber));
 
-        // Group: also match plain-text @mention of bot number
+        // Detect reply to bot message: quotedMessage participant === bot JID
+        const quotedParticipant = _ctx.participant || '';
+        const isReplyToBot = quotedParticipant.includes(botNumber) ||
+                             (isGroup && _ctx.stanzaId && quotedParticipant === (sock.user?.id || ''));
+
+        // Plain-text @mention in body
         const _bodyMention = body && (body.includes(botNumber) || body.includes('@' + botNumber));
-        const _isMentionedFull = isMentioned || _bodyMention;
+        const _isMentionedFull = isMentioned || _bodyMention || isReplyToBot;
 
         if ((isDM || _isMentionedFull) && body && !_expPrefixes.some(p => body.startsWith(p))) {
           const { askMetaAI, sendChunks, isCodingRequest, checkCodeRateLimit } = require('./commands/ai/metaai');
@@ -975,14 +985,31 @@ const handleMessage = async (sock, msg) => {
           try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
 
           // sessionId: bot own number — isolates memory per WhatsApp account
-          const _sessionId = (sock.user?.id || "").split(":")[0].split("@")[0];
-          const chunks = await askMetaAI(from, body, botName2, _sessionId);
-          await sendChunks(sock, from, chunks, msg);
+          const _sessionId = (sock.user?.id || '').split(':')[0].split('@')[0];
+
+          let _aiResult;
+          try {
+            _aiResult = await askMetaAI(from, body, botName2, _sessionId);
+          } catch (aiErr) {
+            // Log full error so we can debug provider failures
+            console.error('[AutoReply] askMetaAI failed:', aiErr.message, aiErr.stack?.split('\n')[1] || '');
+            // Send a friendly error instead of silent failure
+            await sock.sendMessage(from, {
+              text: `❌ AI is temporarily unavailable. Try again shortly.\n_Error: ${aiErr.message}_`
+            }, { quoted: msg }).catch(() => {});
+            return;
+          }
+
+          try {
+            await sendChunks(sock, from, _aiResult, msg);
+          } catch (sendErr) {
+            console.error('[AutoReply] sendChunks failed:', sendErr.message);
+          }
           return;
         }
       } catch (e) {
-        console.error('[AutoReply] Meta AI error:', e.message);
-        // Don't crash — just skip auto-reply on error
+        // Outer catch: only fires for pre-AI errors (body check, rate limit etc)
+        console.error('[AutoReply] Setup error:', e.message, e.stack?.split('\n')[1] || '');
       }
     }
 
@@ -1067,8 +1094,10 @@ const handleMessage = async (sock, msg) => {
           // Use this everywhere instead of raw phone numbers for a friendly UX.
           pushName: msg.pushName || msg.verifiedBizName || sender.split('@')[0],
           usedPrefix: _usedPrefix,
+          prefix: _usedPrefix,  // alias — some commands use extra.prefix
           reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
-          react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } })
+          react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } }),
+          sender
         }),
         new Promise((_, rej) =>
           setTimeout(() => rej(new Error(`Command timed out after ${CMD_TIMEOUT_MS / 1000}s`)), CMD_TIMEOUT_MS)

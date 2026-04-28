@@ -36,8 +36,8 @@ if (USE_POSTGRES) {
       ssl: process.env.DATABASE_URL?.includes('.internal') || process.env.DATABASE_URL?.includes('localhost')
         ? false
         : { rejectUnauthorized: false },
-      max: 8,                      // per-bot pool — enough for concurrent reads/writes
-      min: 2,                      // keep 2 warm on Fly — no cold-connect lag
+      max: 5,                      // 2 machines × 5 = 10 conns total — safe under Fly Postgres 25-conn limit
+      min: 1,                      // 1 warm per machine — reduces idle overhead
       idleTimeoutMillis: 60000,
       connectionTimeoutMillis: 5000,
       keepAlive: true,

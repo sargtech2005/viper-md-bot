@@ -44,75 +44,51 @@ const DB_WRITE_DELAY   = 3000;  // ms — batch DB writes to avoid hammering Pos
 // MEMORY — RAM cache + PostgreSQL persistence
 // ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
-// HISTORY STORE — RAM cache backed by PostgreSQL (or JSON file in dev mode)
+// HISTORY STORE — RAM-first, Postgres-backed, race-safe
 //
-// All chats stored under ONE key 'ai_history' as { chatId: [messages] }
-// so we only need ONE Postgres row per session — clean and efficient.
+// ONE key per chat: 'ai_history:<chatId>' — this piggybacks on database.js's
+// own _cache Map, so it NEVER hits Postgres twice for the same key, and the
+// existing 10s flush interval in database.js handles all writes.
 //
-// Write strategy:
-//   • In-memory map is updated immediately (sync speed for read path)
-//   • DB writes are batched — a single flush 3s after the last change
-//     so rapid back-and-forth doesn't hammer Postgres
+// Why not a single 'ai_history' key for all chats:
+//   • A single key means one Postgres row grows unboundedly as users chat.
+//     With many sessions it becomes a multi-MB JSON blob read on every boot.
+//   • Per-chat keys are small, independent, and never race each other.
+//
+// Race safety: readAsync() checks _cache first (sync). Only the first read
+// per key ever touches Postgres. All subsequent reads/writes are in-memory.
 // ─────────────────────────────────────────────────────────────────────────────
-const historyCache = new Map();   // scopedChatId → [{ role, content }]
-let   historyStore = null;        // full { chatId: messages[] } loaded from DB
-let   historyDirty = false;
-let   dbFlushTimer = null;
 
-async function ensureHistoryLoaded() {
-  if (historyStore !== null) return;
-  try {
-    const db = require('../../database');
-    const raw = await db.readAsync('ai_history');
-    historyStore = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
-    // Warm RAM cache from DB
-    for (const [id, msgs] of Object.entries(historyStore)) {
-      if (Array.isArray(msgs)) historyCache.set(id, msgs);
-    }
-    console.log(`[MetaAI/DB] Loaded history for ${Object.keys(historyStore).length} chats`);
-  } catch (e) {
-    console.error('[MetaAI/DB] Failed to load history:', e.message);
-    historyStore = {};
-  }
-}
-
-function scheduleDbFlush() {
-  if (dbFlushTimer) return;
-  dbFlushTimer = setTimeout(async () => {
-    dbFlushTimer = null;
-    if (!historyDirty || !historyStore) return;
-    historyDirty = false;
-    try {
-      const db = require('../../database');
-      await db.writeAsync('ai_history', historyStore);
-    } catch (e) {
-      console.error('[MetaAI/DB] Flush error:', e.message);
-    }
-  }, DB_WRITE_DELAY);
-}
+function _db() { return require('../../database'); }
 
 async function getHistory(chatId) {
-  await ensureHistoryLoaded();
-  return historyCache.get(chatId) || [];
+  try {
+    const raw = await _db().readAsync('ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_'));
+    return Array.isArray(raw) ? raw : [];
+  } catch { return []; }
 }
 
 async function pushHistory(chatId, role, content) {
-  await ensureHistoryLoaded();
-  const hist = historyCache.get(chatId) || [];
-  hist.push({ role, content });
-  if (hist.length > MAX_HISTORY) hist.splice(0, hist.length - MAX_HISTORY);
-  historyCache.set(chatId, hist);
-  historyStore[chatId] = hist;  // keep in-memory store in sync
-  historyDirty = true;
-  scheduleDbFlush();
+  try {
+    const db   = _db();
+    const key  = 'ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_');
+    const raw  = await db.readAsync(key);
+    const hist = Array.isArray(raw) ? raw : [];
+    hist.push({ role, content });
+    if (hist.length > MAX_HISTORY) hist.splice(0, hist.length - MAX_HISTORY);
+    await db.writeAsync(key, hist);   // writeAsync updates _cache immediately; Postgres flush is batched
+  } catch (e) {
+    console.error('[MetaAI] pushHistory error:', e.message);
+  }
 }
 
 async function clearHistory(chatId) {
-  await ensureHistoryLoaded();
-  historyCache.set(chatId, []);
-  if (historyStore) delete historyStore[chatId];
-  historyDirty = true;
-  scheduleDbFlush();
+  try {
+    const key = 'ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_');
+    await _db().writeAsync(key, []);
+  } catch (e) {
+    console.error('[MetaAI] clearHistory error:', e.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -749,19 +725,27 @@ module.exports = {
   checkCodeRateLimit,
 
   async execute(sock, msg, args, extra) {
+    // Defensive normalization — Baileys can deliver partial extra objects
+    const from    = extra?.from || msg?.key?.remoteJid;
+    const sender  = extra?.sender || msg?.key?.participant || msg?.key?.remoteJid || '';
+    const prefix  = extra?.prefix || extra?.usedPrefix || '.';
+    const replyFn = extra?.reply
+      ? (...a) => replyFn(...a)
+      : (text) => sock.sendMessage(from, { text }, { quoted: msg });
+
+    if (!from) return;
     const text   = args.join(' ').trim();
-    const from   = extra.from;
     const chatId = from;
 
     if (!text || text.toLowerCase() === 'help') {
-      return extra.reply(
+      return replyFn(
         `🤖 *AI Assistant*\n\n` +
-        `Usage: ${extra.prefix||'.'}metaai <question>\n\n` +
+        `Usage: ${prefix||'.'}metaai <question>\n\n` +
         `*Examples:*\n` +
-        `• ${extra.prefix||'.'}metaai explain async/await in JS\n` +
-        `• ${extra.prefix||'.'}metaai code a REST API with Express\n` +
-        `• ${extra.prefix||'.'}metaai what is recursion\n` +
-        `• ${extra.prefix||'.'}metaai clear  ← reset my chat memory\n\n` +
+        `• ${prefix||'.'}metaai explain async/await in JS\n` +
+        `• ${prefix||'.'}metaai code a REST API with Express\n` +
+        `• ${prefix||'.'}metaai what is recursion\n` +
+        `• ${prefix||'.'}metaai clear  ← reset my chat memory\n\n` +
         `_Coding limit: ${CODE_RATE_LIMIT} requests/hr_`
       );
     }
@@ -769,19 +753,19 @@ module.exports = {
     if (text.toLowerCase() === 'clear') {
       const sid   = (sock.user?.id || '').split(':')[0].split('@')[0];
       await clearHistory(`${sid}:${chatId}`);
-      return extra.reply('🧹 Conversation memory cleared.');
+      return replyFn('🧹 Conversation memory cleared.');
     }
 
     const database = require('../../database');
     const config   = require('../../config');
     const botName  = database.getSetting('botName', config.botName) || 'Viper Bot';
-    const userId   = (extra.sender || msg.key?.participant || '').split('@')[0];
+    const userId   = (sender || msg.key?.participant || '').split('@')[0];
     const sid      = (sock.user?.id || '').split(':')[0].split('@')[0];
 
     if (isCodingRequest(text)) {
       const rl = checkCodeRateLimit(userId);
       if (!rl.allowed)
-        return extra.reply(`⏱️ *Coding limit reached*\n\nTry again in ~${rl.waitMins} min(s).\n_Normal chat is unlimited._`);
+        return replyFn(`⏱️ *Coding limit reached*\n\nTry again in ~${rl.waitMins} min(s).\n_Normal chat is unlimited._`);
     }
 
     await sock.sendMessage(from, { react: { text: '🤔', key: msg.key } });
@@ -793,8 +777,8 @@ module.exports = {
       await sendChunks(sock, from, result, msg);
     } catch (e) {
       await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });
-      if (e.response?.status === 429) return extra.reply('⏱️ AI is rate-limited. Try again shortly.');
-      await extra.reply(`❌ AI error: ${e.message}`);
+      if (e.response?.status === 429) return replyFn('⏱️ AI is rate-limited. Try again shortly.');
+      await replyFn(`❌ AI error: ${e.message}`);
     }
   },
 };
