@@ -357,6 +357,6 @@ module.exports = {
   updateUser, getUser,
   addModerator, removeModerator, isModerator, getModerators,
   getSettings, updateSettings, getSetting,
-  readAsync, readSync,
+  readAsync, writeAsync, readSync,
   DB_PATH,
 };

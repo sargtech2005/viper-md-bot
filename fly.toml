@@ -9,7 +9,7 @@ primary_region = "ams"
   # "rolling" replaces one machine at a time — health check must pass before the
   # second machine is replaced. Requires 2+ machines (which you now have).
   # This gives zero-downtime deploys.
-  strategy = "rolling"
+  strategy = "immediate"
 
 [env]
   NODE_ENV = "production"
@@ -20,7 +20,7 @@ primary_region = "ams"
   force_https = true
   auto_stop_machines = false   # NEVER sleep — keep both machines always hot
   auto_start_machines = true
-  min_machines_running = 2     # 2 machines — both must always be running
+  min_machines_running = 1     # 1 machine — single instance to avoid session conflicts
 
   [http_service.concurrency]
     type = "connections"
