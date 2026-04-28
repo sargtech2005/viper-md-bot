@@ -6,11 +6,10 @@ primary_region = "ams"
 [build]
 
 [deploy]
-  # "immediate" is correct for single-machine apps.
-  # "rolling" requires 2+ machines — on 1 machine it deadlocks:
-  # Fly keeps the old machine alive waiting to replace it, but there's
-  # nowhere to put the new one, so both fail with "machine still active".
-  strategy = "immediate"
+  # "rolling" replaces one machine at a time — health check must pass before the
+  # second machine is replaced. Requires 2+ machines (which you now have).
+  # This gives zero-downtime deploys.
+  strategy = "rolling"
 
 [env]
   NODE_ENV = "production"
@@ -31,14 +30,14 @@ primary_region = "ams"
 [[vm]]
   memory = '4gb'
   cpu_kind = 'shared'
-  cpus = 2
+  cpus = 4
 
 [checks]
   [checks.health]
-    grace_period = "40s"
+    grace_period = "60s"   # extra time for bot sessions to resume on startup
     interval = "15s"
     method = "GET"
     path = "/health"
     port = 3000
-    timeout = "20s"
+    timeout = "10s"
     type = "http"

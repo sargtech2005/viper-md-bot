@@ -86,22 +86,33 @@ function unsubscribe(sessionId, res) {
 // ── Creds persistence ──────────────────────────────────────────────────────
 async function saveCredsToDb(sessionId, phone) {
   const sd = sessionDir(phone);
+  // fs.existsSync is sync but fast (single stat) — acceptable here
   if (!fs.existsSync(sd)) return;
   try {
+    // Use async file I/O throughout — NEVER block the event loop
     const files = [];
-    const walk = (dir, base = '') => {
-      for (const entry of fs.readdirSync(dir)) {
-        const full = path.join(dir, entry);
-        const rel  = base ? `${base}/${entry}` : entry;
-        if (fs.statSync(full).isDirectory()) walk(full, rel);
-        else files.push({ rel, data: fs.readFileSync(full).toString('base64') });
+    const walk = async (dir, base = '') => {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        const rel  = base ? `${base}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) await walk(full, rel);
+        else {
+          const data = await fs.promises.readFile(full);
+          files.push({ rel, data: data.toString('base64') });
+        }
       }
     };
-    walk(sd);
+    await walk(sd);
     if (!files.length) return;
-    const b64 = zlib.gzipSync(Buffer.from(JSON.stringify(files))).toString('base64');
+    // Async gzip — yields to event loop during compression
+    const raw = Buffer.from(JSON.stringify(files));
+    const compressed = await new Promise((res, rej) =>
+      zlib.gzip(raw, { level: 6 }, (err, buf) => err ? rej(err) : res(buf))
+    );
+    const b64 = compressed.toString('base64');
     await Sessions.saveCreds(sessionId, b64);
-  } catch (e) {
+  } catch {
     // silent — creds save failure shouldn't crash anything
   }
 }
@@ -111,12 +122,16 @@ async function restoreCredsFromDb(sessionId, phone) {
     const r   = await Sessions.loadCreds(sessionId);
     const b64 = r.rows[0]?.creds_data;
     if (!b64) return false;
-    const files = JSON.parse(zlib.gunzipSync(Buffer.from(b64, 'base64')).toString());
+    // Async gunzip
+    const raw = await new Promise((res, rej) =>
+      zlib.gunzip(Buffer.from(b64, 'base64'), (err, buf) => err ? rej(err) : res(buf))
+    );
+    const files = JSON.parse(raw.toString());
     const sd    = sessionDir(phone);
     for (const { rel, data } of files) {
       const fullPath = path.join(sd, rel);
-      fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-      fs.writeFileSync(fullPath, Buffer.from(data, 'base64'));
+      await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
+      await fs.promises.writeFile(fullPath, Buffer.from(data, 'base64'));
     }
     return true;
   } catch {
@@ -126,7 +141,7 @@ async function restoreCredsFromDb(sessionId, phone) {
 
 function startCredsSync(sessionId, phone) {
   stopCredsSync(sessionId);
-  const iv = setInterval(() => saveCredsToDb(sessionId, phone), 30_000);
+  const iv = setInterval(() => saveCredsToDb(sessionId, phone), 90_000); // was 30s — async now but still reduce frequency
   CREDS_TIMERS.set(sessionId, iv);
 }
 
@@ -393,7 +408,7 @@ async function startLogoutMonitor() {
         }
       }
     } catch {}
-  }, 10_000);
+  }, 45_000); // was 10s — reduced to avoid DB hammering
 }
 
 module.exports = {
