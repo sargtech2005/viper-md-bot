@@ -409,9 +409,22 @@ async function startBot() {
       if (!from || isSystem(from)) continue;
 
       // ── Main command handler (notify only, dedup, age-gated) ────────────
-      if (type === 'notify') {
+      // Baileys v7 RC may emit type as undefined for real incoming messages,
+      // so we also allow undefined here (not just 'notify').
+      if (type === 'notify' || type === undefined) {
         const id  = msg.key.id;
-        const age = msg.messageTimestamp ? Date.now() - msg.messageTimestamp * 1000 : 0;
+        // messageTimestamp can be a protobuf Long object in Baileys v7 RC.
+        // Safely coerce to a plain number before arithmetic.
+        const ts = msg.messageTimestamp
+          ? (typeof msg.messageTimestamp === 'object' && msg.messageTimestamp !== null
+              ? Number(msg.messageTimestamp.low !== undefined
+                  ? (msg.messageTimestamp.low >>> 0) + (msg.messageTimestamp.high || 0) * 4294967296
+                  : msg.messageTimestamp.toNumber
+                    ? msg.messageTimestamp.toNumber()
+                    : Number(msg.messageTimestamp))
+              : Number(msg.messageTimestamp))
+          : Math.floor(Date.now() / 1000);
+        const age = Date.now() - ts * 1000;
 
         if (!processed.has(id) && age <= 5 * 60 * 1000) {
           processed.add(id); _processedTs.set(id, Date.now());

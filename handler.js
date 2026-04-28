@@ -115,6 +115,7 @@ const getMessageContent = (msg) => {
   let m = msg.message;
   
   // Common wrappers in modern WhatsApp
+  if (m.deviceSentMessage) m = m.deviceSentMessage.message || m;
   if (m.ephemeralMessage) m = m.ephemeralMessage.message;
   if (m.viewOnceMessageV2) m = m.viewOnceMessageV2.message;
   if (m.viewOnceMessage) m = m.viewOnceMessage.message;
@@ -725,6 +726,8 @@ const handleMessage = async (sock, msg) => {
     
     // Get message body — cover all WhatsApp message wrapping variants
     const raw = msg.message || {};
+    // deviceSentMessage wraps messages sent from owner's linked devices
+    const _dsm = raw.deviceSentMessage?.message || {};
     let body =
       raw.conversation ||
       raw.extendedTextMessage?.text ||
@@ -738,6 +741,16 @@ const handleMessage = async (sock, msg) => {
       raw.ephemeralMessage?.message?.extendedTextMessage?.text ||
       raw.viewOnceMessage?.message?.imageMessage?.caption ||
       raw.viewOnceMessage?.message?.videoMessage?.caption ||
+      raw.viewOnceMessageV2?.message?.conversation ||
+      raw.viewOnceMessageV2?.message?.extendedTextMessage?.text ||
+      raw.viewOnceMessageV2?.message?.imageMessage?.caption ||
+      raw.viewOnceMessageV2?.message?.videoMessage?.caption ||
+      _dsm.conversation ||
+      _dsm.extendedTextMessage?.text ||
+      _dsm.imageMessage?.caption ||
+      _dsm.videoMessage?.caption ||
+      _dsm.ephemeralMessage?.message?.conversation ||
+      _dsm.ephemeralMessage?.message?.extendedTextMessage?.text ||
       '';
     body = (body || '').trim();
     
@@ -1070,7 +1083,7 @@ const handleMessage = async (sock, msg) => {
     if (command.botAdminNeeded) {
       const botIsAdmin = await isBotAdmin(sock, from, groupMetadata);
       if (!botIsAdmin) {
-        return sock.sendMessage(from, { text: config.messages.botAdminNeeded }, { quoted: msg });
+        return sock.sendMessage(from, { text: config.messages.botAdmin }, { quoted: msg });
       }
     }
     
