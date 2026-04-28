@@ -115,9 +115,25 @@ function splitText(text, chunks) {
   if (current.trim()) chunks.push(current.trim());
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// IDENTITY FIXER  — strip any provider name leaks from response
+// ─────────────────────────────────────────────────────────────────────────────
+function fixIdentity(text, botName) {
+  if (!text) return text;
+  return text
+    // "I'm called ChatGPT" / "I am ChatGPT" / "My name is GPT-4" etc.
+    .replace(/(?:I(?:'m| am)(?: called)?|[Mm]y name is)\s+(?:ChatGPT|GPT-?\d*|Gemini|Claude|Kaitlyn|LLaMA|Llama\s*\d*|an?\s+AI\s+(?:assistant|language\s+model))/gi,
+             `My name is ${botName}`)
+    // Standalone "ChatGPT" → botName (but not inside URLs or code)
+    .replace(/\bChatGPT\b/g, botName)
+    .replace(/\bGPT-4\b|\bGPT-3\.5\b|\bGPT\b(?!\s*[=:(])/g, botName)
+    .replace(/\bKaitlyn\b/gi, botName);
+}
+
 function parseIntoChunks(rawText) {
   const chunks       = [];
-  const codeBlockRgx = /```(\w*)\n?([\s\S]*?)```/g;
+  // Handles: ```python, ``` python, ```\ncode, and plain ``` without language tag
+  const codeBlockRgx = /```[ \t]*(\w*)[ \t]*\r?\n([\s\S]*?)```/g;
   let lastIndex      = 0;
   let match;
 
@@ -129,19 +145,20 @@ function parseIntoChunks(rawText) {
     const code   = match[2].trim();
     const emoji  = getLangEmoji(lang);
     const header = `${emoji} *${lang.toUpperCase()}*`;
-    const box    = `${header}\n\`\`\`\n${code}\n\`\`\``;
+    // Include lang on the ``` fence so WhatsApp renders it as a proper code block
+    const box    = `${header}\n\`\`\`${lang}\n${code}\n\`\`\``;
 
     if (box.length > CHUNK_SIZE) {
       const lines = code.split('\n');
       let buffer = '', part = 1;
       for (const line of lines) {
         if ((buffer + '\n' + line).length > CHUNK_SIZE - 80) {
-          chunks.push(`${header} _(part ${part})_\n\`\`\`\n${buffer.trim()}\n\`\`\``);
+          chunks.push(`${header} _(part ${part})_\n\`\`\`${lang}\n${buffer.trim()}\n\`\`\``);
           buffer = ''; part++;
         }
         buffer += (buffer ? '\n' : '') + line;
       }
-      if (buffer.trim()) chunks.push(`${header} _(part ${part})_\n\`\`\`\n${buffer.trim()}\n\`\`\``);
+      if (buffer.trim()) chunks.push(`${header} _(part ${part})_\n\`\`\`${lang}\n${buffer.trim()}\n\`\`\``);
     } else {
       chunks.push(box);
     }
@@ -149,8 +166,21 @@ function parseIntoChunks(rawText) {
     lastIndex = match.index + match[0].length;
   }
 
+  // Handle unclosed code block: AI was cut off before the closing ```
   const tail = rawText.slice(lastIndex).trim();
-  if (tail) splitText(tail, chunks);
+  if (tail) {
+    const unclosedMatch = tail.match(/^```[ \t]*(\w*)[ \t]*\r?\n([\s\S]+)$/);
+    if (unclosedMatch) {
+      // Treat the rest as a code block even without closing fence
+      const lang   = unclosedMatch[1] || 'code';
+      const code   = unclosedMatch[2].trim();
+      const emoji  = getLangEmoji(lang);
+      const header = `${emoji} *${lang.toUpperCase()}*`;
+      chunks.push(`${header} _[truncated]_\n\`\`\`\n${code}\n\`\`\``);
+    } else {
+      splitText(tail, chunks);
+    }
+  }
 
   return chunks.filter(Boolean);
 }
@@ -253,13 +283,41 @@ async function tryShizo(chatId, userText, botName) {
 }
 
 async function tryPollinations(chatId, userText, botName) {
-  const prompt = `${buildSystemPrompt(botName)}\n\nUser: ${userText}\n${botName}:`;
+  // Use Pollinations OpenAI-compatible endpoint — supports system prompts + full history
+  pushHistory(chatId, 'user', userText);
+  const r = await axios.post(
+    'https://text.pollinations.ai/openai',
+    {
+      model:      'openai',       // routes to GPT-4o-mini via Pollinations proxy
+      messages:   [
+        { role: 'system', content: buildSystemPrompt(botName) },
+        ...getHistory(chatId),
+      ],
+      max_tokens: MAX_TOKENS,
+      seed:       42,             // deterministic enough for consistent identity
+    },
+    {
+      timeout: 35000,
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+    }
+  );
+  const text = r.data?.choices?.[0]?.message?.content?.trim();
+  if (!text || text.length < 2) throw new Error('Empty Pollinations response');
+  pushHistory(chatId, 'assistant', text);
+  return text;
+}
+
+// ── Provider 3b: Pollinations GET (plain text fallback if POST fails) ─────────
+async function tryPollinationsGet(chatId, userText, botName) {
+  const hist   = getHistory(chatId).slice(-4);
+  const ctx    = hist.map(m => `${m.role === 'user' ? 'User' : botName}: ${m.content}`).join('\n');
+  const prompt = `${buildSystemPrompt(botName)}\n\n${ctx ? ctx + '\n' : ''}User: ${userText}\n${botName}:`;
   const r = await axios.get(
     `https://text.pollinations.ai/${encodeURIComponent(prompt)}`,
     { timeout: 25000, headers: { 'User-Agent': 'Mozilla/5.0' } }
   );
   const text = typeof r.data === 'string' ? r.data.trim() : '';
-  if (!text || text.length < 2) throw new Error('Empty Pollinations response');
+  if (!text || text.length < 2) throw new Error('Empty Pollinations GET response');
   pushHistory(chatId, 'user', userText);
   pushHistory(chatId, 'assistant', text);
   return text;
@@ -270,15 +328,34 @@ async function tryPollinations(chatId, userText, botName) {
 // ─────────────────────────────────────────────────────────────────────────────
 async function askMetaAI(chatId, userText, botName) {
   const providers = [
-    { name: 'Groq/Llama',   fn: () => tryGroqMeta(chatId, userText, botName) },
-    { name: 'Shizo',        fn: () => tryShizo(chatId, userText, botName) },
-    { name: 'Pollinations', fn: () => tryPollinations(chatId, userText, botName) },
+    { name: 'Groq/Llama',       fn: () => tryGroqMeta(chatId, userText, botName) },
+    { name: 'Pollinations',     fn: () => tryPollinations(chatId, userText, botName) },
+    { name: 'Pollinations-GET', fn: () => tryPollinationsGet(chatId, userText, botName) },
+    { name: 'Shizo',            fn: () => tryShizo(chatId, userText, botName) }, // last resort — unreliable
   ];
+
+  // Quality heuristic: Shizo leaks random training data as very short lines with no spaces
+  function isGarbageResponse(text) {
+    if (!text || text.length < 3) return true;
+    // Detect Shizo data-leak pattern: long line, no spaces, looks like concatenated code
+    const lines = text.split('\n');
+    const firstLine = lines[0] || '';
+    if (firstLine.length > 80 && !firstLine.includes(' ')) return true;
+    // Detect truncated/incomplete responses (ends with assignment or open paren)
+    const trimmed = text.trimEnd();
+    if (/[=(,{[\s]$/.test(trimmed)) return true;
+    return false;
+  }
 
   let rawReply = null;
   for (const { name, fn } of providers) {
     try {
-      rawReply = await fn();
+      const candidate = await fn();
+      if (isGarbageResponse(candidate)) {
+        console.log(`[${botName}/AI] ${name} → garbage response, trying next`);
+        continue;
+      }
+      rawReply = candidate;
       console.log(`[${botName}/AI] ${name} → ${rawReply.length} chars`);
       break;
     } catch (e) {
@@ -287,7 +364,8 @@ async function askMetaAI(chatId, userText, botName) {
   }
 
   if (!rawReply) throw new Error('All AI providers unavailable');
-  return parseIntoChunks(rawReply);
+  const cleanReply = fixIdentity(rawReply, botName);
+  return parseIntoChunks(cleanReply);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
