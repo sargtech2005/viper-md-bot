@@ -62,33 +62,47 @@ const DB_WRITE_DELAY   = 3000;  // ms — batch DB writes to avoid hammering Pos
 function _db() { return require('../../database'); }
 
 async function getHistory(chatId) {
+  // Check RAM cache first — if we already have messages in this process, use them
+  if (_histRAM.has(chatId)) return _histRAM.get(chatId);
+
+  // Cold start: load from DB (once per chatId per process lifetime)
   try {
-    const raw = await _db().readAsync('ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_'));
-    return Array.isArray(raw) ? raw : [];
-  } catch { return []; }
+    const key = 'ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_');
+    const raw = await _db().readAsync(key);
+    const hist = Array.isArray(raw) ? raw : [];
+    _histRAM.set(chatId, hist);  // warm the RAM cache
+    return hist;
+  } catch {
+    _histRAM.set(chatId, []);
+    return [];
+  }
 }
 
+// In-memory write-back cache — history is always up to date in RAM.
+// DB write is fire-and-forget so it NEVER blocks the AI response path.
+const _histRAM = new Map(); // chatId → [messages]  (survives within process lifetime)
+
 async function pushHistory(chatId, role, content) {
-  try {
-    const db   = _db();
-    const key  = 'ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_');
-    const raw  = await db.readAsync(key);
-    const hist = Array.isArray(raw) ? raw : [];
-    hist.push({ role, content });
-    if (hist.length > MAX_HISTORY) hist.splice(0, hist.length - MAX_HISTORY);
-    await db.writeAsync(key, hist);   // writeAsync updates _cache immediately; Postgres flush is batched
-  } catch (e) {
-    console.error('[MetaAI] pushHistory error:', e.message);
-  }
+  // 1. Always update RAM instantly (sync) — getHistory reads from here first
+  const hist = _histRAM.get(chatId) || [];
+  hist.push({ role, content });
+  if (hist.length > MAX_HISTORY) hist.splice(0, hist.length - MAX_HISTORY);
+  _histRAM.set(chatId, hist);
+
+  // 2. Persist to DB in the background — never await this on the hot path
+  const key = 'ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_');
+  setImmediate(async () => {
+    try { await _db().writeAsync(key, hist); }
+    catch (e) { /* DB unavailable — RAM cache keeps it alive until next restart */ }
+  });
 }
 
 async function clearHistory(chatId) {
-  try {
-    const key = 'ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_');
-    await _db().writeAsync(key, []);
-  } catch (e) {
-    console.error('[MetaAI] clearHistory error:', e.message);
-  }
+  _histRAM.set(chatId, []);
+  const key = 'ai_hist_' + chatId.replace(/[^a-zA-Z0-9]/g, '_');
+  setImmediate(async () => {
+    try { await _db().writeAsync(key, []); } catch {}
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -11,8 +11,8 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes('localhost') || process.env.DATABASE_URL?.includes('.internal')
     ? false
     : { rejectUnauthorized: false },
-  max: 25,                     // Up from 10 — 2GB RAM can handle more concurrent connections
-  min: 3,                      // Keep 3 connections warm at all times — no cold-start lag
+  max: 8,                      // 2 machines × 8 = 16 total — Fly Postgres caps at 25, keep buffer
+  min: 2,                      // 2 warm connections per machine
   idleTimeoutMillis: 60000,    // Keep idle connections alive longer on Fly
   connectionTimeoutMillis: 5000,
   allowExitOnIdle: false,      // Never drop pool on idle — keep warm

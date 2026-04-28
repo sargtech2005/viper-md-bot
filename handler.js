@@ -16,6 +16,18 @@ const axios = require('axios');
 // ── Per-session setting lookup ─────────────────────────────────────────────
 // Reads from the session's settings.json first; falls back to config default.
 // This ensures every paired session has its own independent settings.
+// Pre-load AI module once — avoids cold-require cost on first message in each chat
+let _metaaiMod = null;
+function getMetaAI() {
+  if (!_metaaiMod) {
+    try { _metaaiMod = require('./commands/ai/metaai'); }
+    catch (e) { console.error('[Handler] Failed to load metaai:', e.message); return null; }
+  }
+  return _metaaiMod;
+}
+// Warm it on startup so first user doesn't pay the load cost
+setImmediate(() => getMetaAI());
+
 function dbSetting(key) {
   return database.getSetting(key, config[key]);
 }
@@ -966,7 +978,9 @@ const handleMessage = async (sock, msg) => {
         const _isMentionedFull = isMentioned || _bodyMention || isReplyToBot;
 
         if ((isDM || _isMentionedFull) && body && !_expPrefixes.some(p => body.startsWith(p))) {
-          const { askMetaAI, sendChunks, isCodingRequest, checkCodeRateLimit } = require('./commands/ai/metaai');
+          const _aiMod = getMetaAI();
+          if (!_aiMod) return; // module failed to load — don't crash handler
+          const { askMetaAI, sendChunks, isCodingRequest, checkCodeRateLimit } = _aiMod;
           const config2  = require('./config');
           const botName2 = database.getSetting('botName', config2.botName) || 'Viper Bot';
 
