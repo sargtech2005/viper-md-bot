@@ -992,7 +992,10 @@ const handleMessage = async (sock, msg) => {
 
         if ((isDM || _isMentionedFull) && body && !_expPrefixes.some(p => body.startsWith(p))) {
           const _aiMod = getMetaAI();
-          if (!_aiMod) return; // module failed to load — don't crash handler
+          if (!_aiMod) {
+            // metaai failed to load — fall through to command handler, do NOT return
+            console.error('[AutoReply] metaai module failed to load — skipping autoreply');
+          } else {
           const { askMetaAI, sendChunks, isCodingRequest, checkCodeRateLimit } = _aiMod;
           const config2  = require('./config');
           const botName2 = database.getSetting('botName', config2.botName) || 'Viper Bot';
@@ -1033,6 +1036,7 @@ const handleMessage = async (sock, msg) => {
             console.error('[AutoReply] sendChunks failed:', sendErr.message);
           }
           return;
+          } // end else(_aiMod)
         }
       } catch (e) {
         // Outer catch: only fires for pre-AI errors (body check, rate limit etc)
