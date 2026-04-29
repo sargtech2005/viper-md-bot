@@ -725,12 +725,17 @@ async function sendChunks(sock, from, result, quotedMsg) {
     first = false;
 
     if (item.type === 'code') {
-      // Send code as plain text — grey box is unreliable across WA versions.
-      // The actual file is sent as a document after all text chunks.
-      // This message is just a clean readable preview of the code.
-      const langLabel = item.header.replace(/\*/g, ''); // strip bold markers
-      const codeMsg   = langLabel + '\n' + item.code;
-      await sock.sendMessage(from, { text: codeMsg }, qOpts);
+      // WhatsApp grey box ONLY renders when ``` wraps the ENTIRE message.
+      // Step 1: send the header label as a separate text message
+      // Step 2: send ONLY the raw code wrapped in ``` as the next message
+      // This is how Meta AI sends code in 2026 — grey monospace sandbox box.
+      if (item.header) {
+        await sock.sendMessage(from, { text: item.header }, qOpts);
+        await new Promise(r => setTimeout(r, 300));
+      }
+      // Pure ``` fence — no language tag — triggers the grey code box in all WA clients
+      const greyBox = `\`\`\`\n${item.code}\n\`\`\``;
+      await sock.sendMessage(from, { text: greyBox }, qOpts);
     } else {
       // Regular text chunk
       await sock.sendMessage(from, { text: item.content }, qOpts);

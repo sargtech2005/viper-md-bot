@@ -106,6 +106,17 @@ module.exports = {
     }
 
     await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
-    await extra.reply(`🤖 *AI Response*\n\n${answer}\n\n_via ${usedProvider}_`);
+
+    // Format response — wrap in WhatsApp grey code box (Meta AI 2026 style)
+    // Plain text goes as-is; if the answer contains code blocks, send them boxed.
+    const hasCode = /```/.test(answer);
+    if (hasCode) {
+      // Normalise: strip language tags from fences so WA renders grey boxes
+      const normalised = answer.replace(/```[a-zA-Z0-9_+-]*\n/g, '```\n');
+      await extra.reply(`🤖 *AI Response*\n\n${normalised}\n\n_via ${usedProvider}_`);
+    } else {
+      // Wrap entire plain response in a grey box for the Meta-AI look
+      await extra.reply(`🤖 *AI Response*\n\n\`\`\`\n${answer}\n\`\`\`\n\n_via ${usedProvider}_`);
+    }
   },
 };

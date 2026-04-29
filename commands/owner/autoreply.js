@@ -34,8 +34,11 @@ module.exports = {
         `• 💬 Direct messages (DMs)\n` +
         `• 📢 @mentions in groups\n\n` +
         `Commands:\n` +
-        `• .autoreply on\n` +
-        `• .autoreply off`
+        `\`\`\`\n` +
+        `.autoreply on\n` +
+        `.autoreply off\n` +
+        `.autoreply status\n` +
+        `\`\`\``
       );
     }
 
@@ -46,15 +49,28 @@ module.exports = {
         '🤖 The bot will now reply automatically to:\n' +
         '• 💬 All direct messages (DMs)\n' +
         '• 📢 @mentions in groups\n\n' +
-        '> Powered by Gemini AI 🤖'
+        '```\n' +
+        'Mode    : AUTO-REPLY ON\n' +
+        'Engine  : Gemini AI 🤖\n' +
+        'Trigger : DMs + @mentions\n' +
+        '```'
       );
     }
 
     if (sub === 'off') {
       database.updateSettings({ autoReply: false });
-      return extra.reply('❌ *Auto-Reply disabled.*\n\nThe bot will no longer auto-reply to DMs or mentions.');
+      return extra.reply(
+        '❌ *Auto-Reply disabled.*\n\n' +
+        '```\n' +
+        'Mode    : AUTO-REPLY OFF\n' +
+        'Status  : Bot will no longer auto-reply\n' +
+        '```'
+      );
     }
 
-    return extra.reply(`Usage: .autoreply on | off | status`);
+    return extra.reply(
+      '⚠️ *Invalid subcommand*\n\n' +
+      '```\nUsage: .autoreply on | off | status\n```'
+    );
   },
 };
