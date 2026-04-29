@@ -40,14 +40,18 @@ const loadCommands = (forceReload = false) => {
         if (forceReload && require.cache[require.resolve(filePath)]) {
           delete require.cache[require.resolve(filePath)];
         }
-        const command = require(filePath);
-        if (command.name) {
-          commands.set(command.name, command);
-          if (Array.isArray(command.aliases)) {
-            command.aliases.forEach(alias => commands.set(alias, command));
+        const exported = require(filePath);
+        // Support both single-command export and array of commands
+        const cmdList = Array.isArray(exported) ? exported : [exported];
+        cmdList.forEach(command => {
+          if (command && command.name) {
+            commands.set(command.name, command);
+            if (Array.isArray(command.aliases)) {
+              command.aliases.forEach(alias => commands.set(alias, command));
+            }
+            loaded++;
           }
-          loaded++;
-        }
+        });
       } catch (error) {
         console.error(`[CommandLoader] Error loading ${category}/${file}:`, error.message);
         failed++;
