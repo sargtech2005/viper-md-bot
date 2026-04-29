@@ -152,87 +152,84 @@ function getLangEmoji(lang) { return LANG_EMOJI[(lang||'').toLowerCase()] || LAN
 function getLangExt(lang)   { return LANG_EXT[(lang||'').toLowerCase()]   || LANG_EXT.default;   }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PURE-JS ZIP CREATOR (no external deps — uses built-in zlib)
+// ZIP CREATOR — uses archiver npm package (reliable, handles all edge cases)
+// Falls back to a simple store-only zip if archiver is unavailable.
 // ─────────────────────────────────────────────────────────────────────────────
-function crc32(buf) {
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < buf.length; i++) {
-    crc ^= buf[i];
-    for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+async function createZipBufferAsync(files) {
+  // files: [{ name: string, content: string|Buffer }]
+  try {
+    const archiver = require('archiver');
+    const { PassThrough } = require('stream');
+    return await new Promise((resolve, reject) => {
+      const chunks = [];
+      const output = new PassThrough();
+      output.on('data', d => chunks.push(d));
+      output.on('end',  () => resolve(Buffer.concat(chunks)));
+      output.on('error', reject);
+
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      archive.on('error', reject);
+      archive.pipe(output);
+
+      for (const file of files) {
+        const content = Buffer.isBuffer(file.content)
+          ? file.content
+          : Buffer.from(file.content, 'utf-8');
+        archive.append(content, { name: file.name });
+      }
+      archive.finalize();
+    });
+  } catch {
+    // Fallback: store-only zip (no compression, always valid)
+    return createZipBufferSync(files);
   }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-function createZipBuffer(files) {
-  // files: [{ name: string, content: Buffer|string }]
-  const localParts    = [];
-  const centralParts  = [];
-  let   offset        = 0;
-
+// Minimal store-only fallback zip (no compression — always works)
+function createZipBufferSync(files) {
+  const parts = [], central = [];
+  let offset = 0;
   for (const file of files) {
-    const nameBytes = Buffer.from(file.name, 'utf-8');
-    const raw       = Buffer.isBuffer(file.content) ? file.content : Buffer.from(file.content, 'utf-8');
-    const deflated  = zlib.deflateRawSync(raw, { level: 6 });
-    const useDeflate = deflated.length < raw.length;
-    const compData  = useDeflate ? deflated : raw;
-    const method    = useDeflate ? 8 : 0;
-    const crc       = crc32(raw);
-
-    // Local file header (30 bytes + name)
-    const lh = Buffer.alloc(30 + nameBytes.length);
-    lh.writeUInt32LE(0x04034B50, 0);         // signature
-    lh.writeUInt16LE(20,         4);          // version needed
-    lh.writeUInt16LE(0x0800,     6);          // UTF-8 flag
-    lh.writeUInt16LE(method,     8);          // compression
-    lh.writeUInt16LE(0,          10);         // mod time
-    lh.writeUInt16LE(0,          12);         // mod date
-    lh.writeUInt32LE(crc,        14);         // crc32
-    lh.writeUInt32LE(compData.length, 18);    // compressed size
-    lh.writeUInt32LE(raw.length, 22);         // uncompressed size
-    lh.writeUInt16LE(nameBytes.length, 26);   // name length
-    lh.writeUInt16LE(0,          28);         // extra length
-    nameBytes.copy(lh, 30);
-
-    // Central directory entry (46 bytes + name)
-    const ce = Buffer.alloc(46 + nameBytes.length);
-    ce.writeUInt32LE(0x02014B50, 0);          // signature
-    ce.writeUInt16LE(20,         4);           // version made by
-    ce.writeUInt16LE(20,         6);           // version needed
-    ce.writeUInt16LE(0x0800,     8);           // UTF-8 flag
-    ce.writeUInt16LE(method,     10);          // compression
-    ce.writeUInt16LE(0,          12);          // mod time
-    ce.writeUInt16LE(0,          14);          // mod date
-    ce.writeUInt32LE(crc,        16);          // crc32
-    ce.writeUInt32LE(compData.length, 20);     // compressed size
-    ce.writeUInt32LE(raw.length, 24);          // uncompressed size
-    ce.writeUInt16LE(nameBytes.length, 28);    // name length
-    ce.writeUInt16LE(0,          30);          // extra length
-    ce.writeUInt16LE(0,          32);          // comment length
-    ce.writeUInt16LE(0,          34);          // disk start
-    ce.writeUInt16LE(0,          36);          // internal attr
-    ce.writeUInt32LE(0,          38);          // external attr
-    ce.writeUInt32LE(offset,     42);          // local header offset
-    nameBytes.copy(ce, 46);
-
-    const localEntry = Buffer.concat([lh, compData]);
-    localParts.push(localEntry);
-    centralParts.push(ce);
-    offset += localEntry.length;
+    const name = Buffer.from(file.name, 'utf-8');
+    const data = Buffer.isBuffer(file.content) ? file.content : Buffer.from(file.content, 'utf-8');
+    // CRC32
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < data.length; i++) {
+      crc ^= data[i];
+      for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+    }
+    crc = (crc ^ 0xFFFFFFFF) >>> 0;
+    // Local header
+    const lh = Buffer.alloc(30 + name.length);
+    lh.writeUInt32LE(0x04034B50, 0); lh.writeUInt16LE(20, 4);
+    lh.writeUInt16LE(0x0800, 6);     lh.writeUInt16LE(0, 8); // stored
+    lh.writeUInt16LE(0, 10);         lh.writeUInt16LE(0, 12);
+    lh.writeUInt32LE(crc, 14);       lh.writeUInt32LE(data.length, 18);
+    lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26);
+    lh.writeUInt16LE(0, 28);         name.copy(lh, 30);
+    // Central dir
+    const cd = Buffer.alloc(46 + name.length);
+    cd.writeUInt32LE(0x02014B50, 0); cd.writeUInt16LE(20, 4);
+    cd.writeUInt16LE(20, 6);         cd.writeUInt16LE(0x0800, 8);
+    cd.writeUInt16LE(0, 10);         cd.writeUInt16LE(0, 12);
+    cd.writeUInt16LE(0, 14);         cd.writeUInt32LE(crc, 16);
+    cd.writeUInt32LE(data.length, 20); cd.writeUInt32LE(data.length, 24);
+    cd.writeUInt16LE(name.length, 28); cd.writeUInt16LE(0, 30);
+    cd.writeUInt16LE(0, 32);         cd.writeUInt16LE(0, 34);
+    cd.writeUInt16LE(0, 36);         cd.writeUInt32LE(0, 38);
+    cd.writeUInt32LE(offset, 42);    name.copy(cd, 46);
+    const entry = Buffer.concat([lh, data]);
+    parts.push(entry); central.push(cd); offset += entry.length;
   }
-
-  const centralDir = Buffer.concat(centralParts);
+  const dir = Buffer.concat(central);
   const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054B50,      0);   // signature
-  eocd.writeUInt16LE(0,               4);   // disk number
-  eocd.writeUInt16LE(0,               6);   // start disk
-  eocd.writeUInt16LE(files.length,    8);   // entries on disk
-  eocd.writeUInt16LE(files.length,   10);   // total entries
-  eocd.writeUInt32LE(centralDir.length, 12); // central dir size
-  eocd.writeUInt32LE(offset,         16);   // central dir offset
-  eocd.writeUInt16LE(0,              20);   // comment length
-
-  return Buffer.concat([...localParts, centralDir, eocd]);
+  eocd.writeUInt32LE(0x06054B50, 0); eocd.writeUInt16LE(0, 4);
+  eocd.writeUInt16LE(0, 6);          eocd.writeUInt16LE(files.length, 8);
+  eocd.writeUInt16LE(files.length, 10); eocd.writeUInt32LE(dir.length, 12);
+  eocd.writeUInt32LE(offset, 16);    eocd.writeUInt16LE(0, 20);
+  return Buffer.concat([...parts, dir, eocd]);
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARKDOWN NORMALIZER — AI markdown → WhatsApp formatting
@@ -272,8 +269,24 @@ function normalizeMarkdown(text) {
 // ─────────────────────────────────────────────────────────────────────────────
 // IDENTITY FIXER — prevent AI from leaking provider name
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// AD STRIPPER — remove Pollinations.AI ad injected at end of responses
+// ─────────────────────────────────────────────────────────────────────────────
+function stripAds(text) {
+  if (!text) return text;
+  return text
+    // Remove Pollinations ad block (--- separator + anything after with "Support Pollinations")
+    .replace(/\n*---\n[\s\S]*?Support Pollinations[\s\S]*?(\n|$)/gi, '')
+    .replace(/\n*[*\s]*Ad[*\s]*[\s\S]*?Pollinations[\s\S]{0,500}/gi, '')
+    .replace(/Powered by Pollinations\.AI[\s\S]{0,300}/gi, '')
+    .replace(/Support our mission[\s\S]{0,200}/gi, '')
+    .replace(/\[Support our mission\][^\n]*/gi, '')
+    .trimEnd();
+}
+
 function fixIdentity(text, botName) {
   if (!text) return text;
+  text = stripAds(text);
   text = normalizeMarkdown(text);
   return text
     .replace(/(?:I(?:'m| am)(?: called)?|[Mm]y name is)\s+(?:ChatGPT|GPT-?\d*|Gemini|Claude|Kaitlyn|LLaMA|Llama\s*\d*|an?\s+AI\s+(?:assistant|language\s+model))/gi,
@@ -427,36 +440,71 @@ function parseIntoChunks(rawText) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ZIP BUILDER — extract all code blocks → zip buffer + summary text
 // ─────────────────────────────────────────────────────────────────────────────
-function buildCodeZip(rawText, botName) {
+async function buildCodeFiles(rawText, botName) {
   const { codeBlocks } = extractCodeBlocks(rawText);
   if (codeBlocks.length === 0) return null;
 
-  // Smart filenames: give sequential names per language
+  // Build named files
   const langCount = {};
   const files = codeBlocks.map(({ lang, code }) => {
-    const ext   = getLangExt(lang);
-    const base  = lang === 'code' || !lang ? 'code' : lang;
+    const ext  = getLangExt(lang);
+    const base = (lang === 'code' || !lang) ? 'code' : lang.toLowerCase();
     langCount[base] = (langCount[base] || 0) + 1;
-    const count = langCount[base];
-    const name  = count === 1 && Object.keys(langCount).filter(k => k===base).length <= 1
-      ? `${base}.${ext}`
-      : `${base}_${count}.${ext}`;
-    return { name, content: code };
+    const n    = langCount[base];
+    const name = n === 1 ? `${base}.${ext}` : `${base}_${n}.${ext}`;
+    return { name, content: code, lang, ext };
   });
 
-  // Add a README.txt
+  if (files.length === 1) {
+    // Single file → send as the actual file (e.g. main.py, index.html)
+    const f       = files[0];
+    const emoji   = getLangEmoji(f.lang);
+    const caption = `${emoji} *${f.name}*
+_${f.lang.toUpperCase()} file from ${botName}_`;
+    return {
+      type: 'single',
+      buf:  Buffer.from(f.content, 'utf-8'),
+      name: f.name,
+      mime: getMime(f.ext),
+      caption,
+    };
+  }
+
+  // Multiple files → zip
   const fileList = files.map(f => `  • ${f.name}`).join('\n');
-  files.unshift({
-    name: 'README.txt',
-    content: `Code files from ${botName}\nGenerated: ${new Date().toISOString()}\n\nFiles:\n${fileList}\n`,
-  });
+  const allFiles = [
+    {
+      name: 'README.txt',
+      content: `Code files from ${botName}\nGenerated: ${new Date().toISOString()}\n\nFiles:\n${fileList}\n`,
+    },
+    ...files,
+  ];
 
-  const zipBuf  = createZipBuffer(files);
-  const caption = `📦 *Code files* (${codeBlocks.length} file${codeBlocks.length > 1 ? 's' : ''})\n` +
-                  files.filter(f => f.name !== 'README.txt').map(f => `  • ${f.name}`).join('\n') +
-                  `\n\n> _Powered by ${botName}_`;
+  let zipBuf;
+  try {
+    zipBuf = await createZipBufferAsync(allFiles);
+  } catch (e) {
+    console.error('[MetaAI] ZIP creation failed:', e.message);
+    // Fallback: send each file individually
+    return { type: 'multi_fallback', files };
+  }
 
-  return { zipBuf, caption, fileCount: codeBlocks.length };
+  const caption = `📦 *Code files* (${files.length} files)\n${fileList}\n\n> _Powered by ${botName}_`;
+  return { type: 'zip', buf: zipBuf, name: `code_${Date.now()}.zip`, caption };
+}
+
+function getMime(ext) {
+  const map = {
+    py:'text/x-python', js:'text/javascript', ts:'text/typescript',
+    html:'text/html', css:'text/css', php:'application/x-httpd-php',
+    json:'application/json', sh:'text/x-sh', sql:'application/sql',
+    java:'text/x-java', rb:'text/x-ruby', go:'text/x-go',
+    rs:'text/x-rust', kt:'text/x-kotlin', swift:'text/x-swift',
+    xml:'application/xml', yaml:'text/yaml', yml:'text/yaml',
+    md:'text/markdown', txt:'text/plain', jsx:'text/javascript',
+    tsx:'text/typescript', vue:'text/html', scss:'text/x-scss',
+  };
+  return map[ext] || 'text/plain';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -655,7 +703,7 @@ async function askMetaAI(chatId, userText, botName, sessionId) {
   const chunks     = parseIntoChunks(cleanReply);
 
   // Build ZIP if there are code blocks
-  const zipData = buildCodeZip(cleanReply, botName);
+  const zipData = await buildCodeFiles(cleanReply, botName);
 
   return { chunks, zipData, provider: usedProvider };
 }
@@ -677,41 +725,56 @@ async function sendChunks(sock, from, result, quotedMsg) {
     first = false;
 
     if (item.type === 'code') {
-      // ── WhatsApp grey code box ─────────────────────────────────────────────
-      // Format confirmed working in WhatsApp 2024+:
-      //   Line 1: emoji + language label (plain text — NOT bold/italic)
-      //   Line 2: ``` (opening fence — must be on its own line)
-      //   Lines 3–N: code content
-      //   Last line: ``` (closing fence — must be on its own line)
-      //
-      // The header must NOT use *bold* markers — text before the ``` fence
-      // in the SAME message is allowed and WhatsApp still renders the grey box.
-      // Using *bold* in the header line can confuse the WA renderer on some clients.
-      const langLabel = item.header.replace(/\*/g, '');  // strip * bold markers from header
-      const codeMsg   = langLabel + '\n```\n' + item.code + '\n```';
-      await sock.sendMessage(from, {
-        text: codeMsg,
-        // Suppress link preview — prevents WA from treating ``` as a URL in some edge cases
-        contextInfo: { externalAdReply: undefined },
-      }, qOpts);
+      // Send code as plain text — grey box is unreliable across WA versions.
+      // The actual file is sent as a document after all text chunks.
+      // This message is just a clean readable preview of the code.
+      const langLabel = item.header.replace(/\*/g, ''); // strip bold markers
+      const codeMsg   = langLabel + '\n' + item.code;
+      await sock.sendMessage(from, { text: codeMsg }, qOpts);
     } else {
       // Regular text chunk
       await sock.sendMessage(from, { text: item.content }, qOpts);
     }
   }
 
-  // ZIP as document (always send after all text/code)
+  // Send code file(s) after all text chunks
   if (zipData) {
     try {
       await new Promise(r => setTimeout(r, 500));
-      await sock.sendMessage(from, {
-        document: zipData.zipBuf,
-        fileName: `code_${Date.now()}.zip`,
-        mimetype: 'application/zip',
-        caption:  zipData.caption,
-      }, qOpts);
+
+      if (zipData.type === 'single') {
+        // One file → send as the actual .py / .html / etc document
+        await sock.sendMessage(from, {
+          document: zipData.buf,
+          fileName: zipData.name,
+          mimetype: zipData.mime,
+          caption:  zipData.caption,
+        }, qOpts);
+
+      } else if (zipData.type === 'zip') {
+        // Multiple files → zip
+        await sock.sendMessage(from, {
+          document: zipData.buf,
+          fileName: zipData.name,
+          mimetype: 'application/zip',
+          caption:  zipData.caption,
+        }, qOpts);
+
+      } else if (zipData.type === 'multi_fallback') {
+        // ZIP failed → send each file individually
+        for (const f of zipData.files) {
+          await new Promise(r => setTimeout(r, 400));
+          const emoji = getLangEmoji(f.lang || 'code');
+          await sock.sendMessage(from, {
+            document: Buffer.from(f.content, 'utf-8'),
+            fileName: f.name,
+            mimetype: getMime(f.ext || 'txt'),
+            caption:  `${emoji} *${f.name}*`,
+          }, qOpts);
+        }
+      }
     } catch (e) {
-      console.error('[MetaAI] ZIP send failed:', e.message);
+      console.error('[MetaAI] File send failed:', e.message);
     }
   }
 }
