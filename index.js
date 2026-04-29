@@ -223,15 +223,15 @@ async function startBot() {
     auth:                  state,
     syncFullHistory:       false,
     downloadHistory:       false,
-    markOnlineOnConnect:   false,
+    markOnlineOnConnect:   true,                // always appear online
     getMessage:            async (key) => store.loadMessage(key.remoteJid, key.id),
-    // ── Fly.io High-Performance Tuning ───────────────────────────────────────
-    keepAliveIntervalMs:   10_000,   // 10s pings — Fly's NAT keeps connections alive, no need to over-ping
-    connectTimeoutMs:      30_000,   // faster connect timeout — Fly machines boot fast
-    defaultQueryTimeoutMs: 20_000,   // 20s is plenty; Fly has low latency to WA servers
-    retryRequestDelayMs:   250,      // retry faster — Fly is stable, transient errors are rare
+    // ── High-Performance Tuning ───────────────────────────────────────────────
+    keepAliveIntervalMs:   5_000,    // 5s WS pings — keeps connection warm
+    connectTimeoutMs:      20_000,   // 20s connect timeout
+    defaultQueryTimeoutMs: 10_000,   // 10s per WA query
+    retryRequestDelayMs:   100,      // 100ms retry — very fast recovery
     generateHighQualityLinkPreview: false, // skip link previews — saves CPU
-    transactionOpts: { maxCommitRetries: 5, delayBetweenTriesMs: 500 },
+    transactionOpts: { maxCommitRetries: 5, delayBetweenTriesMs: 300 },
     ...(pairNumber ? { qrTimeout: 0 } : {}),
   });
 
@@ -298,7 +298,7 @@ async function startBot() {
         return;
       }
 
-      if (reconnect) setTimeout(startBot, 3000);
+      if (reconnect) setTimeout(startBot, 1000);
     }
 
     if (connection === 'open') {
@@ -357,19 +357,18 @@ async function startBot() {
       sock._keepAliveTimer = setInterval(async () => {
         try {
           if (sock.ws?.readyState === 1) {
+            // Broadcast available to all open chats — keeps bot showing as online
             await sock.sendPresenceUpdate('available');
             lastActivity = Date.now();
           }
-          // If WS is not open and not connecting, force a reconnect
-          // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
           if (sock.ws?.readyState === 3) {
-            console.error('[KeepAlive] WebSocket closed unexpectedly — restarting');
+            console.error('[KeepAlive] WebSocket closed — restarting');
             clearInterval(sock._keepAliveTimer);
             sock._keepAliveTimer = null;
-            setTimeout(startBot, 2000);
+            setTimeout(startBot, 1000);
           }
         } catch (_) {}
-      }, 2 * 60 * 1000);
+      }, 30 * 1000); // every 30 seconds — keeps bot visibly online
 
       // ── Broadcast control file poller ──────────────────────────────────
       const bcFile = path.join(sessionFolder, 'broadcast.json');
@@ -418,6 +417,8 @@ async function startBot() {
   // every incoming message triggers both chains independently. Merged into one.
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
     lastActivity = Date.now();
+    // Re-announce available on every message — keeps bot always showing online
+    if (sock.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
 
     for (const msg of msgs) {
       if (!msg.message || !msg.key?.id) continue;
