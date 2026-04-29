@@ -61,6 +61,10 @@ const DB_WRITE_DELAY   = 3000;  // ms — batch DB writes to avoid hammering Pos
 
 function _db() { return require('../../database'); }
 
+// In-memory write-back cache — MUST be declared before any function that uses it.
+// DB write is fire-and-forget so it NEVER blocks the AI response path.
+const _histRAM = new Map(); // chatId → [messages]  (survives within process lifetime)
+
 async function getHistory(chatId) {
   // Check RAM cache first — if we already have messages in this process, use them
   if (_histRAM.has(chatId)) return _histRAM.get(chatId);
@@ -77,10 +81,6 @@ async function getHistory(chatId) {
     return [];
   }
 }
-
-// In-memory write-back cache — history is always up to date in RAM.
-// DB write is fire-and-forget so it NEVER blocks the AI response path.
-const _histRAM = new Map(); // chatId → [messages]  (survives within process lifetime)
 
 async function pushHistory(chatId, role, content) {
   // 1. Always update RAM instantly (sync) — getHistory reads from here first
@@ -251,10 +251,8 @@ function normalizeMarkdown(text) {
 
   // Apply WA formatting only to non-code portions
   safe = safe
-    .replace(/\*\*([^*
-]+?)\*\*/g, '*$1*')       // **bold** → *bold*
-    .replace(/__([^_
-]+?)__/g, '_$1_')             // __italic__ → _italic_
+    .replace(/\*\*([^*\n]+?)\*\*/g, '*$1*')      // **bold** → *bold*
+    .replace(/__([^_\n]+?)__/g, '_$1_')             // __italic__ → _italic_
     .replace(/^#{1,6}\s+(.+)$/gm, '*$1*')           // # Heading → *Heading*
     .replace(/^[ 	]*[-*]\s+/gm, '• ')              // - item / * item → • item
     // Markdown tables → simple readable text (WA doesn't render tables)
@@ -262,10 +260,7 @@ function normalizeMarkdown(text) {
       if (/^\|[\s\-:|]+\|$/.test(row.trim())) return ''; // skip |---|---| separator
       return row.split('|').map(s => s.trim()).filter(Boolean).join('  •  ');
     })
-    .replace(/
-{3,}/g, '
-
-');                    // max 2 blank lines
+    .replace(/\n{3,}/g, '\n\n');                    // max 2 blank lines
 
   // Restore saved code blocks
   safe = safe.replace(/BLOCK(\d+)/g,

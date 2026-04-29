@@ -201,7 +201,15 @@ async function startBot() {
   loadViperSession(sessionFolder, sessionFile);
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
-  const { version }          = await fetchLatestBaileysVersion();
+  // fetchLatestBaileysVersion hits the internet — fall back to a hardcoded
+  // version if the request fails (network blip on Fly.io, etc.)
+  let version;
+  try {
+    ({ version } = await fetchLatestBaileysVersion());
+  } catch (e) {
+    console.error('[Boot] fetchLatestBaileysVersion failed, using fallback:', e.message);
+    version = [2, 3000, 1015901307]; // last known good WA Web version
+  }
 
   const pairNumber = process.env.PAIR_NUMBER
     ? process.env.PAIR_NUMBER.replace(/[^0-9]/g, '')
@@ -352,8 +360,16 @@ async function startBot() {
             await sock.sendPresenceUpdate('available');
             lastActivity = Date.now();
           }
+          // If WS is not open and not connecting, force a reconnect
+          // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED
+          if (sock.ws?.readyState === 3) {
+            console.error('[KeepAlive] WebSocket closed unexpectedly — restarting');
+            clearInterval(sock._keepAliveTimer);
+            sock._keepAliveTimer = null;
+            setTimeout(startBot, 2000);
+          }
         } catch (_) {}
-      }, 4 * 60 * 1000);
+      }, 2 * 60 * 1000);
 
       // ── Broadcast control file poller ──────────────────────────────────
       const bcFile = path.join(sessionFolder, 'broadcast.json');

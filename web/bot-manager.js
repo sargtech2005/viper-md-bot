@@ -141,7 +141,7 @@ async function restoreCredsFromDb(sessionId, phone) {
 
 function startCredsSync(sessionId, phone) {
   stopCredsSync(sessionId);
-  const iv = setInterval(() => saveCredsToDb(sessionId, phone), 90_000); // was 30s — async now but still reduce frequency
+  const iv = setInterval(() => saveCredsToDb(sessionId, phone), 30_000); // every 30s — fast enough to not lose creds on crash
   CREDS_TIMERS.set(sessionId, iv);
 }
 
@@ -310,12 +310,36 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   proc.on('exit', async code => {
     PROCS.delete(sessionId);
     stopCredsSync(sessionId);
+    // Save creds immediately on exit — don't wait for the 90s interval
     await saveCredsToDb(sessionId, phone);
-    // Wipe log buffer — session is dead, no reason to keep output in RAM
     clearLog(sessionId);
+
     try {
       const r = await Sessions.findById(sessionId);
-      if (r.rows[0]?.status === 'connected') await Sessions.updateStatus(sessionId, 'stopped');
+      const status = r.rows[0]?.status;
+
+      // If WhatsApp explicitly logged us out, don't restart
+      if (status === 'logged_out') return;
+
+      // If the session was connected or connecting, auto-restart it
+      // This keeps sessions alive through network hiccups, OOM kills, etc.
+      if (status === 'connected' || status === 'connecting') {
+        console.log(`[BotMgr] Session ${sessionId} exited (code ${code}) — auto-restarting in 5s`);
+        await Sessions.updateStatus(sessionId, 'connecting');
+        setTimeout(async () => {
+          try {
+            // Only restart if no other instance is already running
+            if (!isRunning(sessionId)) {
+              await startBot(sessionId, phone);
+            }
+          } catch (e) {
+            console.error(`[BotMgr] Auto-restart failed for session ${sessionId}:`, e.message);
+            await Sessions.updateStatus(sessionId, 'stopped').catch(() => {});
+          }
+        }, 5000);
+      } else {
+        await Sessions.updateStatus(sessionId, 'stopped');
+      }
     } catch {}
   });
 
@@ -373,17 +397,23 @@ async function resumeSessions() {
     let started = 0;
     for (const s of r.rows) {
       if (!s.phone_number) continue;
+      // Skip sessions that were explicitly stopped or logged out
+      if (s.status === 'stopped' || s.status === 'logged_out') continue;
       const restored = await restoreCredsFromDb(s.id, s.phone_number);
       if (restored) {
         await startBot(s.id, s.phone_number);
         await Sessions.updateStatus(s.id, 'connecting');
         started++;
-        await new Promise(r => setTimeout(r, 800));
+        // Stagger starts to avoid hammering WhatsApp servers simultaneously
+        await new Promise(r => setTimeout(r, 1500));
       } else {
         await Sessions.updateStatus(s.id, 'stopped');
       }
     }
-  } catch {}
+    console.log(`[BotMgr] Resumed ${started} session(s) on boot`);
+  } catch (e) {
+    console.error('[BotMgr] resumeSessions error:', e.message);
+  }
 }
 
 // ── Logout monitor (background) ────────────────────────────────────────────
