@@ -1105,8 +1105,16 @@ const handleMessage = async (sock, msg) => {
     // kills the handler or disconnects the bot from WhatsApp.
     // 90-second hard timeout prevents media/download commands from freezing
     // the entire bot when an external API hangs indefinitely.
-    console.log(`Executing command: ${commandName} from ${sender}`);
+    console.log(`[CMD] ${commandName} from ${sender.split('@')[0]}`);
     const CMD_TIMEOUT_MS = 90_000;
+
+    // ── Lazy admin resolvers — only hit WA API if command actually needs them ──
+    // OLD: both were eagerly awaited before EVERY command (even .ping, .menu).
+    // That was 2 WA round-trips per message. Now they're cached async getters.
+    let _cachedIsAdmin = null, _cachedIsBotAdmin = null;
+    const _lazyIsAdmin    = async () => { if (_cachedIsAdmin    === null) _cachedIsAdmin    = await isAdmin(sock, sender, from, groupMetadata);    return _cachedIsAdmin; };
+    const _lazyIsBotAdmin = async () => { if (_cachedIsBotAdmin === null) _cachedIsBotAdmin = await isBotAdmin(sock, from, groupMetadata); return _cachedIsBotAdmin; };
+
     try {
       await Promise.race([
         command.execute(sock, msg, args, {
@@ -1115,14 +1123,12 @@ const handleMessage = async (sock, msg) => {
           isGroup,
           groupMetadata,
           isOwner: isOwner(sender),
-          isAdmin: await isAdmin(sock, sender, from, groupMetadata),
-          isBotAdmin: await isBotAdmin(sock, from, groupMetadata),
+          isAdmin:    _lazyIsAdmin,
+          isBotAdmin: _lazyIsBotAdmin,
           isMod: isMod(sender),
-          // pushName: WhatsApp display name set by the user in their profile.
-          // Use this everywhere instead of raw phone numbers for a friendly UX.
           pushName: msg.pushName || msg.verifiedBizName || sender.split('@')[0],
           usedPrefix: _usedPrefix,
-          prefix: _usedPrefix,  // alias — some commands use extra.prefix
+          prefix: _usedPrefix,
           reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
           react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } }),
           sender

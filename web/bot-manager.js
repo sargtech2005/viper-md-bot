@@ -141,7 +141,7 @@ async function restoreCredsFromDb(sessionId, phone) {
 
 function startCredsSync(sessionId, phone) {
   stopCredsSync(sessionId);
-  const iv = setInterval(() => saveCredsToDb(sessionId, phone), 30_000); // every 30s — fast enough to not lose creds on crash
+  const iv = setInterval(() => saveCredsToDb(sessionId, phone), 15_000); // every 15s — was 30s
   CREDS_TIMERS.set(sessionId, iv);
 }
 
@@ -217,7 +217,7 @@ function watchLog(sessionId, phone, { isPairing = false } = {}) {
         }
       }
     } catch {}
-  }, 1500);
+  }, 200); // poll every 200ms — fast state transitions, minimal CPU
 
   return () => { done = true; clearInterval(iv); };
 }
@@ -287,10 +287,13 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   // ── Spawn with pipe stdio — NO log files written to disk ──────────────────
   clearLog(sessionId);
   const proc = spawn('node', [
-    // ── High-performance Node.js flags for bot child process ──────────────
-    '--max-old-space-size=1024',   // 1GB heap for bot worker (leaves room for web server)
-    '--optimize-for-size',          // More aggressive GC — keeps heap lean
-    '--gc-interval=100',            // More frequent GC — prevents long GC pauses
+    // ── Node.js flags — optimised for fast response, low latency ──────────
+    // --optimize-for-size REMOVED: it trades speed for memory, making V8
+    //   generate deliberately slower machine code. Wrong for a latency-critical bot.
+    // --gc-interval=100 REMOVED: forces GC every 100 allocations = constant
+    //   stop-the-world pauses every few ms. Killed response times.
+    '--max-old-space-size=512',    // 512MB heap — plenty for one bot instance
+    '--max-semi-space-size=64',    // Larger young generation = fewer minor GCs
     NODE_ENTRY,
   ], {
     cwd:   ROOT_DIR,
@@ -321,22 +324,18 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
       // If WhatsApp explicitly logged us out, don't restart
       if (status === 'logged_out') return;
 
-      // If the session was connected or connecting, auto-restart it
-      // This keeps sessions alive through network hiccups, OOM kills, etc.
+      // Only auto-restart if session was connected/connecting AND not manually stopped
       if (status === 'connected' || status === 'connecting') {
-        console.log(`[BotMgr] Session ${sessionId} exited (code ${code}) — auto-restarting in 5s`);
+        console.log(`[BotMgr] Session ${sessionId} exited (code ${code}) — auto-restarting in 1s`);
         await Sessions.updateStatus(sessionId, 'connecting');
         setTimeout(async () => {
           try {
-            // Only restart if no other instance is already running
-            if (!isRunning(sessionId)) {
-              await startBot(sessionId, phone);
-            }
+            if (!isRunning(sessionId)) await startBot(sessionId, phone);
           } catch (e) {
             console.error(`[BotMgr] Auto-restart failed for session ${sessionId}:`, e.message);
             await Sessions.updateStatus(sessionId, 'stopped').catch(() => {});
           }
-        }, 5000);
+        }, 1000); // 1s — was 5s
       } else {
         await Sessions.updateStatus(sessionId, 'stopped');
       }
@@ -346,24 +345,42 @@ async function startBot(sessionId, phone, { pairNumber = null } = {}) {
   return proc;
 }
 
-// ── Stop bot process ───────────────────────────────────────────────────────
-function stopSession(sessionId) {
+// ── Stop bot process — marks stopped BEFORE kill so exit handler skips restart ─
+async function stopSession(sessionId) {
   const e = PROCS.get(sessionId);
   if (!e) return;
   stopCredsSync(sessionId);
+  // Mark stopped in DB FIRST — the proc.on('exit') handler checks this to
+  // decide whether to auto-restart. If we mark it after kill, there's a
+  // race where exit fires before the UPDATE and the bot restarts itself.
+  try { await Sessions.updateStatus(sessionId, 'stopped'); } catch {}
   try { e.proc.kill('SIGTERM'); } catch {}
-  setTimeout(() => { try { e.proc.kill('SIGKILL'); } catch {} }, 3000);
+  setTimeout(() => { try { e.proc.kill('SIGKILL'); } catch {} }, 2000);
   PROCS.delete(sessionId);
   SSE_SUBS.delete(sessionId);
   PAIR_CACHE.delete(sessionId);
   clearLog(sessionId);
 }
 
-// ── Delete session files + DB creds ───────────────────────────────────────
-function deleteSessionFiles(sessionId, phone) {
+// ── Delete session — stops process, wipes files AND all Postgres bot_data ─────
+async function deleteSessionFiles(sessionId, phone) {
   stopSession(sessionId);
+  // Wipe tmp session folder
   const sd = sessionDir(phone);
   try { if (fs.existsSync(sd)) fs.rmSync(sd, { recursive: true, force: true }); } catch {}
+  // ── Wipe all bot_data rows scoped to this phone number ──────────────────────
+  // database.js scopes all keys as "PHONE:key" (e.g. "2348083086811:settings").
+  // Without this DELETE, the bot_data rows persist forever in Postgres.
+  // If the same number re-pairs later, it inherits stale settings/groups/users
+  // from the old session — causing ghost data bugs and cross-session leakage.
+  try {
+    const { pool } = require('./db');
+    const scope = phone.replace(/[^a-zA-Z0-9_-]/g, '_');
+    await pool.query(`DELETE FROM bot_data WHERE store_key LIKE $1`, [`${scope}:%`]);
+    console.log(`[BotMgr] Wiped bot_data for session ${sessionId} (phone ${phone})`);
+  } catch (e) {
+    console.error(`[BotMgr] bot_data wipe failed for session ${sessionId}:`, e.message);
+  }
 }
 
 // ── tailLog — returns last N lines from in-memory buffer ──────────────────
