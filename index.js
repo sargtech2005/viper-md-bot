@@ -222,7 +222,16 @@ const isSystem = jid =>
 // ── Main bot function ────────────────────────────────────────────────────────
 let _connectedNotified = false; // module-level — survives reconnects, resets only on full restart
 
+let _botStarting = false; // guard: prevent duplicate startBot() calls
+
 async function startBot() {
+  if (_botStarting) {
+    console.log('[Boot] startBot() called while already starting — skipped duplicate');
+    return;
+  }
+  _botStarting = true;
+  // Clear flag after 15s so a stuck boot doesn't block future reconnects
+  setTimeout(() => { _botStarting = false; }, 15_000);
   const sessionFolder = process.env.SESSION_DIR
     ? process.env.SESSION_DIR
     : `./${config.sessionName}`;
@@ -249,14 +258,14 @@ async function startBot() {
     version,
     logger:                silentLogger(),
     printQRInTerminal:     false,
-    browser:               Browsers.ubuntu('Chrome'),
+    browser:               ['Viper Bot', 'Chrome', '124.0.0'],  // custom browser string
     auth:                  state,
     syncFullHistory:       false,
     downloadHistory:       false,
     markOnlineOnConnect:   true,                // always appear online
     getMessage:            async (key) => store.loadMessage(key.remoteJid, key.id),
     // ── High-Performance Tuning ───────────────────────────────────────────────
-    keepAliveIntervalMs:   5_000,    // 5s WS pings — keeps connection warm
+    keepAliveIntervalMs:   20_000,   // 20s WS pings — standard, stable
     connectTimeoutMs:      20_000,   // 20s connect timeout
     defaultQueryTimeoutMs: 10_000,   // 10s per WA query
     retryRequestDelayMs:   100,      // 100ms retry — very fast recovery
@@ -332,6 +341,7 @@ async function startBot() {
     }
 
     if (connection === 'open') {
+      _botStarting = false; // clear the starting guard on successful open
       lastActivity = Date.now();
       if (_connectedNotified) return; // already sent — don't spam on every reconnect
       _connectedNotified = true;
@@ -384,21 +394,16 @@ async function startBot() {
       } catch (_) { /* non-fatal — don't crash if DM fails */ }
 
       if (sock._keepAliveTimer) clearInterval(sock._keepAliveTimer);
-      sock._keepAliveTimer = setInterval(async () => {
-        try {
-          if (sock.ws?.readyState === 1) {
-            // Broadcast available to all open chats — keeps bot showing as online
-            await sock.sendPresenceUpdate('available');
-            lastActivity = Date.now();
-          }
-          if (sock.ws?.readyState === 3) {
-            console.error('[KeepAlive] WebSocket closed — restarting');
-            clearInterval(sock._keepAliveTimer);
-            sock._keepAliveTimer = null;
-            setTimeout(startBot, 1000);
-          }
-        } catch (_) {}
-      }, 30 * 1000); // every 30 seconds — keeps bot visibly online
+      sock._keepAliveTimer = setInterval(() => {
+        // Pure health check — NO presence spam, Baileys keepAliveIntervalMs handles WS pings.
+        // Sending presence every 30s was causing WA to rate-limit and close the connection.
+        if (sock.ws?.readyState === 3) {
+          console.error('[KeepAlive] WebSocket closed — restarting');
+          clearInterval(sock._keepAliveTimer);
+          sock._keepAliveTimer = null;
+          setTimeout(startBot, 1500);
+        }
+      }, 60 * 1000); // check every 60s — WS pings handled by keepAliveIntervalMs
 
       // ── Broadcast control file poller ──────────────────────────────────
       const bcFile = path.join(sessionFolder, 'broadcast.json');
@@ -449,8 +454,8 @@ async function startBot() {
     lastActivity = Date.now();
     _lastMsgTime  = Date.now();
     global._viperSock = sock; // expose sock for health-check interval
-    // Re-announce available on every message — keeps bot always showing online
-    if (sock.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
+    // NOTE: sendPresenceUpdate on every message was REMOVED.
+    // WA rate-limits and disconnects bots that spam presence on every message.
 
     for (const msg of msgs) {
       if (!msg.message || !msg.key?.id) continue;

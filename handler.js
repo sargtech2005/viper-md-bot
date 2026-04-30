@@ -5,6 +5,24 @@
 const config = require('./config');
 const database = require('./database');
 const { loadCommands } = require('./utils/commandLoader');
+
+// ── Resilient send — retries once on Connection Closed ─────────────────────────
+// The WA WebSocket can briefly drop between receiving a message and sending the reply.
+// A single retry after 800ms catches that blip without user-visible failure.
+async function resilientSend(sock, jid, content, opts = {}) {
+  try {
+    return await sock.sendMessage(jid, content, opts);
+  } catch (e) {
+    const isConnErr = e?.message?.includes('Connection Closed')
+      || e?.message?.includes('Connection Terminated')
+      || e?.message?.includes('Socket closed')
+      || e?.output?.statusCode === 428;
+    if (!isConnErr) throw e; // non-connection error — rethrow normally
+    // Wait for WS to recover then retry once
+    await new Promise(r => setTimeout(r, 800));
+    return await sock.sendMessage(jid, content, opts);
+  }
+}
 const { addMessage } = require('./utils/groupstats');
 const levelupCmd      = require('./commands/fun/levelup');
 const wcgCmd          = require('./commands/fun/wcg');
@@ -1129,8 +1147,8 @@ const handleMessage = async (sock, msg) => {
           pushName: msg.pushName || msg.verifiedBizName || sender.split('@')[0],
           usedPrefix: _usedPrefix,
           prefix: _usedPrefix,
-          reply: (text) => sock.sendMessage(from, { text }, { quoted: msg }),
-          react: (emoji) => sock.sendMessage(from, { react: { text: emoji, key: msg.key } }),
+          reply: (text) => resilientSend(sock, from, { text }, { quoted: msg }),
+          react: (emoji) => resilientSend(sock, from, { react: { text: emoji, key: msg.key } }),
           sender
         }),
         new Promise((_, rej) =>
