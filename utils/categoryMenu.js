@@ -243,7 +243,7 @@ async function sendCategoryMenu(sock, msg, extra, category, icon, title) {
   // ── Style 3: interactive WhatsApp list popup ──────────────────────────────
   try {
     var db = require('../database');
-    if (db.getSetting('menuStyle', 1) === 3) {
+    if (db.getSetting('menuStyle', 2) === 3) {
       return sendCategoryMenuStyle3(sock, msg, extra, category, icon, title, sorted, prefix, botName);
     }
   } catch (_) {}

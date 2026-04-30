@@ -113,7 +113,7 @@ module.exports = {
 
     await sock.sendMessage(from, { react: { text: '🤖', key: msg.key } });
     if (extra.autoTyping !== false) {
-      try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
+      sock.sendPresenceUpdate('composing', from).catch(() => {}); // fire-and-forget
     }
 
     try {

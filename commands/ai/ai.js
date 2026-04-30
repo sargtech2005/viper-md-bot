@@ -76,7 +76,7 @@ module.exports = {
     const from = extra.from;
 
     // Typing indicator
-    try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
+    sock.sendPresenceUpdate('composing', from).catch(() => {}); // fire-and-forget
     await sock.sendMessage(from, { react: { text: '🤖', key: msg.key } });
 
     const providers = [
@@ -98,7 +98,7 @@ module.exports = {
       }
     }
 
-    try { await sock.sendPresenceUpdate('paused', from); } catch (_) {}
+    sock.sendPresenceUpdate('paused', from).catch(() => {}); // fire-and-forget
 
     if (!answer) {
       await sock.sendMessage(from, { react: { text: '❌', key: msg.key } });

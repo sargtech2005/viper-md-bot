@@ -134,13 +134,43 @@ async function cachedGroupMeta(sock, jid) {
   }
 }
 
-// Prune expired group cache entries every 15 minutes
+// ── Prune expired group cache entries every 15 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of groupCache) {
     if (now - v.ts > GROUP_CACHE_TTL) groupCache.delete(k);
   }
 }, 15 * 60 * 1000);
+
+// ── 10-minute full cache flush + health check ─────────────────────────────
+// Clears ALL in-memory caches so the bot never gets stale state.
+// Also checks if the bot has stopped processing messages and force-reconnects.
+let _lastMsgTime = Date.now();
+setInterval(async () => {
+  try {
+    // 1. Full group metadata cache wipe
+    groupCache.clear();
+    // 2. Wipe processed-message dedup set
+    processed.clear();
+    _processedTs.clear();
+    // 3. Force-reload commands (clears require cache)
+    const { loadCommands } = require('./utils/commandLoader');
+    loadCommands(true);
+    console.log('[HealthCheck] ✅ Caches cleared, commands reloaded');
+    // 4. Health check: if no message in last 10min + WS is open, re-announce presence
+    const sock = global._viperSock;
+    if (sock) {
+      const silentMs = Date.now() - _lastMsgTime;
+      if (silentMs > 9 * 60 * 1000 && sock.ws?.readyState === 1) {
+        // Send available to re-register as online with WA servers
+        await sock.sendPresenceUpdate('available').catch(() => {});
+        console.log('[HealthCheck] Re-announced presence after', Math.floor(silentMs/60000), 'min silence');
+      }
+    }
+  } catch (e) {
+    console.error('[HealthCheck] Error:', e.message);
+  }
+}, 10 * 60 * 1000); // every 10 minutes
 
 // ── Safe media download with size cap ────────────────────────────────────────
 // Returns a Buffer, or null if the file exceeds MAX_MEDIA_BYTES.
@@ -417,6 +447,8 @@ async function startBot() {
   // every incoming message triggers both chains independently. Merged into one.
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
     lastActivity = Date.now();
+    _lastMsgTime  = Date.now();
+    global._viperSock = sock; // expose sock for health-check interval
     // Re-announce available on every message — keeps bot always showing online
     if (sock.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
 

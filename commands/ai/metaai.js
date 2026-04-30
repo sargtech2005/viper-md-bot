@@ -34,8 +34,8 @@ const path  = require('path');
 // CONFIG
 // ─────────────────────────────────────────────────────────────────────────────
 const MAX_HISTORY      = 20;    // messages kept in memory + DB (per chat)
-const MAX_TOKENS       = 16384; // max tokens per AI response
-const CHUNK_SIZE       = 15000; // chars before splitting a WA message
+const MAX_TOKENS       = 32768; // max tokens per AI response — doubled so code answers aren't cut off
+const CHUNK_SIZE       = 3500;  // chars per WA message — WA clips at ~4096, keep margin
 const CODE_RATE_LIMIT  = 10;    // coding requests per hour per user
 const CODE_RATE_WINDOW = 3600 * 1000;
 const DB_WRITE_DELAY   = 3000;  // ms — batch DB writes to avoid hammering Postgres
@@ -720,8 +720,9 @@ async function sendChunks(sock, from, result, quotedMsg) {
   let   first = true;
 
   for (const item of chunks) {
-    try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
-    if (!first) await new Promise(r => setTimeout(r, 650));
+    // fire-and-forget typing — never block message delivery
+    sock.sendPresenceUpdate('composing', from).catch(() => {});
+    if (!first) await new Promise(r => setTimeout(r, 200)); // 200ms between chunks — fast but ordered
     first = false;
 
     if (item.type === 'code') {
@@ -846,7 +847,7 @@ module.exports = {
     }
 
     await sock.sendMessage(from, { react: { text: '🤔', key: msg.key } });
-    try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
+    sock.sendPresenceUpdate('composing', from).catch(() => {});
 
     try {
       const result = await askMetaAI(chatId, text, botName, sid);

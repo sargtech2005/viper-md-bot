@@ -34,7 +34,7 @@ module.exports = {
       if (warnings.count >= config.maxWarnings) {
         t += `💀 *You have collected all ${config.maxWarnings} warnings. BYEEEEE!* 👋`;
         await sock.sendMessage(extra.from, { text: t, mentions: [target] }, { quoted: msg });
-        if (extra.isBotAdmin) {
+        if (await extra.isBotAdmin()) {
           await sock.groupParticipantsUpdate(extra.from, [target], 'remove');
           database.clearWarnings(extra.from, target);
         }

@@ -23,17 +23,17 @@ const sc = s => {
 // Both menus (Style 1 compact + Style 2 expanded) use this single source of truth,
 // so renaming here automatically keeps both menus consistent.
 const CAT = {
-  general:   { icon: '🐍', hint: '.viper',      label: 'ᴠɪᴘᴇʀ'    },  // core commands
-  admin:     { icon: '⚔️', hint: '.squad',      label: 'ꜱQᴜᴀᴅ'    },  // group management
-  owner:     { icon: '👑', hint: '.venom',      label: 'ᴠᴇɴᴏᴍ'    },  // owner-only
-  fun:       { icon: '🎮', hint: '.arcade',     label: 'ᴀʀᴄᴀᴅᴇ'   },  // games & fun
-  ai:        { icon: '🤖', hint: '.nexus',      label: 'ɴᴇxᴜꜱ'    },  // AI suite
-  download:  { icon: '📥', hint: '.media',      label: 'ᴍᴇᴅɪᴀ'    },  // downloads & stickers
-  utility:   { icon: '🔐', hint: '.vault',      label: 'ᴠᴀᴜʟᴛ'    },  // utility tools
-  search:    { icon: '🔍', hint: '.radar',      label: 'ʀᴀᴅᴀʀ'    },  // search
-  sports:    { icon: '⚽', hint: '.arena',      label: 'ᴀʀᴇɴᴀ'    },  // sports
-  textmaker: { icon: '🖋️', hint: '.studio',     label: 'ꜱᴛᴜᴅɪᴏ'  },  // text art
-  developer: { icon: '💻', hint: '.lab',        label: 'ʟᴀʙ'      },  // dev tools
+  general:   { icon: '🐍', hint: '.viper',   label: 'General'    },
+  admin:     { icon: '⚔️', hint: '.squad',   label: 'Admin'      },
+  owner:     { icon: '👑', hint: '.venom',   label: 'Owner'      },
+  fun:       { icon: '🎮', hint: '.arcade',  label: 'Fun'        },
+  ai:        { icon: '🤖', hint: '.nexus',   label: 'AI'         },
+  download:  { icon: '📥', hint: '.media',   label: 'Download'   },
+  utility:   { icon: '🔐', hint: '.vault',   label: 'Utility'    },
+  search:    { icon: '🔍', hint: '.radar',   label: 'Search'     },
+  sports:    { icon: '⚽', hint: '.arena',   label: 'Sports'     },
+  textmaker: { icon: '🖋️', hint: '.studio',  label: 'Text Maker' },
+  developer: { icon: '💻', hint: '.lab',     label: 'Developer'  },
 };
 
 // ── Runtime formatter ─────────────────────────────────────────────────────────
@@ -251,14 +251,13 @@ module.exports = {
         function(k) { return cmds.get(k).name === k && !cmds.get(k).isNavShortcut; }
       ).length;
 
-      const style = database.getSetting('menuStyle', 1);
+      const style = database.getSetting('menuStyle', 2);
 
       if (style === 3) {
         await renderStyle3(sock, msg, extra, cmds, cats, total);
-      } else if (style === 2) {
-        await renderStyle2(sock, msg, extra, cmds, cats, total);
       } else {
-        await renderStyle1(sock, msg, extra, cmds, cats, total);
+        // Style 2 is now the only default — style 1 has been removed
+        await renderStyle2(sock, msg, extra, cmds, cats, total);
       }
     } catch (err) {
       await extra.reply('❌ ' + err.message);

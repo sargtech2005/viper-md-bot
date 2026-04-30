@@ -5,10 +5,10 @@
 const database = require('../../database');
 
 module.exports = {
-  name: 'autosticker',
-  aliases: ['autos', 'asticker'],
+  name: 'groupsticker',
+  aliases: ['groupstickerauto', 'gautos'],
   category: 'admin',
-  description: 'Enable or disable auto-sticker conversion (images/videos automatically become stickers)',
+  description: 'Toggle auto-sticker for this group only',
   usage: '.autosticker <on/off>',
   groupOnly: true,
   adminOnly: true,
